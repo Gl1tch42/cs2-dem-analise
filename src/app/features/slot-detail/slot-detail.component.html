@@ -75,27 +75,80 @@
           <th>Mapa</th>
           <th>Placar</th>
           <th>Adicionada em</th>
+          <th>Time do slot</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let demo of slot.demos">
-          <td class="mono">{{ demo.fileName }}</td>
-          <td>{{ demo.map }}</td>
-          <td>{{ demo.score ? (demo.score.team + ' : ' + demo.score.opponent) : '—' }}</td>
-          <td class="text-muted">{{ demo.addedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
-          <td>
-            <a class="icon-trash-btn" title="Excluir demo" (click)="removeDemo(demo.id)">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-                <path d="M10 11v6"></path>
-                <path d="M14 11v6"></path>
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
-              </svg>
-            </a>
-          </td>
-        </tr>
+        <ng-container *ngFor="let demo of slot.demos">
+          <tr>
+            <td class="mono">{{ demo.fileName }}</td>
+            <td>{{ demo.map }}</td>
+            <td>{{ demo.score ? (demo.score.team + ' : ' + demo.score.opponent) : '—' }}</td>
+            <td class="text-muted">{{ demo.addedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+            <td>
+              <button
+                class="button is-small"
+                [class.is-success]="demo.myTeamSteamIds?.length"
+                [class.is-warning]="!demo.myTeamSteamIds?.length"
+                (click)="toggleRoster(demo)"
+              >
+                {{ demo.myTeamSteamIds?.length ? '✓ definido' : '⚠ definir time' }}
+              </button>
+            </td>
+            <td>
+              <a class="icon-trash-btn" title="Excluir demo" (click)="removeDemo(demo.id)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                  <path d="M10 11v6"></path>
+                  <path d="M14 11v6"></path>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+                </svg>
+              </a>
+            </td>
+          </tr>
+          <tr *ngIf="rosterOpenFor === demo.id">
+            <td colspan="6">
+              <div class="roster-panel">
+                <p class="text-muted" *ngIf="rosterLoading">Carregando jogadores…</p>
+                <p class="help is-danger" *ngIf="rosterError">{{ rosterError }}</p>
+                <ng-container *ngIf="!rosterLoading && rosterSummary">
+                  <p class="text-muted roster-hint">
+                    Marque os 5 jogadores que são <strong>o time deste slot</strong> nesta demo. O time troca de
+                    lado (CT/TR) no intervalo, então isso importa mais que marcar "CT" ou "TR" direto — a análise
+                    passa a considerar só as rodadas desses jogadores, em vez de misturar com o adversário.
+                  </p>
+                  <div class="roster-quick-select">
+                    <span class="text-muted" style="font-size:0.75rem">Preencher automaticamente:</span>
+                    <button class="button is-small is-ghost" (click)="selectRosterSide('ct')">quem jogou mais CT</button>
+                    <button class="button is-small is-ghost" (click)="selectRosterSide('t')">quem jogou mais TR</button>
+                  </div>
+                  <div class="roster-players">
+                    <label class="checkbox roster-player" *ngFor="let p of rosterSummary.playerAggregates">
+                      <input
+                        type="checkbox"
+                        [checked]="rosterDraft.has(p.steamId)"
+                        (change)="toggleRosterPlayer(p.steamId)"
+                      />
+                      {{ p.name }}
+                      <span class="text-muted" style="font-size:0.75rem">({{ p.side === 'ct' ? 'CT' : 'TR' }} predominante)</span>
+                    </label>
+                  </div>
+                  <div class="roster-actions">
+                    <span class="help is-danger" *ngIf="rosterDraft.size > 0 && rosterDraft.size !== 5">
+                      Times de CS têm 5 jogadores — você marcou {{ rosterDraft.size }}.
+                    </span>
+                    <button class="button is-small" [class.is-loading]="rosterSaving" (click)="saveRoster(demo)">
+                      Salvar time
+                    </button>
+                    <button class="button is-small is-ghost" (click)="rosterOpenFor = null">cancelar</button>
+                  </div>
+                </ng-container>
+              </div>
+            </td>
+          </tr>
+        </ng-container>
       </tbody>
     </table>
   </section>
@@ -123,6 +176,11 @@
     <p class="text-muted" *ngIf="slot.demos.length === 0">Importe ao menos uma demo antes de analisar.</p>
 
     <ng-container *ngIf="analysisResult as result">
+      <p class="help is-warning roster-pending-warning" *ngIf="result.stats.demosPendingRoster.length > 0">
+        ⚠ {{ result.stats.demosPendingRoster.length }} demo(s) ficaram de fora das tendências porque o time do
+        slot ainda não foi marcado nelas: {{ result.stats.demosPendingRoster.join(', ') }}. Marque em
+        <a (click)="setTab('demos')">Demos</a> pra incluir.
+      </p>
       <div class="columns">
         <div class="column is-7">
           <h2 class="stat-title">Leitura da IA</h2>

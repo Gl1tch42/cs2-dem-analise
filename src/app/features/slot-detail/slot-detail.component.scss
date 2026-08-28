@@ -82,6 +82,49 @@
   margin-bottom: 0.75rem;
 }
 
+.roster-panel {
+  padding: 0.75rem 0.9rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+}
+.roster-hint {
+  font-size: 0.78rem;
+  margin-bottom: 0.6rem;
+}
+.roster-quick-select {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.roster-players {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.roster-player {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.83rem;
+}
+.roster-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.roster-pending-warning {
+  font-size: 0.78rem;
+  margin-bottom: 0.75rem;
+
+  a {
+    text-decoration: underline;
+    cursor: pointer;
+  }
+}
+
 .icon-trash-btn {
   display: inline-flex;
   align-items: center;

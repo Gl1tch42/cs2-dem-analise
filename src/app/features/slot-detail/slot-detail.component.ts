@@ -5,7 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { ElectronService } from '../../core/services/electron.service';
 import { NotebookComponent } from '../notebook/notebook.component';
 import { Map2dComponent } from '../map2d/map2d.component';
-import { SlotDetail, AnalysisResult } from '../../core/models/slot.model';
+import { SlotDetail, AnalysisResult, DemoRecord, DemoSummary } from '../../core/models/slot.model';
 
 type TabId = 'overview' | 'map' | 'demos' | 'notebook' | 'ai';
 
@@ -29,6 +29,13 @@ export class SlotDetailComponent implements OnInit {
   analyzing = false;
   analysisError = '';
   analysisResult?: AnalysisResult;
+
+  rosterOpenFor: string | null = null;
+  rosterSummary?: DemoSummary;
+  rosterLoading = false;
+  rosterSaving = false;
+  rosterError = '';
+  rosterDraft = new Set<string>();
 
   constructor(private route: ActivatedRoute, private electron: ElectronService) {}
 
@@ -85,6 +92,54 @@ export class SlotDetailComponent implements OnInit {
     if (!this.slot) return;
     await this.electron.api.slots.removeDemo(this.slot.id, demoId);
     await this.loadSlot(this.slot.id);
+  }
+
+  async toggleRoster(demo: DemoRecord) {
+    if (this.rosterOpenFor === demo.id) {
+      this.rosterOpenFor = null;
+      return;
+    }
+    this.rosterOpenFor = demo.id;
+    this.rosterError = '';
+    this.rosterSummary = undefined;
+    this.rosterDraft = new Set(demo.myTeamSteamIds ?? []);
+    this.rosterLoading = true;
+    try {
+      this.rosterSummary = await this.electron.api.demos.getSummary(this.slot!.id, demo.id);
+    } catch (err) {
+      this.rosterError = (err as Error).message ?? 'Falha ao carregar jogadores da demo.';
+    } finally {
+      this.rosterLoading = false;
+    }
+  }
+
+  toggleRosterPlayer(steamId: string) {
+    if (this.rosterDraft.has(steamId)) this.rosterDraft.delete(steamId);
+    else this.rosterDraft.add(steamId);
+    this.rosterDraft = new Set(this.rosterDraft); // novo objeto — força o Angular a reavaliar rosterDraft.has() no template
+  }
+
+  /** Preenche o rascunho com quem jogou mais de um lado (ct/t) nesta demo — atalho, já que o time troca de lado no intervalo. */
+  selectRosterSide(side: 'ct' | 't') {
+    if (!this.rosterSummary) return;
+    this.rosterDraft = new Set(
+      this.rosterSummary.playerAggregates.filter((p) => p.side === side).map((p) => p.steamId)
+    );
+  }
+
+  async saveRoster(demo: DemoRecord) {
+    if (!this.slot) return;
+    this.rosterSaving = true;
+    this.rosterError = '';
+    try {
+      const updated = await this.electron.api.slots.setDemoRoster(this.slot.id, demo.id, Array.from(this.rosterDraft));
+      demo.myTeamSteamIds = updated.myTeamSteamIds;
+      this.rosterOpenFor = null;
+    } catch (err) {
+      this.rosterError = (err as Error).message ?? 'Falha ao salvar time.';
+    } finally {
+      this.rosterSaving = false;
+    }
   }
 
   async runAnalysis() {
