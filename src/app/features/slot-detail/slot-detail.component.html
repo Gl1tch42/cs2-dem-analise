@@ -1,0 +1,178 @@
+<ng-container *ngIf="loading">
+  <p class="text-muted">Carregando slot…</p>
+</ng-container>
+
+<ng-container *ngIf="!loading && slot">
+  <header class="slot-header">
+    <div class="slot-title">
+      <span class="dot" [class.dot-own]="slot.kind === 'own'" [class.dot-opponent]="slot.kind === 'opponent'"></span>
+      <h1 *ngIf="!editingName" (dblclick)="startRename()">{{ slot.name }}</h1>
+      <input
+        *ngIf="editingName"
+        class="input rename-input"
+        [(ngModel)]="nameDraft"
+        (keyup.enter)="confirmRename()"
+        (blur)="confirmRename()"
+      />
+      <button class="button is-small is-ghost" (click)="startRename()" *ngIf="!editingName">renomear</button>
+    </div>
+    <p class="text-muted slot-subtitle">
+      {{ slot.demos.length }} demo(s) salva(s) · limite 100 por slot
+    </p>
+  </header>
+
+  <div class="tabs">
+    <ul>
+      <li [class.is-active]="activeTab === 'overview'"><a (click)="setTab('overview')">Visão Geral</a></li>
+      <li [class.is-active]="activeTab === 'map'"><a (click)="setTab('map')">Mapa 2D</a></li>
+      <li [class.is-active]="activeTab === 'demos'"><a (click)="setTab('demos')">Demos</a></li>
+      <li [class.is-active]="activeTab === 'notebook'"><a (click)="setTab('notebook')">Notebook</a></li>
+      <li [class.is-active]="activeTab === 'ai'"><a (click)="setTab('ai')">Análise de IA</a></li>
+    </ul>
+  </div>
+
+  <!-- VISÃO GERAL -->
+  <section *ngIf="activeTab === 'overview'">
+    <div class="panel-block-data p-4" *ngIf="slot.demos.length === 0">
+      <p class="text-muted">
+        Nenhuma demo ainda. Vá na aba <strong>Demos</strong> e importe pelo menos uma partida
+        para começar a consolidar padrões deste time.
+      </p>
+    </div>
+    <ul class="overview-demo-list" *ngIf="slot.demos.length > 0">
+      <li *ngFor="let demo of slot.demos; let i = index" class="panel-block-data">
+        <span class="demo-number">#{{ slot.demos.length - i }}</span>
+        <span class="mono demo-name">{{ demo.fileName }}</span>
+        <a class="icon-trash-btn" title="Excluir demo" (click)="removeDemo(demo.id)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+          </svg>
+        </a>
+      </li>
+    </ul>
+  </section>
+
+  <!-- MAPA 2D -->
+  <section *ngIf="activeTab === 'map'">
+    <app-map2d [slotId]="slot.id" [demos]="slot.demos"></app-map2d>
+  </section>
+
+  <!-- DEMOS -->
+  <section *ngIf="activeTab === 'demos'">
+    <button class="button is-small mb-3" [class.is-loading]="importing" (click)="importDemo()">
+      + Importar demo (.dem)
+    </button>
+    <p class="help is-danger" *ngIf="importError">{{ importError }}</p>
+
+    <table class="table is-fullwidth is-narrow demos-table" *ngIf="slot.demos.length > 0">
+      <thead>
+        <tr>
+          <th>Arquivo</th>
+          <th>Mapa</th>
+          <th>Placar</th>
+          <th>Adicionada em</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let demo of slot.demos">
+          <td class="mono">{{ demo.fileName }}</td>
+          <td>{{ demo.map }}</td>
+          <td>{{ demo.score ? (demo.score.team + ' : ' + demo.score.opponent) : '—' }}</td>
+          <td class="text-muted">{{ demo.addedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+          <td>
+            <a class="icon-trash-btn" title="Excluir demo" (click)="removeDemo(demo.id)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+              </svg>
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- NOTEBOOK -->
+  <section *ngIf="activeTab === 'notebook'">
+    <app-notebook [slotId]="slot.id" [initialContent]="slot.notebook.content"></app-notebook>
+  </section>
+
+  <!-- ANÁLISE DE IA -->
+  <section *ngIf="activeTab === 'ai'">
+    <p class="text-muted ai-scope-note" *ngIf="slot.demos.length > 0">
+      Esta análise sempre considera <strong>todas as {{ slot.demos.length }} demo(s)</strong> deste
+      slot, não só a mais recente.
+    </p>
+    <button
+      class="button is-small mb-3"
+      [class.is-loading]="analyzing"
+      [disabled]="slot.demos.length === 0"
+      (click)="runAnalysis()"
+    >
+      Rodar análise de padrões
+    </button>
+    <p class="help is-danger" *ngIf="analysisError">{{ analysisError }}</p>
+    <p class="text-muted" *ngIf="slot.demos.length === 0">Importe ao menos uma demo antes de analisar.</p>
+
+    <ng-container *ngIf="analysisResult as result">
+      <div class="columns">
+        <div class="column is-7">
+          <h2 class="stat-title">Leitura da IA</h2>
+          <div class="panel-block-data p-4 ai-output">{{ result.analysis }}</div>
+        </div>
+        <div class="column is-5">
+          <h2 class="stat-title">Consolidado local ({{ result.stats.demosAnalyzed }} demos, {{ result.stats.roundsAnalyzed }} rounds)</h2>
+
+          <p class="stat-subtitle">Por tipo de compra</p>
+          <table class="table is-narrow is-fullwidth mini-table">
+            <tbody>
+              <tr *ngFor="let e of entries(result.stats.tendencyByBuyType)">
+                <td>{{ e[0] }}</td>
+                <td class="text-muted">{{ e[1].count }}x</td>
+                <td [class.winrate-good]="e[1].winRate >= 0.5" [class.winrate-bad]="e[1].winRate < 0.5">
+                  {{ winRatePct(e[1].winRate) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="stat-subtitle">Jogadas mais recorrentes</p>
+          <table class="table is-narrow is-fullwidth mini-table">
+            <tbody>
+              <tr *ngFor="let p of result.stats.topRecurringPatterns">
+                <td class="mono">{{ p.pattern }}</td>
+                <td class="text-muted">{{ p.count }}x</td>
+                <td [class.winrate-good]="p.winRate >= 0.5" [class.winrate-bad]="p.winRate < 0.5">
+                  {{ winRatePct(p.winRate) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="stat-subtitle">Jogadores</p>
+          <table class="table is-narrow is-fullwidth mini-table">
+            <thead>
+              <tr><th>Jogador</th><th>ADR</th><th>Entry%</th><th>Clutch%</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let pl of result.stats.playerMovementProfile">
+                <td>{{ pl.name }}</td>
+                <td>{{ pl.avgAdr }}</td>
+                <td>{{ winRatePct(pl.entryRate) }}</td>
+                <td>{{ winRatePct(pl.clutchRate) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </ng-container>
+  </section>
+</ng-container>

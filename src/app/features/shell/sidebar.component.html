@@ -1,0 +1,50 @@
+<aside
+  class="sidebar"
+  [class.collapsed]="collapsed"
+  [class.hovering]="hovering"
+  (mouseenter)="onMouseEnter()"
+  (mouseleave)="onMouseLeave()"
+>
+  <div class="sidebar-content">
+    <div class="sidebar-brand">
+      <span class="brand-mark">▣</span>
+      <span class="brand-text">CS Analyst</span>
+      <button
+        type="button"
+        class="collapse-toggle"
+        (click)="toggleCollapsed()"
+        [title]="collapsed ? 'Fixar barra lateral' : 'Recolher barra lateral'"
+      >
+        {{ collapsed ? '»' : '«' }}
+      </button>
+    </div>
+
+    <p class="menu-label">Time</p>
+    <ul class="menu-list" *ngIf="ownSlot">
+      <li>
+        <a [routerLink]="['/slot', ownSlot.id]" routerLinkActive="is-active">
+          <span class="dot dot-own"></span>
+          {{ ownSlot.name }}
+          <span class="tag is-rounded demo-count">{{ ownSlot.demoCount }}</span>
+        </a>
+      </li>
+    </ul>
+
+    <p class="menu-label">Adversários</p>
+    <ul class="menu-list opponents-list">
+      <li *ngFor="let slot of opponentSlots">
+        <a [routerLink]="['/slot', slot.id]" routerLinkActive="is-active">
+          <span class="dot dot-opponent"></span>
+          {{ slot.name }}
+          <span class="tag is-rounded demo-count" *ngIf="slot.demoCount > 0">{{ slot.demoCount }}</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <a routerLink="/config-ia" routerLinkActive="is-active" class="config-link">
+        <span class="icon">⚙</span> Configurações de IA
+      </a>
+    </div>
+  </div>
+</aside>

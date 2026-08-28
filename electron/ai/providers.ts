@@ -1,0 +1,102 @@
+import { AiProviderConfig } from '../storage/types';
+
+export interface AiCallParams {
+  provider: AiProviderConfig;
+  apiKey: string;
+  systemPrompt: string;
+  userPrompt: string;
+}
+
+export async function callAiProvider({ provider, apiKey, systemPrompt, userPrompt }: AiCallParams): Promise<string> {
+  switch (provider.id) {
+    case 'anthropic':
+      return callAnthropic(apiKey, provider.model ?? 'claude-sonnet-5', systemPrompt, userPrompt);
+    case 'openai':
+      return callOpenAi(apiKey, provider.model ?? 'gpt-4.1-mini', systemPrompt, userPrompt);
+    case 'custom':
+      return callCustomEndpoint(provider, apiKey, systemPrompt, userPrompt);
+    case 'mock':
+      return callMock(systemPrompt, userPrompt);
+    default:
+      throw new Error(`Provedor não suportado: ${provider.id}`);
+  }
+}
+
+/**
+ * Não chama API nenhuma — devolve o prompt exatamente como seria enviado pra uma IA
+ * de verdade. Serve pra validar se os dados da demo estão sendo montados de um jeito
+ * legível ANTES de gastar crédito de API de verdade com um provedor real.
+ */
+async function callMock(systemPrompt: string, userPrompt: string): Promise<string> {
+  return [
+    '⚠️ Modo de teste local — nenhuma IA foi chamada, nenhum crédito foi gasto.',
+    'Abaixo está exatamente o que seria enviado para um provedor real.',
+    '',
+    '--- SYSTEM PROMPT ---',
+    systemPrompt,
+    '',
+    '--- USER PROMPT ---',
+    userPrompt,
+  ].join('\n');
+}
+
+async function callAnthropic(apiKey: string, model: string, system: string, user: string): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2000,
+      system,
+      messages: [{ role: 'user', content: user }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic API: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.content?.map((b: any) => b.text ?? '').join('\n') ?? '';
+}
+
+async function callOpenAi(apiKey: string, model: string, system: string, user: string): Promise<string> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI API: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? '';
+}
+
+async function callCustomEndpoint(
+  provider: AiProviderConfig,
+  apiKey: string,
+  system: string,
+  user: string
+): Promise<string> {
+  if (!provider.endpoint) throw new Error('Endpoint personalizado não configurado.');
+  const res = await fetch(provider.endpoint, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model: provider.model, system, prompt: user }),
+  });
+  if (!res.ok) throw new Error(`Endpoint personalizado: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  // Ajuste este parsing conforme o formato de resposta do seu endpoint.
+  return data.text ?? data.content ?? JSON.stringify(data);
+}

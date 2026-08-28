@@ -1,0 +1,97 @@
+.slot-header {
+  margin-bottom: 1rem;
+}
+.slot-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 0;
+    cursor: pointer;
+  }
+}
+.rename-input {
+  max-width: 260px;
+}
+.slot-subtitle {
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dot-own { background: var(--own-color); }
+.dot-opponent { background: var(--opponent-color); }
+
+.stat-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.stat-subtitle {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0.9rem 0 0.3rem;
+}
+.mini-table td, .mini-table th {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+.ai-output {
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+.demos-table td, .demos-table th {
+  font-size: 0.82rem;
+}
+
+.overview-demo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.9rem;
+  }
+
+  .demo-number {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    min-width: 2.2rem;
+  }
+
+  .demo-name {
+    flex: 1;
+    font-size: 0.85rem;
+  }
+}
+
+.ai-scope-note {
+  font-size: 0.78rem;
+  margin-bottom: 0.75rem;
+}
+
+.icon-trash-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fails-color);
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 3px;
+
+  &:hover {
+    background: #1f252d;
+  }
+}

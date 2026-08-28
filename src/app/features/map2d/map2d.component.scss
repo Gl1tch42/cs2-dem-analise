@@ -1,0 +1,271 @@
+.map2d-toolbar {
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.demo-select-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+
+  select {
+    max-width: 320px;
+  }
+}
+.radar-status {
+  font-size: 0.78rem;
+}
+
+.round-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.85rem;
+}
+.round-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.badge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.badge-ct {
+  background: rgba(93, 173, 226, 0.18);
+  color: #5dade2;
+}
+.badge-t {
+  background: rgba(245, 176, 65, 0.18);
+  color: #f5b041;
+}
+
+// Altura máxima da linha canvas+placar — limitada ao viewport (menos a barra
+// de título, cabeçalho do slot, abas, toolbar, barra de reprodução e legenda)
+// pra essa linha nunca precisar empurrar `.main-content` inteiro pra rolar.
+// Só a lista de compras (.economy-panel) deve rolar, por dentro dela mesma.
+.map2d-body {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.map2d-canvas-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem;
+  flex: 1 1 480px;
+  min-height: 0;
+
+  canvas {
+    width: auto;
+    height: 100%;
+    max-width: 640px;
+    aspect-ratio: 1 / 1;
+    border-radius: 4px;
+  }
+
+  .no-data {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.8rem;
+    margin: 0;
+  }
+}
+
+.economy-panel {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+// Uma linha por jogador, estilo placar in-game: fundo com leve tingimento
+// da cor do time + uma tarja colorida na borda esquerda.
+.scoreboard-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.6rem;
+  border-radius: 3px;
+  overflow: hidden;
+
+  &.side-ct {
+    background: rgba(93, 173, 226, 0.14);
+    .sb-stripe {
+      background: #5dade2;
+    }
+  }
+  &.side-t {
+    background: rgba(245, 176, 65, 0.14);
+    .sb-stripe {
+      background: #f5b041;
+    }
+  }
+  &.is-dead {
+    opacity: 0.45;
+  }
+}
+.sb-stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.sb-main {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+}
+.sb-hp {
+  min-width: 1.6rem;
+  font-weight: 700;
+  color: #e6e9ee;
+}
+.sb-armor-icon {
+  display: flex;
+  color: rgba(230, 233, 238, 0.25);
+
+  &.filled {
+    color: #9fb8c8;
+  }
+  &.helmet {
+    color: #d7e6ee;
+  }
+  svg {
+    fill: currentColor;
+  }
+}
+.sb-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.sb-weapon {
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.sb-money {
+  font-size: 0.72rem;
+  color: #8fd19e;
+  white-space: nowrap;
+}
+.sb-dead {
+  color: #e57373;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+.sb-sub {
+  display: flex;
+  gap: 0.6rem;
+  padding-left: 2rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+.sb-roundkill {
+  color: #8fd19e;
+  font-weight: 600;
+}
+
+.playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+
+  .scrub {
+    flex: 1;
+    min-width: 160px;
+  }
+  .time-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    min-width: 90px;
+  }
+  .speed-buttons {
+    display: flex;
+    gap: 0.25rem;
+  }
+}
+
+.legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot-ct {
+    background: #5dade2;
+  }
+  .dot-t {
+    background: #f5b041;
+  }
+  .dot-glow {
+    background: #f7dc6f;
+    box-shadow: 0 0 4px 2px rgba(247, 220, 106, 0.75);
+  }
+  .x-mark {
+    color: #e57373;
+    font-weight: 700;
+  }
+  .ring-mark {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    display: inline-block;
+  }
+  .swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .swatch-smoke {
+    background: rgba(195, 200, 205, 0.75);
+  }
+  .swatch-fire {
+    background: radial-gradient(circle, #ffc440 0%, #e65a1e 55%, rgba(180, 30, 20, 0) 100%);
+  }
+  .swatch-flash {
+    background: radial-gradient(circle, #fff 0%, rgba(255, 255, 255, 0) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+  .swatch-decoy {
+    background: transparent;
+    border: 1.5px dashed rgba(200, 200, 200, 0.8);
+  }
+}

@@ -1,0 +1,75 @@
+<h1 class="page-title">Configurações de IA</h1>
+<p class="text-muted mb-4">
+  Escolha o provedor padrão e cole sua chave de API. As chaves ficam criptografadas
+  localmente (nunca saem da sua máquina, exceto na chamada direta ao provedor escolhido).
+</p>
+
+<ng-container *ngIf="!loading && settings">
+  <div class="panel-block-data p-4 provider-card" *ngFor="let provider of settings.providers">
+    <div class="provider-header">
+      <label class="radio">
+        <input
+          type="radio"
+          name="defaultProvider"
+          [checked]="settings.defaultProviderId === provider.id"
+          (change)="setDefault(provider.id)"
+        />
+        <strong>{{ provider.label }}</strong>
+      </label>
+      <span class="tag is-rounded" [class.is-success]="provider.hasKey" [class.is-dark]="!provider.hasKey">
+        {{ provider.hasKey ? 'chave salva' : 'sem chave' }}
+      </span>
+    </div>
+
+    <p class="text-muted mt-3" *ngIf="provider.id === 'mock'" style="font-size:0.8rem">
+      Não chama nenhuma API — devolve exatamente o prompt que seria enviado a um provedor real,
+      pra você conferir se os dados da demo estão bem formatados antes de gastar crédito de verdade.
+    </p>
+
+    <div class="field is-grouped mt-3" *ngIf="provider.id !== 'custom' && provider.id !== 'mock'">
+      <div class="control">
+        <label class="label is-small text-muted">Modelo</label>
+        <input class="input is-small" [ngModel]="provider.model" (ngModelChange)="saveModel(provider.id, $event)" />
+      </div>
+    </div>
+
+    <div class="field is-grouped mt-3" *ngIf="provider.id === 'custom'">
+      <div class="control is-expanded">
+        <label class="label is-small text-muted">Endpoint</label>
+        <input
+          class="input is-small"
+          placeholder="https://sua-api.com/v1/analyze"
+          [ngModel]="provider.endpoint"
+          (ngModelChange)="saveEndpoint(provider.id, $event)"
+        />
+      </div>
+      <div class="control">
+        <label class="label is-small text-muted">Modelo</label>
+        <input class="input is-small" [ngModel]="provider.model" (ngModelChange)="saveModel(provider.id, $event)" />
+      </div>
+    </div>
+
+    <div class="field has-addons mt-3" *ngIf="provider.id !== 'mock'">
+      <div class="control is-expanded">
+        <input
+          class="input is-small"
+          type="password"
+          placeholder="Colar API key"
+          [(ngModel)]="keyDrafts[provider.id]"
+        />
+      </div>
+      <div class="control">
+        <button
+          class="button is-small"
+          [class.is-loading]="savingKeyFor === provider.id"
+          (click)="saveKey(provider.id)"
+        >
+          Salvar chave
+        </button>
+      </div>
+      <div class="control" *ngIf="provider.hasKey">
+        <button class="button is-small is-ghost has-text-danger" (click)="clearKey(provider.id)">Remover</button>
+      </div>
+    </div>
+  </div>
+</ng-container>

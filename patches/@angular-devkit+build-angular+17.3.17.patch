@@ -1,0 +1,13 @@
+diff --git a/node_modules/@angular-devkit/build-angular/src/tools/sass/worker.js b/node_modules/@angular-devkit/build-angular/src/tools/sass/worker.js
+index 0af7605..ac60fac 100644
+--- a/node_modules/@angular-devkit/build-angular/src/tools/sass/worker.js
++++ b/node_modules/@angular-devkit/build-angular/src/tools/sass/worker.js
+@@ -44,7 +44,7 @@ node_worker_threads_1.parentPort.on('message', (message) => {
+                         id,
+                         url,
+                         options: {
+-                            ...options,
++                            fromImport: options.fromImport,
+                             containingUrl: options.containingUrl ? (0, node_url_1.fileURLToPath)(options.containingUrl) : null,
+                         },
+                     });

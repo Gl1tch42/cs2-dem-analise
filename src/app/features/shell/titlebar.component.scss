@@ -1,0 +1,64 @@
+:host {
+  display: block;
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.titlebar {
+  height: 32px;
+  display: flex;
+  align-items: stretch;
+  // mesma cor do fundo do app — sem borda/sombra separando da janela,
+  // pra parecer parte contínua do resto do app (estilo Discord).
+  background: #14181d;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.titlebar-drag {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding-left: 0.75rem;
+  min-width: 0;
+}
+
+.titlebar-brand {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titlebar-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+  width: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    background: #1f252d;
+    color: #f2f4f6;
+  }
+
+  &:active {
+    background: #262c35;
+  }
+}
+
+.titlebar-close:hover {
+  background: var(--fails-color);
+  color: #fff;
+}

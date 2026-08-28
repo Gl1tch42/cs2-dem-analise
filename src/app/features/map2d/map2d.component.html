@@ -1,0 +1,140 @@
+<div class="map2d">
+  <ng-container *ngIf="demos.length === 0">
+    <p class="text-muted">Importe pelo menos uma demo pra ver o replay 2D.</p>
+  </ng-container>
+
+  <ng-container *ngIf="demos.length > 0">
+    <div class="map2d-toolbar">
+      <label class="demo-select-label">
+        Demo:
+        <select class="input is-small" [(ngModel)]="selectedDemoId" (ngModelChange)="onDemoChange()">
+          <option *ngFor="let d of demos" [value]="d.id">{{ d.fileName }} ({{ d.map }})</option>
+        </select>
+      </label>
+
+      <span class="radar-status" *ngIf="radarStatus === 'missing'">
+        <a (click)="extractRadars()">🗺️ usar radar real do CS2 (dust2, mirage, ...)</a>
+      </span>
+      <span class="radar-status text-muted" *ngIf="radarStatus === 'extracting'">Extraindo radares do CS2 local…</span>
+      <span class="radar-status text-muted" *ngIf="radarStatus === 'loaded'">🗺️ radar real do CS2</span>
+      <span class="help is-danger radar-status" *ngIf="extractError">{{ extractError }}</span>
+    </div>
+
+    <p class="text-muted" *ngIf="loading">Carregando posições…</p>
+    <p class="help is-danger" *ngIf="loadError">{{ loadError }}</p>
+
+    <ng-container *ngIf="summary && !loading">
+      <div class="round-nav" *ngIf="summary.rounds.length > 0">
+        <button class="button is-small" (click)="prevRound()" [disabled]="roundIndex === 0">‹ anterior</button>
+        <span class="round-label">
+          Round {{ currentRound?.roundNumber }} / {{ summary.rounds.length }}
+          <span
+            class="badge"
+            [class.badge-ct]="currentRound?.winner === 'ct'"
+            [class.badge-t]="currentRound?.winner === 't'"
+          >
+            {{ currentRound?.winner === 'ct' ? 'CT venceu' : 'TR venceu' }}
+          </span>
+          <span class="text-muted" *ngIf="currentRound?.siteHit && currentRound?.siteHit !== 'unknown'">
+            · site {{ currentRound?.siteHit }}
+          </span>
+        </span>
+        <button
+          class="button is-small"
+          (click)="nextRound()"
+          [disabled]="roundIndex === summary.rounds.length - 1"
+        >
+          próxima ›
+        </button>
+      </div>
+
+      <p class="text-muted" *ngIf="summary.rounds.length === 0">Esta demo não tem rounds parseados.</p>
+
+      <ng-container *ngIf="summary.rounds.length > 0">
+        <div class="map2d-body">
+          <div class="map2d-canvas-wrap panel-block-data">
+            <canvas #canvas width="640" height="640"></canvas>
+            <p class="text-muted no-data" *ngIf="!currentRound?.keyPositions?.length">
+              Sem amostras de posição gravadas para esta rodada.
+            </p>
+          </div>
+
+          <div class="economy-panel" *ngIf="currentRound?.loadout?.length">
+            <ng-container *ngFor="let side of sides">
+              <div
+                class="scoreboard-row"
+                *ngFor="let l of loadoutBySide(side)"
+                [class.side-ct]="side === 'ct'"
+                [class.side-t]="side === 't'"
+                [class.is-dead]="deathOf(l.player)"
+              >
+                <span class="sb-stripe"></span>
+                <div class="sb-main">
+                  <span class="sb-hp mono">{{ l.health ?? '—' }}</span>
+                  <span class="sb-armor-icon" [class.filled]="l.armor && l.armor > 0" [class.helmet]="l.hasHelmet" [title]="l.armor ? (l.armor + ' de colete' + (l.hasHelmet ? ' + capacete' : '')) : 'sem colete'">
+                    <svg viewBox="0 0 24 24" width="13" height="13">
+                      <path d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" />
+                    </svg>
+                  </span>
+                  <span class="sb-name">{{ l.player }}</span>
+                  <span class="sb-weapon text-muted">{{ formatWeapon(l.weapon) }}</span>
+                  <span class="sb-money mono">${{ l.equipValue }}</span>
+                  <span class="sb-dead" *ngIf="deathOf(l.player) as death" [title]="death.by ? ('morto por ' + death.by) : ''">✕</span>
+                </div>
+                <div class="sb-sub" *ngIf="l.kills !== undefined">
+                  <span class="mono">K {{ l.kills }}</span>
+                  <span class="mono">D {{ l.deaths }}</span>
+                  <span class="mono" *ngIf="l.assists">A {{ l.assists }}</span>
+                  <span class="sb-roundkill" *ngIf="killsThisRound(l.player) as k">+{{ k }} neste round</span>
+                </div>
+              </div>
+            </ng-container>
+          </div>
+        </div>
+
+        <div class="playback-bar">
+          <button
+            class="button is-small"
+            (click)="togglePlay()"
+            [disabled]="!currentRound?.keyPositions?.length"
+          >
+            {{ playing ? '❚❚ pausar' : '▶ tocar' }}
+          </button>
+          <input
+            type="range"
+            class="scrub"
+            min="0"
+            [max]="maxTime"
+            step="0.1"
+            [(ngModel)]="currentTime"
+            (ngModelChange)="onScrub($event)"
+            [disabled]="!currentRound?.keyPositions?.length"
+          />
+          <span class="time-label mono">{{ formatTime(currentTime) }} / {{ formatTime(maxTime) }}</span>
+          <div class="speed-buttons">
+            <button
+              *ngFor="let s of speedOptions"
+              class="button is-small"
+              [class.is-active]="speed === s"
+              (click)="setSpeed(s)"
+            >
+              {{ s }}x
+            </button>
+          </div>
+        </div>
+
+        <div class="legend">
+          <span class="legend-item"><span class="dot dot-ct"></span> CT</span>
+          <span class="legend-item"><span class="dot dot-t"></span> TR</span>
+          <span class="legend-item"><span class="x-mark">✕</span> morto</span>
+          <span class="legend-item"><span class="dot dot-glow"></span> ponta brilhando = atirando</span>
+          <span class="legend-item"><span class="swatch swatch-smoke"></span> fumaça</span>
+          <span class="legend-item"><span class="swatch swatch-fire"></span> molotov</span>
+          <span class="legend-item"><span class="swatch swatch-flash"></span> flash</span>
+          <span class="legend-item"><span class="ring-mark"></span> cego</span>
+          <span class="legend-item"><span class="swatch swatch-decoy"></span> decoy</span>
+        </div>
+      </ng-container>
+    </ng-container>
+  </ng-container>
+</div>

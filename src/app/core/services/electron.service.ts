@@ -1,0 +1,68 @@
+import { Injectable } from '@angular/core';
+import {
+  SlotMeta,
+  SlotDetail,
+  DemoRecord,
+  DemoSummary,
+  AiSettings,
+  AiProviderId,
+  AnalysisResult,
+} from '../models/slot.model';
+
+declare global {
+  interface Window {
+    electronAPI: {
+      slots: {
+        list: () => Promise<SlotMeta[]>;
+        get: (id: string) => Promise<SlotDetail>;
+        rename: (id: string, name: string) => Promise<SlotMeta>;
+        setColorTag: (id: string, colorTag: string) => Promise<SlotMeta>;
+        saveNotebook: (id: string, content: string) => Promise<{ content: string; updatedAt: string }>;
+        removeDemo: (id: string, demoId: string) => Promise<void>;
+        setDemoRoster: (id: string, demoId: string, steamIds: string[]) => Promise<DemoRecord>;
+      };
+      demos: {
+        importDemo: (slotId: string) => Promise<DemoRecord[]>;
+        getSummary: (slotId: string, demoId: string) => Promise<DemoSummary>;
+      };
+      assets: {
+        getRadarImage: (map: string) => Promise<string | null>;
+        extractRadars: () => Promise<{ cs2Found: boolean; extractedMaps: string[]; error?: string }>;
+      };
+      ai: {
+        getSettings: () => Promise<AiSettings>;
+        setDefaultProvider: (providerId: AiProviderId) => Promise<AiSettings>;
+        updateProviderConfig: (providerId: AiProviderId, patch: unknown) => Promise<AiSettings>;
+        saveApiKey: (providerId: AiProviderId, apiKey: string) => Promise<AiSettings>;
+        clearApiKey: (providerId: AiProviderId) => Promise<AiSettings>;
+        analyzeSlot: (slotId: string, providerId?: AiProviderId) => Promise<AnalysisResult>;
+      };
+      app: {
+        getVersion: () => Promise<string>;
+      };
+      window: {
+        minimize: () => Promise<void>;
+        toggleMaximize: () => Promise<void>;
+        close: () => Promise<void>;
+        isMaximized: () => Promise<boolean>;
+        onMaximizedChange: (cb: (isMaximized: boolean) => void) => () => void;
+      };
+    };
+  }
+}
+
+/**
+ * Fininho de propósito: só repassa para window.electronAPI. Mantém os
+ * componentes desacoplados do detalhe "isso é Electron" e dá um único
+ * lugar pra trocar de estratégia se um dia rodar fora do Electron (ex: modo web).
+ */
+@Injectable({ providedIn: 'root' })
+export class ElectronService {
+  get api() {
+    return window.electronAPI;
+  }
+
+  get isElectron(): boolean {
+    return !!window.electronAPI;
+  }
+}

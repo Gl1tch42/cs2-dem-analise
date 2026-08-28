@@ -1,0 +1,62 @@
+{
+  "name": "cs-demo-analyst",
+  "version": "0.1.0",
+  "description": "Analisador de demos de CS: mapa 2D animado, IA de padrões táticos e notebook do analista.",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "postinstall": "patch-package",
+    "ng": "ng",
+    "start": "concurrently -k -n ANGULAR,ELECTRON -c blue,yellow \"npm run start:angular\" \"npm run start:electron\"",
+    "start:angular": "ng serve",
+    "start:electron": "wait-on http://localhost:4200 && npm run build:electron && electron .",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:angular": "ng build",
+    "build": "npm run build:angular && npm run build:electron",
+    "package": "npm run build && electron-builder",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "private": true,
+  "overrides": {
+    "sass": "^1.103.1"
+  },
+  "dependencies": {
+    "@angular/animations": "^17.3.0",
+    "@angular/common": "^17.3.0",
+    "@angular/compiler": "^17.3.0",
+    "@angular/core": "^17.3.0",
+    "@angular/forms": "^17.3.0",
+    "@angular/platform-browser": "^17.3.0",
+    "@angular/platform-browser-dynamic": "^17.3.0",
+    "@angular/router": "^17.3.0",
+    "@tiptap/core": "^3.30.5",
+    "@tiptap/extension-placeholder": "^3.30.5",
+    "@tiptap/pm": "^3.30.5",
+    "@tiptap/starter-kit": "^3.30.5",
+    "bulma": "^1.0.2",
+    "rxjs": "~7.8.0",
+    "tiptap-markdown": "^0.9.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.14.3"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^17.3.17",
+    "@angular/cli": "^17.3.17",
+    "@angular/compiler-cli": "^17.3.0",
+    "@types/jasmine": "~5.1.0",
+    "@types/node": "^20.11.0",
+    "concurrently": "^8.2.2",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3",
+    "jasmine-core": "~5.1.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "patch-package": "^8.0.1",
+    "sass": "^1.103.1",
+    "typescript": "~5.4.2",
+    "wait-on": "^7.2.0"
+  }
+}
