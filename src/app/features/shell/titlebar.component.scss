@@ -8,8 +8,6 @@
   height: 32px;
   display: flex;
   align-items: stretch;
-  // mesma cor do fundo do app — sem borda/sombra separando da janela,
-  // pra parecer parte contínua do resto do app (estilo Discord).
   background: #14181d;
   -webkit-app-region: drag;
   user-select: none;

@@ -1,9 +1,3 @@
-/**
- * Espelho de electron/storage/radarCalibration.ts (ver lá o porquê da duplicação
- * entre main/renderer). São só números de calibração world->radar, extraídos dos
- * arquivos oficiais `resource/overviews/<mapa>.txt` do próprio CS2 — não a
- * imagem do radar em si, que é obtida localmente da instalação do usuário.
- */
 export interface RadarCalibration {
   posX: number;
   posY: number;

@@ -19,19 +19,16 @@ type RadarStatus = 'idle' | 'loaded' | 'missing' | 'unsupported' | 'extracting';
 
 const CT_COLOR = '#5dade2';
 const T_COLOR = '#f5b041';
-const DIRECTION_COLOR = '#26282c'; // pontinha de direção — preto/cinza escuro, "grudada" na bola
+const DIRECTION_COLOR = '#26282c';
 const BALL_RADIUS = 5.5;
-const GLOW_COLOR = '255,241,150'; // rgb — brilho na ponta do indicador de direção quando atira
-const SHOT_FLASH_WINDOW = 0.25; // segundos ao redor do tiro em que a ponta brilha
+const GLOW_COLOR = '255,241,150';
+const SHOT_FLASH_WINDOW = 0.25;
 
-// Raios aproximados (unidades de mundo do CS) das áreas de efeito das granadas —
-// só pra desenhar a região no mapa, não precisam ser exatos ao milímetro.
 const SMOKE_RADIUS = 144;
 const FIRE_RADIUS = 120;
-const FLASH_PULSE_DURATION = 0.5; // segundos que o "estouro" da flash fica visível
-const BLIND_RING_RADIUS = 12; // px fixos (não escala com o zoom do mapa)
+const FLASH_PULSE_DURATION = 0.5;
+const BLIND_RING_RADIUS = 12;
 
-/** Interpolação de ângulo pelo caminho mais curto (evita giro de 350° em vez de -10°). */
 function lerpAngle(a: number, b: number, ratio: number): number {
   const diff = (((b - a + 180) % 360) + 360) % 360 - 180;
   return a + diff * ratio;
@@ -136,7 +133,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
       return;
     }
 
-    // 1. Radares já vêm empacotados com o app (assets/radars/) — funciona sem CS2 instalado.
     const bundled = await this.loadImage(`assets/radars/${map}.png`);
     if (bundled) {
       this.radarImageEl = bundled;
@@ -146,7 +142,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
       return;
     }
 
-    // 2. Fallback: mapa novo ainda não empacotado — tenta o cache extraído do CS2 local.
     try {
       const dataUrl = await this.electron.api.assets.getRadarImage(map);
       if (!dataUrl) {
@@ -227,8 +222,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
       if (p.y < minY) minY = p.y;
       if (p.y > maxY) maxY = p.y;
     }
-    // padding proporcional + garante uma área quadrada mínima pra não distorcer
-    // a posição relativa dos jogadores quando o range de um eixo é bem menor que o outro.
     const span = Math.max(maxX - minX, maxY - minY, 200);
     const pad = span * 0.1;
     const cx = (minX + maxX) / 2;
@@ -380,7 +373,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
   private toCanvasXY(x: number, y: number, width: number, height: number): { px: number; py: number } {
     if (this.useRealRadar && this.calibration) {
       const px = ((x - this.calibration.posX) / this.calibration.scale) * (width / RADAR_REFERENCE_SIZE);
-      // eixo Y do radar cresce de cima pra baixo a partir de pos_y (canto superior esquerdo em world Y).
       const py = ((this.calibration.posY - y) / this.calibration.scale) * (height / RADAR_REFERENCE_SIZE);
       return { px, py };
     }
@@ -388,12 +380,10 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     const rangeX = maxX - minX || 1;
     const rangeY = maxY - minY || 1;
     const px = ((x - minX) / rangeX) * width;
-    // eixo Y do mundo do CS cresce pra "norte" — inverte pra desenhar com y pra baixo na tela.
     const py = height - ((y - minY) / rangeY) * height;
     return { px, py };
   }
 
-  /** Converte um raio em unidades de mundo (ex: raio de fumaça) pra pixels do canvas atual. */
   private worldRadiusToPixels(radius: number, width: number): number {
     if (this.useRealRadar && this.calibration) {
       return (radius / this.calibration.scale) * (width / RADAR_REFERENCE_SIZE);
@@ -434,13 +424,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
   }
 
-  /**
-   * A bola (círculo, sempre na cor do time) é o marcador principal do
-   * jogador. Quando a demo expõe yaw, uma pontinha triangular pequena e
-   * escura (preto/cinza) fica grudada na borda da bola, apontando pra onde
-   * ele está olhando. Quando `shooting` é true, acende um brilho bem na
-   * ponta dessa seta — sem mudar a cor da bola nem da seta.
-   */
   private drawPlayerMarker(
     ctx: CanvasRenderingContext2D,
     px: number,
@@ -452,7 +435,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     ctx.save();
     ctx.translate(px, py);
 
-    // a bola — sempre presente, é ela que representa o jogador.
     ctx.beginPath();
     ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = color;
@@ -462,12 +444,10 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     ctx.stroke();
 
     if (yawDeg !== undefined) {
-      // yaw 0° = +X (leste); no canvas (Y pra baixo), o mesmo sentido físico
-      // vira uma rotação negativa em relação ao eixo X do canvas.
       ctx.rotate((-yawDeg * Math.PI) / 180);
 
       const triSize = 4;
-      const baseX = BALL_RADIUS - 1; // começa um pouco "dentro" da bola, grudada na borda
+      const baseX = BALL_RADIUS - 1;
       ctx.beginPath();
       ctx.moveTo(baseX + triSize, 0);
       ctx.lineTo(baseX - triSize * 0.4, triSize * 0.6);
@@ -487,7 +467,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
         ctx.fill();
       }
     } else if (shooting) {
-      // sem yaw (dado de demo antiga sem esse prop) — brilho ao redor da própria bola.
       const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 12);
       grad.addColorStop(0, `rgba(${GLOW_COLOR},0.85)`);
       grad.addColorStop(1, `rgba(${GLOW_COLOR},0)`);
@@ -524,7 +503,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     ctx.restore();
   }
 
-  /** Fumaça (cinza), fogo de molotov (vermelho/laranja) e decoy (contorno pontilhado) — sob os jogadores. */
   private drawGrenadeEffects(ctx: CanvasRenderingContext2D, width: number, height: number) {
     const round = this.currentRound;
     if (!round) return;
@@ -572,7 +550,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     }
   }
 
-  /** Estouro de flashbang: um clarão branco que expande e desaparece rápido. */
   private drawFlashPulses(ctx: CanvasRenderingContext2D, width: number, height: number) {
     const round = this.currentRound;
     if (!round) return;
@@ -594,13 +571,6 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     }
   }
 
-  /**
-   * @ViewChild só é resolvido depois que a view termina de assentar — chamadas
-   * vindas de fluxos assíncronos (loadRadarImage, extractRadars) podem terminar
-   * antes disso e cair num draw() sem canvas ainda. Dá um segundo tiro via
-   * setTimeout(0) pra cobrir esse caso, sem custo perceptível quando já funcionou
-   * de primeira.
-   */
   private safeDraw() {
     this.draw();
     setTimeout(() => this.draw());

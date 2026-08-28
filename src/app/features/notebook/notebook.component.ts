@@ -45,7 +45,6 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    // troca de slot (Seu Time / Adversário) — recarrega o editor com o notebook do novo slot
     if (this.viewReady && changes['slotId'] && this.slotId !== this.loadedSlotId) {
       this.mountEditor();
     }
@@ -73,7 +72,6 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
   onEdit() {
     this.status = 'idle';
     if (this.saveTimer) clearTimeout(this.saveTimer);
-    // autosave com debounce — evita gravar em disco a cada tecla
     this.saveTimer = setTimeout(() => this.save(), 800);
   }
 

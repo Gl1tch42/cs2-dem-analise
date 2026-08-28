@@ -29,15 +29,6 @@ const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const electron_1 = require("electron");
-/**
- * O parsing real do binário .dem é feito em Python (biblioteca `demoparser2`),
- * empacotado como executável standalone (PyInstaller) dentro de resources/python/
- * no build final — assim o usuário não precisa ter Python instalado.
- *
- * Em desenvolvimento, apontamos para `python/parse_demo.py` rodando com o
- * interpretador do sistema; troque PARSER_BIN por resources/python/parse_demo(.exe)
- * quando empacotar com electron-builder (extraResources).
- */
 function resolveParserCommand() {
     const isPackaged = electron_1.app.isPackaged;
     if (isPackaged) {

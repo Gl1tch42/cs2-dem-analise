@@ -16,11 +16,6 @@ async function callAiProvider({ provider, apiKey, systemPrompt, userPrompt }) {
     }
 }
 exports.callAiProvider = callAiProvider;
-/**
- * Não chama API nenhuma — devolve o prompt exatamente como seria enviado pra uma IA
- * de verdade. Serve pra validar se os dados da demo estão sendo montados de um jeito
- * legível ANTES de gastar crédito de API de verdade com um provedor real.
- */
 async function callMock(systemPrompt, userPrompt) {
     return [
         '⚠️ Modo de teste local — nenhuma IA foi chamada, nenhum crédito foi gasto.',
@@ -87,7 +82,6 @@ async function callCustomEndpoint(provider, apiKey, system, user) {
     if (!res.ok)
         throw new Error(`Endpoint personalizado: ${res.status} ${await res.text()}`);
     const data = await res.json();
-    // Ajuste este parsing conforme o formato de resposta do seu endpoint.
     return data.text ?? data.content ?? JSON.stringify(data);
 }
 //# sourceMappingURL=providers.js.map

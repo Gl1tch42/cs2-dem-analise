@@ -5,6 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { ElectronService } from '../../core/services/electron.service';
 import { NotebookComponent } from '../notebook/notebook.component';
 import { Map2dComponent } from '../map2d/map2d.component';
+import { TeamStatsComponent } from './team-stats.component';
 import { SlotDetail, AnalysisResult, DemoRecord, DemoSummary } from '../../core/models/slot.model';
 
 type TabId = 'overview' | 'map' | 'demos' | 'notebook' | 'ai';
@@ -12,7 +13,7 @@ type TabId = 'overview' | 'map' | 'demos' | 'notebook' | 'ai';
 @Component({
   selector: 'app-slot-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, NotebookComponent, Map2dComponent],
+  imports: [CommonModule, FormsModule, NotebookComponent, Map2dComponent, TeamStatsComponent],
   templateUrl: './slot-detail.component.html',
   styleUrl: './slot-detail.component.scss',
 })
@@ -116,10 +117,9 @@ export class SlotDetailComponent implements OnInit {
   toggleRosterPlayer(steamId: string) {
     if (this.rosterDraft.has(steamId)) this.rosterDraft.delete(steamId);
     else this.rosterDraft.add(steamId);
-    this.rosterDraft = new Set(this.rosterDraft); // novo objeto — força o Angular a reavaliar rosterDraft.has() no template
+    this.rosterDraft = new Set(this.rosterDraft);
   }
 
-  /** Preenche o rascunho com quem jogou mais de um lado (ct/t) nesta demo — atalho, já que o time troca de lado no intervalo. */
   selectRosterSide(side: 'ct' | 't') {
     if (!this.rosterSummary) return;
     this.rosterDraft = new Set(
@@ -155,12 +155,4 @@ export class SlotDetailComponent implements OnInit {
     }
   }
 
-  winRatePct(rate: number): string {
-    return `${Math.round(rate * 100)}%`;
-  }
-
-  /** Exposto para o template poder iterar Records (ex: tendencyByBuyType) com *ngFor. */
-  entries<T>(obj: Record<string, T> | undefined): [string, T][] {
-    return obj ? Object.entries(obj) : [];
-  }
 }

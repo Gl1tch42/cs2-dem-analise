@@ -2,11 +2,6 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ElectronService } from '../../core/services/electron.service';
 
-/**
- * Barra de título customizada — a janela roda com frame:false (ver electron/main.ts)
- * pra ficar parecida com o Discord: sem moldura/menu nativos do Windows, só esta
- * faixa fina com a área de arrastar e os três botões (minimizar/maximizar/fechar).
- */
 @Component({
   selector: 'app-titlebar',
   standalone: true,

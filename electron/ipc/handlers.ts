@@ -8,7 +8,6 @@ import { runSlotAnalysis } from '../ai/analysisRunner';
 import { extractRadarsFromLocalCs2, getCachedRadarPath } from '../ai/radarExtractor';
 
 export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, settings: SettingsManager) {
-  // --- Slots -----------------------------------------------------------
   ipcMain.handle('slots:list', () => slots.listSlots());
   ipcMain.handle('slots:get', (_e, id: string) => slots.getSlot(id));
   ipcMain.handle('slots:rename', (_e, id: string, name: string) => slots.renameSlot(id, name));
@@ -19,7 +18,6 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
     slots.setDemoRoster(id, demoId, steamIds)
   );
 
-  // --- Demos -------------------------------------------------------------
   ipcMain.handle('demos:getSummary', (_e, slotId: string, demoId: string) =>
     slots.readDemoSummary(slotId, demoId)
   );
@@ -34,10 +32,7 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
 
     const added = [];
     for (const filePath of result.filePaths) {
-      // 1. Parser Python (empacotado) extrai o resumo estruturado da demo.
       const parsed = await parseDemoFile(filePath);
-      // 2. Só o resumo (leve) é gravado no slot — a demo bruta fica só se o usuário
-      //    marcar essa opção no futuro; por padrão não duplicamos arquivos grandes.
       const record = slots.addDemo(slotId, {
         fileName: parsed.fileName,
         map: parsed.map,
@@ -45,14 +40,12 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
         score: parsed.finalScore,
         roundsParsed: parsed.rounds.length,
       });
-      // grava o summary.json dentro da pasta real criada pelo addDemo
       parsed.writeSummary(slots.demoFolderPath(slotId, record.id));
       added.push(record);
     }
     return added;
   });
 
-  // --- Configurações de IA -----------------------------------------------
   ipcMain.handle('ai:getSettings', () => settings.getSettings());
   ipcMain.handle('ai:setDefaultProvider', (_e, providerId: AiProviderId) => settings.setDefaultProvider(providerId));
   ipcMain.handle('ai:updateProviderConfig', (_e, providerId: AiProviderId, patch: any) =>
@@ -67,7 +60,6 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
     runSlotAnalysis(slots, settings, slotId, providerId)
   );
 
-  // --- Radares do Mapa 2D (extraídos do CS2 local do usuário) ------------
   ipcMain.handle('assets:extractRadars', () => extractRadarsFromLocalCs2());
   ipcMain.handle('assets:getRadarImage', (_e, map: string) => {
     const filePath = getCachedRadarPath(map);
@@ -76,11 +68,8 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
     return `data:image/png;base64,${buf.toString('base64')}`;
   });
 
-  // --- App -----------------------------------------------------------------
   ipcMain.handle('app:getVersion', () => process.env['npm_package_version'] ?? '0.1.0');
 
-  // --- Janela (a barra de título nativa some com frame:false — os controles
-  //     de minimizar/maximizar/fechar são desenhados pelo Angular e chamam isto) ---
   ipcMain.handle('window:minimize', () => win.minimize());
   ipcMain.handle('window:toggleMaximize', () => (win.isMaximized() ? win.unmaximize() : win.maximize()));
   ipcMain.handle('window:close', () => win.close());

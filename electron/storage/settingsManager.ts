@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AiProviderConfig, AiProviderId, AiSettings } from './types';
 
-/** 'mock' não chama nenhuma API de verdade — não precisa de chave, hasKey já vem true. */
 const DEFAULT_PROVIDERS: AiProviderConfig[] = [
   { id: 'anthropic', label: 'Claude (Anthropic)', model: 'claude-sonnet-5', hasKey: false },
   { id: 'openai', label: 'OpenAI', model: 'gpt-4.1-mini', hasKey: false },
@@ -11,13 +10,6 @@ const DEFAULT_PROVIDERS: AiProviderConfig[] = [
   { id: 'mock', label: 'Teste local (sem custo, sem API)', hasKey: true },
 ];
 
-/**
- * As chaves de API nunca são gravadas em texto puro nem devolvidas ao renderer.
- * Usamos safeStorage (DPAPI no Windows, Keychain no macOS, libsecret no Linux)
- * para criptografar antes de gravar em disco. Se safeStorage não estiver
- * disponível (ex: algumas distros Linux sem keyring), caímos para uma
- * ofuscação simples com aviso — nunca bloqueamos o usuário.
- */
 export class SettingsManager {
   private readonly settingsPath: string;
   private readonly keysDir: string;
@@ -39,7 +31,6 @@ export class SettingsManager {
     }
   }
 
-  /** Instalações antigas têm um settings.json sem os provedores novos (ex: 'mock') — completa sem apagar o que já tem. */
   private backfillMissingProviders() {
     const settings = this.readRaw();
     let changed = false;
@@ -64,7 +55,6 @@ export class SettingsManager {
     return path.join(this.keysDir, `${providerId}.key`);
   }
 
-  /** Retorna as configs SEM as chaves (seguro para mandar pro renderer). */
   getSettings(): AiSettings {
     return this.readRaw();
   }
@@ -88,7 +78,7 @@ export class SettingsManager {
   saveApiKey(providerId: AiProviderId, apiKey: string): AiSettings {
     const encrypted = safeStorage.isEncryptionAvailable()
       ? safeStorage.encryptString(apiKey)
-      : Buffer.from(apiKey, 'utf-8'); // fallback sem criptografia real — ver aviso acima
+      : Buffer.from(apiKey, 'utf-8');
     fs.writeFileSync(this.keyFile(providerId), encrypted);
 
     const settings = this.readRaw();
@@ -108,7 +98,6 @@ export class SettingsManager {
     return settings;
   }
 
-  /** Só é chamado internamente pelo cliente de IA — nunca exposto via IPC. */
   getDecryptedKey(providerId: AiProviderId): string | null {
     const file = this.keyFile(providerId);
     if (!fs.existsSync(file)) return null;

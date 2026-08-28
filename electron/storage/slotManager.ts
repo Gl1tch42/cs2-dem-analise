@@ -13,16 +13,6 @@ import {
   MAX_OPPONENT_SLOTS,
 } from './types';
 
-/**
- * Tudo fica dentro de <userData>/cs-demo-analyst/slots/<slotId>/
- *   meta.json
- *   notebook.md
- *   demos/<demoId>/raw.dem       (opcional, se o usuário mantiver a demo original)
- *   demos/<demoId>/summary.json  (saída do parser Python — o que a IA de fato lê)
- *
- * Não há banco de dados: cada slot é uma pasta autocontida, fácil de copiar/backupar
- * manualmente pelo usuário.
- */
 export class SlotManager {
   private readonly rootDir: string;
 
@@ -140,15 +130,10 @@ export class SlotManager {
   saveNotebook(id: string, content: string): NotebookEntry {
     fs.writeFileSync(this.notebookPath(id), content);
     const meta = this.readMeta(id);
-    this.writeMeta(meta); // só para tocar updatedAt do slot
+    this.writeMeta(meta);
     return { content, updatedAt: new Date().toISOString() };
   }
 
-  /**
-   * Registra uma demo já parseada dentro do slot. O parsing em si (chamada ao script
-   * Python) acontece antes, em electron/ai ou num handler dedicado — aqui só gravamos
-   * o resultado e mantemos o limite de MAX_DEMOS_PER_SLOT.
-   */
   addDemo(id: string, record: Omit<DemoRecord, 'id' | 'addedAt'>): DemoRecord {
     const existing = this.readDemoRecords(id);
     if (existing.length >= MAX_DEMOS_PER_SLOT) {
@@ -168,7 +153,6 @@ export class SlotManager {
     return full;
   }
 
-  /** Marca quais 5 steamIds são "o time deste slot" numa demo — ver comentário em types.ts. */
   setDemoRoster(id: string, demoId: string, steamIds: string[]): DemoRecord {
     const records = this.readDemoRecords(id);
     const record = records.find((r) => r.id === demoId);
@@ -191,12 +175,10 @@ export class SlotManager {
     this.writeMeta(meta);
   }
 
-  /** Caminho absoluto da pasta de uma demo — usado pelos handlers de parsing/IA. */
   demoFolderPath(slotId: string, demoId: string): string {
     return path.join(this.demosDir(slotId), demoId);
   }
 
-  /** Lê o summary.json completo (rounds, keyPositions etc.) de uma demo já importada. */
   readDemoSummary(slotId: string, demoId: string): DemoSummary {
     const records = this.readDemoRecords(slotId);
     const record = records.find((r) => r.id === demoId);

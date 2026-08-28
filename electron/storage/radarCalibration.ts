@@ -1,14 +1,3 @@
-/**
- * Calibração world->radar de cada mapa: pos_x/pos_y (canto superior esquerdo,
- * em coordenadas de mundo) e scale (unidades de mundo por pixel), extraídos dos
- * arquivos oficiais `resource/overviews/<mapa>.txt` do próprio CS2. São só
- * números (não a imagem do radar em si), então não há problema de direitos
- * autorais em manter isso no código-fonte.
- *
- * Imagem de referência: 1024x1024px. Ver radarExtractor.ts pra como a imagem
- * real (essa sim, propriedade da Valve) é obtida — a partir da instalação
- * local do CS2 do próprio usuário, nunca redistribuída com o app.
- */
 export interface RadarCalibration {
   posX: number;
   posY: number;
@@ -32,5 +21,4 @@ export const RADAR_CALIBRATION: Record<string, RadarCalibration> = {
   cs_office: { posX: -1838, posY: 1858, scale: 4.1 },
 };
 
-/** Mapas cuja imagem de radar tentamos extrair automaticamente do CS2 local. */
 export const RADAR_EXTRACTABLE_MAPS = Object.keys(RADAR_CALIBRATION);

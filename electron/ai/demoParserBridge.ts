@@ -5,15 +5,6 @@ import * as os from 'os';
 import { app } from 'electron';
 import { DemoSummary } from '../storage/types';
 
-/**
- * O parsing real do binário .dem é feito em Python (biblioteca `demoparser2`),
- * empacotado como executável standalone (PyInstaller) dentro de resources/python/
- * no build final — assim o usuário não precisa ter Python instalado.
- *
- * Em desenvolvimento, apontamos para `python/parse_demo.py` rodando com o
- * interpretador do sistema; troque PARSER_BIN por resources/python/parse_demo(.exe)
- * quando empacotar com electron-builder (extraResources).
- */
 function resolveParserCommand(): { cmd: string; baseArgs: string[] } {
   const isPackaged = app.isPackaged;
   if (isPackaged) {

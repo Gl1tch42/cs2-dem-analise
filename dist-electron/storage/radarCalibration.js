@@ -16,6 +16,5 @@ exports.RADAR_CALIBRATION = {
     cs_italy: { posX: -2647, posY: 2592, scale: 4.6 },
     cs_office: { posX: -1838, posY: 1858, scale: 4.1 },
 };
-/** Mapas cuja imagem de radar tentamos extrair automaticamente do CS2 local. */
 exports.RADAR_EXTRACTABLE_MAPS = Object.keys(exports.RADAR_CALIBRATION);
 //# sourceMappingURL=radarCalibration.js.map

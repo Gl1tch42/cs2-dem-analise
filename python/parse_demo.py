@@ -1,55 +1,20 @@
-#!/usr/bin/env python3
-"""
-Parser real de demos de CS2, usando `demoparser2` (bindings Rust, rápido).
-
-Lê a demo em --input, extrai por rodada (buyType, tempo, postura, site,
-utilitário, posições esparsas) e por jogador (kills/deaths/ADR, entry
-duels, clutches, áreas mais visitadas), e escreve tudo no formato
-DemoSummary (ver electron/storage/types.ts) como JSON em --output.
-
-Toda demo tem DOIS lados (CT e T) e o app ainda não tem um jeito de saber
-qual dos dois é "o time do slot" entre demos diferentes — por isso os
-campos táticos de rodada saem separados por lado (round.ct / round.t) em
-vez de tentar adivinhar uma perspectiva única, e playerAggregates traz os
-10 jogadores da partida, cada um marcado com o lado predominante que jogou.
-
-Classificações como buyType/tempo/postura são HEURÍSTICAS (limiares
-simples e documentados abaixo), no mesmo espírito do "algoritmo leve" de
-electron/ai/localHeuristics.ts — não é machine learning, e os limiares são
-ajustáveis conforme a gente for testando contra demos reais.
-"""
 import argparse
 import json
 import os
 import sys
 from typing import Optional
 
-# Em algumas instalações do Windows, stdout/stderr do Python vêm no codepage
-# local (ex: cp1252) em vez de UTF-8 — como o Electron lê a saída como UTF-8
-# (ver demoParserBridge.ts), mensagens de erro com acento saem corrompidas
-# se não forçarmos a codificação aqui.
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8")
 
 from demoparser2 import DemoParser
 
-# CS2 roda a simulação de round a 64 ticks/segundo (fixo, diferente do
-# CS:GO que tinha servidores 64 ou 128 tick) — demoparser2 só lê demos CS2.
 TICK_RATE = 64.0
 
-# team_num do engine Source 2: 1 = não atribuído/espectador, 2 = Terrorist,
-# 3 = Counter-Terrorist. Estável desde o CS:GO — usado pelo prop `team_num`
-# (via parse_ticks). Já os campos "other" de game events (ex: `winner` de
-# round_end) o demoparser2 devolve como string decodificada ('CT'/'TERRORIST'),
-# não o int cru — por isso `coerce_side` abaixo aceita os dois formatos.
 TEAM_NUM_TO_SIDE = {2: "t", 3: "ct"}
 
-
 def coerce_side(value) -> Optional[str]:
-    """Normaliza um valor de lado vindo do demoparser2 pra 'ct'/'t', aceitando
-    tanto o team_num numérico (2/3) quanto strings decodificadas ('CT',
-    'TERRORIST', 'T', 'COUNTER-TERRORIST', case-insensitive)."""
     if value is None:
         return None
     s = str(value).strip()
@@ -66,34 +31,22 @@ def coerce_side(value) -> Optional[str]:
         return "t"
     return None
 
-# Limiares de classificação de compra (valor médio de equipamento por
-# jogador do lado, medido logo após o fim do tempo de compra). Ajustáveis.
 BUY_ECO_MAX = 2000
 BUY_FORCE_MAX = 3000
 BUY_SEMI_MAX = 4000
 
-# Janela (em segundos de round) considerada "contato antecipado" pra
-# classificar tempo como rush.
 EARLY_CONTACT_SECONDS = 15.0
-# Deslocamento médio (unidades de mapa) acima do qual um lado é considerado
-# tendo avançado bastante nos primeiros ~15s do round.
 HIGH_DISPLACEMENT = 900.0
 LOW_DISPLACEMENT = 250.0
 
-# Intervalo de amostragem de posições dentro do round, pra keyPositions.
 POSITION_SAMPLE_SECONDS = 3.0
 
-# Durações padrão (fallback, quando o evento de "fim" não é encontrado) das
-# granadas de área, em segundos — usadas só se a demo não expuser o evento de
-# expiração correspondente.
 SMOKE_DEFAULT_DURATION_SECONDS = 18.0
 FIRE_DEFAULT_DURATION_SECONDS = 7.0
 DECOY_DEFAULT_DURATION_SECONDS = 18.0
 
-
 def eprint(*args):
     print(*args, file=sys.stderr)
-
 
 def classify_buy_type(avg_equip_value: float) -> str:
     if avg_equip_value <= 0:
@@ -106,10 +59,7 @@ def classify_buy_type(avg_equip_value: float) -> str:
         return "semi"
     return "full"
 
-
 def area_from_place_name(place: Optional[str]) -> str:
-    """Mapeia o `last_place_name` (nome de área do nav mesh do próprio jogo)
-    pra um dos buckets 'A'/'B'/'mid'/'unknown' usados em siteHit."""
     if not place or not isinstance(place, str):
         return "unknown"
     low = place.lower()
@@ -121,19 +71,14 @@ def area_from_place_name(place: Optional[str]) -> str:
         return "mid"
     return "unknown"
 
-
 def safe_parse_event(parser: DemoParser, name: str, **kwargs):
     try:
         df = parser.parse_event(name, **kwargs)
         return df
-    except Exception as exc:  # noqa: BLE001 - queremos degradar, não quebrar o parse inteiro
+    except Exception as exc:
         eprint(f"[parse_demo] aviso: evento '{name}' indisponível nesta demo ({exc})")
         return None
 
-
-# Props "exóticos" — nem toda demo/versão do jogo expõe todos. Se parse_ticks
-# falhar com o conjunto completo, vamos removendo um de cada vez (nesta ordem)
-# até conseguir, em vez de perder a rodada inteira por causa de um prop só.
 OPTIONAL_TICK_PROPS = [
     "last_place_name",
     "weapon_name",
@@ -145,13 +90,12 @@ OPTIONAL_TICK_PROPS = [
     "assists_total",
 ]
 
-
 def safe_parse_ticks(parser: DemoParser, props: list, ticks: list):
     attempt = list(props)
     while True:
         try:
             return parser.parse_ticks(attempt, ticks=ticks)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             eprint(f"[parse_demo] aviso: parse_ticks falhou com props {attempt} ({exc})")
             dropped = False
             for optional in OPTIONAL_TICK_PROPS:
@@ -163,10 +107,7 @@ def safe_parse_ticks(parser: DemoParser, props: list, ticks: list):
                 eprint("[parse_demo] aviso: parse_ticks falhou mesmo sem os props opcionais")
                 return None
 
-
 def event_xy(row):
-    """Eventos de granada expõem x/y em minúsculo — mas tenta os dois formatos
-    por segurança, já que não temos como testar contra uma demo real aqui."""
     x = getattr(row, "x", None)
     if x is None:
         x = getattr(row, "X", None)
@@ -175,12 +116,7 @@ def event_xy(row):
         y = getattr(row, "Y", None)
     return x, y
 
-
 def pair_grenade_lifespan(start_df, end_df, freeze_tick: int, end_tick: int, default_duration_ticks: int):
-    """Casa o evento de início de uma granada com posição (smoke/fogo/decoy)
-    com o evento de fim correspondente pelo mesmo entityid. Se não achar um fim
-    (ainda ativo quando o round acaba, ou a demo não expõe o evento), assume
-    default_duration_ticks a partir do início, sem passar do fim do round."""
     results = []
     if start_df is None or "tick" not in start_df.columns:
         return results
@@ -216,11 +152,7 @@ def pair_grenade_lifespan(start_df, end_df, freeze_tick: int, end_tick: int, def
         )
     return results
 
-
 def build_round_windows(parser: DemoParser):
-    """Casa round_freeze_end (início do round "ao vivo", pós-compra) com o
-    próximo round_end (fim), na ordem em que aconteceram. Descarta rounds
-    sem um dos dois eventos (ex: round incompleto no fim da demo)."""
     freeze_df = safe_parse_event(parser, "round_freeze_end")
     end_df = safe_parse_event(parser, "round_end", other=["winner", "reason"])
     if freeze_df is None or end_df is None or len(freeze_df) == 0 or len(end_df) == 0:
@@ -232,8 +164,6 @@ def build_round_windows(parser: DemoParser):
     windows = []
     for i, row in enumerate(end_df.itertuples()):
         end_tick = int(row.tick)
-        # a freeze_end deste round é a última que aconteceu antes do fim dele
-        # e depois do fim do round anterior.
         prev_end_tick = int(windows[-1]["endTick"]) if windows else -1
         candidates = [t for t in freeze_ticks if prev_end_tick < t < end_tick]
         if not candidates:
@@ -243,8 +173,6 @@ def build_round_windows(parser: DemoParser):
         winner_raw = getattr(row, "winner", None)
         side = coerce_side(winner_raw)
         if side is None:
-            # sem vencedor reconhecível (ex: round de warmup/edge case) — pula,
-            # o schema exige 'ct'|'t' e não vale a pena chutar.
             continue
 
         windows.append(
@@ -257,7 +185,6 @@ def build_round_windows(parser: DemoParser):
         )
     return windows
 
-
 def main():
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--input", required=True)
@@ -269,7 +196,7 @@ def main():
     header = {}
     try:
         header = parser.parse_header() or {}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         eprint(f"[parse_demo] aviso: falha ao ler header ({exc})")
     map_name = header.get("map_name") or header.get("map") or "unknown"
 
@@ -294,13 +221,10 @@ def main():
     decoy_end_df = safe_parse_event(parser, "decoy_detonate")
     try:
         grenades_df = parser.parse_grenades()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         eprint(f"[parse_demo] aviso: parse_grenades falhou ({exc})")
         grenades_df = None
 
-    # --- Uma única chamada a parse_ticks pra tudo que precisa de posição/prop
-    #     por tick: lado (team_num), economia (current_equip_value), área
-    #     (last_place_name) e as amostras esparsas de keyPositions. ---
     sample_ticks_set = set()
     for w in windows:
         sample_ticks_set.add(w["freezeTick"])
@@ -309,8 +233,6 @@ def main():
             sample_ticks_set.add(int(t))
             t += POSITION_SAMPLE_SECONDS * TICK_RATE
         sample_ticks_set.add(w["endTick"])
-    # contatos (mortes/dano/plant/tiro) também viram amostras de posição, pra
-    # capturar o momento exato de engajamento, não só a grade fixa de 3 em 3s.
     for df in (death_df, hurt_df, plant_df, fire_df):
         if df is not None and "tick" in df.columns:
             sample_ticks_set.update(int(t) for t in df["tick"].tolist())
@@ -350,17 +272,11 @@ def main():
         return grp if grp is not None else ticks_df.iloc[0:0]
 
     def nearest_rows_at_or_before(tick: int):
-        """Pega a última amostra <= tick pra um round específico — usado quando
-        o tick exato pedido não bateu em `ticks_by_tick` (acontece se o demo
-        pular alguns ticks intermediários)."""
         available = [t for t in ticks_by_tick.keys() if t <= tick]
         if not available:
             return ticks_df.iloc[0:0]
         return ticks_by_tick[max(available)]
 
-    # --- Round 1 define quem é cada "roster" (grupo de 5 steamids) — o lado
-    #     (ct/t) troca no intervalo, mas a composição do time não. Usado só
-    #     pra dar um placar final estável entre os dois lados. ---
     first_round_rows = rows_at(windows[0]["freezeTick"])
     if len(first_round_rows) == 0:
         first_round_rows = nearest_rows_at_or_before(windows[0]["freezeTick"])
@@ -370,9 +286,9 @@ def main():
         if side:
             roster_by_side_r1[side].add(int(r.steamid))
 
-    player_side_counts: dict = {}  # steamid -> {"ct": n, "t": n}
-    player_names: dict = {}  # steamid -> name (última vista)
-    player_area_counts: dict = {}  # steamid -> {area: count}
+    player_side_counts: dict = {}
+    player_names: dict = {}
+    player_area_counts: dict = {}
     player_kills: dict = {}
     player_deaths: dict = {}
     player_assists: dict = {}
@@ -386,7 +302,7 @@ def main():
         d[key] = d.get(key, 0) + amount
 
     rounds_out = []
-    roster_wins = {"ct": 0, "t": 0}  # na verdade acumula por roster via round["winner"] abaixo
+    roster_wins = {"ct": 0, "t": 0}
 
     for w in windows:
         freeze_tick, end_tick, winner = w["freezeTick"], w["endTick"], w["winner"]
@@ -395,7 +311,7 @@ def main():
         if len(side_rows) == 0:
             side_rows = nearest_rows_at_or_before(freeze_tick)
 
-        side_map = {}  # steamid -> 'ct'/'t' nesta rodada
+        side_map = {}
         equip_by_side = {"ct": [], "t": []}
         for r in side_rows.itertuples():
             steamid = int(r.steamid)
@@ -413,10 +329,8 @@ def main():
             counts = player_side_counts.setdefault(steamid, {"ct": 0, "t": 0})
             counts[side] += 1
 
-        # roster do round 1 ganha o crédito da vitória, independente do lado atual
         for roster_side, ids in roster_by_side_r1.items():
             occupying_side = None
-            # quem desse roster está jogando qual lado agora?
             sample_id = next(iter(ids), None)
             if sample_id is not None and sample_id in side_map:
                 occupying_side = side_map[sample_id]
@@ -427,7 +341,6 @@ def main():
             side: classify_buy_type(sum(vals) / len(vals) if vals else 0.0) for side, vals in equip_by_side.items()
         }
 
-        # --- deslocamento inicial por lado (pra tempo/postura) ---
         mid_tick = int(freeze_tick + EARLY_CONTACT_SECONDS * TICK_RATE)
         start_rows = side_rows
         mid_rows = rows_at(mid_tick)
@@ -481,7 +394,6 @@ def main():
                 else:
                     stance_by_side[side] = "passive-aggressive"
 
-        # --- mortes/dano da rodada ---
         round_deaths = None
         if death_df is not None:
             round_deaths = death_df[(death_df["tick"] > freeze_tick) & (death_df["tick"] <= end_tick)].sort_values("tick")
@@ -525,7 +437,6 @@ def main():
                 if attacker_id is not None and str(attacker_id) != "nan":
                     bump(player_dmg, int(attacker_id), float(dmg))
 
-        # --- clutch: simula contagem de vivos por lado a partir de 5v5 ---
         if round_deaths is not None and len(round_deaths) > 0:
             alive = {"ct": set(), "t": set()}
             for steamid, side in side_map.items():
@@ -548,7 +459,6 @@ def main():
                             clutch_candidate = next(iter(alive[side]))
                             clutch_side = side
                 elif clutch_candidate == user_id:
-                    # o próprio clutcher morreu antes do fim do round
                     bump(player_clutches_lost, clutch_candidate)
                     clutch_candidate = None
                     clutch_side = None
@@ -556,7 +466,6 @@ def main():
             if clutch_candidate is not None and clutch_side == winner:
                 bump(player_clutches_won, clutch_candidate)
 
-        # --- utilitário por lado ---
         utility_by_side = {
             "ct": {"flashes": 0, "smokes": 0, "molotovs": 0, "he": 0},
             "t": {"flashes": 0, "smokes": 0, "molotovs": 0, "he": 0},
@@ -580,7 +489,6 @@ def main():
                 elif "hegrenade" in gname or gname == "he":
                     utility_by_side[side]["he"] += 1
 
-        # --- site: onde o bomb foi plantado (ou, sem plant, onde a entry frag aconteceu) ---
         site_hit = "unknown"
         if plant_df is not None and "tick" in plant_df.columns:
             round_plants = plant_df[(plant_df["tick"] > freeze_tick) & (plant_df["tick"] <= end_tick)]
@@ -598,10 +506,6 @@ def main():
             if len(rows) > 0:
                 site_hit = area_from_place_name(rows.iloc[0].get("last_place_name"))
 
-        # --- posições esparsas (keyPositions) ---
-        # grade fixa de 3 em 3s + o tick exato de qualquer morte/dano/plant/tiro
-        # nesta rodada, pra capturar o momento de engajamento com precisão (não
-        # só interpolado entre dois pontos da grade).
         key_positions = []
         t = freeze_tick
         sample_ticks_local = set()
@@ -641,7 +545,6 @@ def main():
                         counts = player_area_counts.setdefault(steamid, {})
                         counts[str(place)] = counts.get(str(place), 0) + 1
 
-        # --- mortes com posição (pro "X" no mapa 2D) ---
         deaths_out = []
         if round_deaths is not None:
             for d in round_deaths.itertuples():
@@ -680,7 +583,6 @@ def main():
                     death_entry["headshot"] = True
                 deaths_out.append(death_entry)
 
-        # --- tiros (pro indicador "atirando" no mapa 2D) ---
         shots_out = []
         if round_shots is not None:
             for s in round_shots.itertuples():
@@ -699,7 +601,6 @@ def main():
                     }
                 )
 
-        # --- loadout pós-compra (pro placar de economia no mapa 2D) ---
         loadout_out = []
         for r in side_rows.itertuples():
             steamid = int(r.steamid)
@@ -740,7 +641,6 @@ def main():
                     loadout_entry["assists"] = int(float(assists))
             loadout_out.append(loadout_entry)
 
-        # --- granadas de área (fumaça/fogo/decoy) + flashes/cegueira ---
         smokes_out = pair_grenade_lifespan(
             smoke_start_df, smoke_end_df, freeze_tick, end_tick, int(SMOKE_DEFAULT_DURATION_SECONDS * TICK_RATE)
         )
@@ -855,7 +755,7 @@ def main():
     final_score = {"team": roster_wins.get("ct", 0), "opponent": roster_wins.get("t", 0)}
 
     summary = {
-        "demoId": "placeholder",  # sobrescrito pelo Electron ao gravar (record.id vira o demoId real)
+        "demoId": "placeholder",
         "map": map_name,
         "finalScore": final_score,
         "rounds": rounds_out,
@@ -865,7 +765,6 @@ def main():
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
-
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,3 @@
-// Espelha electron/storage/types.ts. Mantidos separados de propósito: o Angular
-// (contexto browser) não deve importar código do processo principal (contexto Node).
-// Se o projeto crescer, mover ambos para um pacote `shared/` com seu próprio
-// tsconfig resolve a duplicação — por ora, MVP simples.
-
 export type SlotKind = 'own' | 'opponent';
 export type BuyType = 'eco' | 'force' | 'semi' | 'full' | 'unknown';
 export type RoundTempo = 'rush' | 'slow' | 'default' | 'split' | 'unknown';
@@ -28,7 +23,6 @@ export interface DemoRecord {
   score?: { team: number; opponent: number };
   roundsParsed?: number;
   notes?: string;
-  /** SteamIds dos 5 jogadores que são "o time deste slot" nesta demo — ver electron/storage/types.ts. */
   myTeamSteamIds?: string[];
 }
 
@@ -42,10 +36,6 @@ export interface SlotDetail extends SlotMeta {
   notebook: NotebookEntry;
 }
 
-/**
- * Toda demo tem dois lados (CT e T) — os campos táticos de rodada vêm
- * separados por lado, sem tentar adivinhar qual dos dois é "o time do slot".
- */
 export interface RoundSideSummary {
   buyType: BuyType;
   tempo: RoundTempo;
@@ -58,12 +48,10 @@ export interface KeyPosition {
   side: 'ct' | 't';
   x: number;
   y: number;
-  t: number; // segundos desde o início (freeze end) da rodada
-  /** Direção de visão (graus), quando a demo expõe o prop — usada pro triângulo do Mapa 2D. */
+  t: number;
   yaw?: number;
 }
 
-/** Morte com posição — usada pro "X" do jogador morto no Mapa 2D. */
 export interface RoundDeath {
   player: string;
   side: 'ct' | 't';
@@ -76,30 +64,25 @@ export interface RoundDeath {
   headshot?: boolean;
 }
 
-/** Um disparo — usado pro flash amarelo do indicador de mira no Mapa 2D. */
 export interface RoundShot {
   player: string;
   side: 'ct' | 't';
   t: number;
 }
 
-/** Loadout pós-compra (freeze_end) de um jogador — usado no placar de economia do Mapa 2D. */
 export interface RoundLoadout {
   player: string;
   side: 'ct' | 't';
   weapon: string | null;
   equipValue: number;
-  /** Campos abaixo dependem de props que nem toda demo expõe — sempre opcionais. */
   health?: number;
   armor?: number;
   hasHelmet?: boolean;
-  /** Contagens cumulativas (o jogo já mantém isso por controller) até o início deste round. */
   kills?: number;
   deaths?: number;
   assists?: number;
 }
 
-/** Área coberta por uma granada de fumaça, do início ao fim (segundos desde freeze_end). */
 export interface RoundSmoke {
   x: number;
   y: number;
@@ -107,7 +90,6 @@ export interface RoundSmoke {
   endT: number;
 }
 
-/** Área em chamas de uma molotov/incendiária. */
 export interface RoundFire {
   x: number;
   y: number;
@@ -115,7 +97,6 @@ export interface RoundFire {
   endT: number;
 }
 
-/** Janela ativa de uma decoy (tiros falsos). */
 export interface RoundDecoy {
   x: number;
   y: number;
@@ -123,14 +104,12 @@ export interface RoundDecoy {
   endT: number;
 }
 
-/** Estouro de uma flashbang (instante — o efeito visual é um flash breve). */
 export interface RoundFlash {
   x: number;
   y: number;
   t: number;
 }
 
-/** Um jogador cegado por uma flash, com duração da cegueira em segundos. */
 export interface RoundBlind {
   player: string;
   side: 'ct' | 't';
@@ -138,7 +117,6 @@ export interface RoundBlind {
   duration: number;
 }
 
-/** Resumo leve e estruturado de UMA rodada, gerado pela camada algorítmica local. */
 export interface RoundSummary {
   roundNumber: number;
   winner: 'ct' | 't';
@@ -147,8 +125,7 @@ export interface RoundSummary {
   entryFragBy?: string;
   entryFragOn?: string;
   siteHit?: 'A' | 'B' | 'mid' | 'unknown';
-  keyPositions: KeyPosition[]; // amostragem esparsa, não tick-a-tick
-  /** Ausentes em summary.json gerados antes desses campos existirem — sempre trate como opcionais. */
+  keyPositions: KeyPosition[];
   deaths?: RoundDeath[];
   shots?: RoundShot[];
   loadout?: RoundLoadout[];
@@ -176,7 +153,6 @@ export interface PlayerAggregate {
   favoriteAreas: { area: string; count: number }[];
 }
 
-/** Resumo estruturado de uma demo inteira, lido do summary.json gerado pelo parser Python. */
 export interface DemoSummary {
   demoId: string;
   map: string;
@@ -211,18 +187,21 @@ export interface PlayerMovementProfile {
   deaths: number;
 }
 
-export interface ConsolidatedSlotStats {
-  demosAnalyzed: number;
-  roundsAnalyzed: number;
-  /** Nomes de arquivo das demos que entraram em demosAnalyzed mas ficaram de fora das
-   *  tendências táticas porque ninguém marcou "meu time" nelas ainda. */
-  demosPendingRoster: string[];
+export interface TeamTendencyStats {
   tendencyByBuyType: Record<BuyType, { count: number; winRate: number }>;
   tendencyByTempo: Record<RoundTempo, { count: number; winRate: number }>;
   tendencyByStance: Record<RoundStance, { count: number; winRate: number }>;
-  siteHitDistribution: Record<string, number>;
-  playerMovementProfile: PlayerMovementProfile[];
   topRecurringPatterns: { pattern: string; count: number; winRate: number }[];
+  playerMovementProfile: PlayerMovementProfile[];
+}
+
+export interface ConsolidatedSlotStats {
+  demosAnalyzed: number;
+  roundsAnalyzed: number;
+  demosPendingRoster: string[];
+  siteHitDistribution: Record<string, number>;
+  myTeam: TeamTendencyStats;
+  opponent: TeamTendencyStats;
 }
 
 export interface AnalysisResult {

@@ -48,10 +48,6 @@
   color: #f5b041;
 }
 
-// Altura máxima da linha canvas+placar — limitada ao viewport (menos a barra
-// de título, cabeçalho do slot, abas, toolbar, barra de reprodução e legenda)
-// pra essa linha nunca precisar empurrar `.main-content` inteiro pra rolar.
-// Só a lista de compras (.economy-panel) deve rolar, por dentro dela mesma.
 .map2d-body {
   display: flex;
   gap: 0.75rem;
@@ -94,8 +90,6 @@
   overflow-y: auto;
 }
 
-// Uma linha por jogador, estilo placar in-game: fundo com leve tingimento
-// da cor do time + uma tarja colorida na borda esquerda.
 .scoreboard-row {
   position: relative;
   display: flex;

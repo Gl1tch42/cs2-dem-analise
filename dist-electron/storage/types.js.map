@@ -1,1 +1,1 @@
-{"version":3,"file":"types.js","sourceRoot":"","sources":["../../electron/storage/types.ts"],"names":[],"mappings":";AAAA,+EAA+E;AAC/E,+EAA+E;AAC/E,4BAA4B;;;AAwNf,QAAA,kBAAkB,GAAG,GAAG,CAAC;AACzB,QAAA,kBAAkB,GAAG,EAAE,CAAC"}
+{"version":3,"file":"types.js","sourceRoot":"","sources":["../../electron/storage/types.ts"],"names":[],"mappings":";;;AAmLa,QAAA,kBAAkB,GAAG,GAAG,CAAC;AACzB,QAAA,kBAAkB,GAAG,EAAE,CAAC"}

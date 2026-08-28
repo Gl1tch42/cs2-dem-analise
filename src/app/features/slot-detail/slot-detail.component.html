@@ -31,7 +31,6 @@
     </ul>
   </div>
 
-  <!-- VISÃO GERAL -->
   <section *ngIf="activeTab === 'overview'">
     <div class="panel-block-data p-4" *ngIf="slot.demos.length === 0">
       <p class="text-muted">
@@ -56,12 +55,10 @@
     </ul>
   </section>
 
-  <!-- MAPA 2D -->
   <section *ngIf="activeTab === 'map'">
     <app-map2d [slotId]="slot.id" [demos]="slot.demos"></app-map2d>
   </section>
 
-  <!-- DEMOS -->
   <section *ngIf="activeTab === 'demos'">
     <button class="button is-small mb-3" [class.is-loading]="importing" (click)="importDemo()">
       + Importar demo (.dem)
@@ -153,12 +150,10 @@
     </table>
   </section>
 
-  <!-- NOTEBOOK -->
   <section *ngIf="activeTab === 'notebook'">
     <app-notebook [slotId]="slot.id" [initialContent]="slot.notebook.content"></app-notebook>
   </section>
 
-  <!-- ANÁLISE DE IA -->
   <section *ngIf="activeTab === 'ai'">
     <p class="text-muted ai-scope-note" *ngIf="slot.demos.length > 0">
       Esta análise sempre considera <strong>todas as {{ slot.demos.length }} demo(s)</strong> deste
@@ -189,46 +184,15 @@
         <div class="column is-5">
           <h2 class="stat-title">Consolidado local ({{ result.stats.demosAnalyzed }} demos, {{ result.stats.roundsAnalyzed }} rounds)</h2>
 
-          <p class="stat-subtitle">Por tipo de compra</p>
-          <table class="table is-narrow is-fullwidth mini-table">
-            <tbody>
-              <tr *ngFor="let e of entries(result.stats.tendencyByBuyType)">
-                <td>{{ e[0] }}</td>
-                <td class="text-muted">{{ e[1].count }}x</td>
-                <td [class.winrate-good]="e[1].winRate >= 0.5" [class.winrate-bad]="e[1].winRate < 0.5">
-                  {{ winRatePct(e[1].winRate) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="team-stats-block">
+            <h3 class="team-stats-heading is-mine">Seu Time</h3>
+            <app-team-stats [team]="result.stats.myTeam"></app-team-stats>
+          </div>
 
-          <p class="stat-subtitle">Jogadas mais recorrentes</p>
-          <table class="table is-narrow is-fullwidth mini-table">
-            <tbody>
-              <tr *ngFor="let p of result.stats.topRecurringPatterns">
-                <td class="mono">{{ p.pattern }}</td>
-                <td class="text-muted">{{ p.count }}x</td>
-                <td [class.winrate-good]="p.winRate >= 0.5" [class.winrate-bad]="p.winRate < 0.5">
-                  {{ winRatePct(p.winRate) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <p class="stat-subtitle">Jogadores</p>
-          <table class="table is-narrow is-fullwidth mini-table">
-            <thead>
-              <tr><th>Jogador</th><th>ADR</th><th>Entry%</th><th>Clutch%</th></tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let pl of result.stats.playerMovementProfile">
-                <td>{{ pl.name }}</td>
-                <td>{{ pl.avgAdr }}</td>
-                <td>{{ winRatePct(pl.entryRate) }}</td>
-                <td>{{ winRatePct(pl.clutchRate) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="team-stats-block">
+            <h3 class="team-stats-heading is-opponent">Adversário</h3>
+            <app-team-stats [team]="result.stats.opponent"></app-team-stats>
+          </div>
         </div>
       </div>
     </ng-container>

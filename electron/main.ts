@@ -12,10 +12,7 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor: '#14181d', // evita "flash branco" — combina com o tema escuro/analítico
-    // Sem moldura/menu nativos — a barra de título é desenhada pelo Angular
-    // (app-titlebar) pra ficar parecida com o Discord: sem separação visual
-    // do resto da janela, só os botões de minimizar/maximizar/fechar.
+    backgroundColor: '#14181d',
     frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -38,8 +35,6 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // Remove o menu padrão (File/Edit/View/Window/Help) — com frame:false ele já
-  // some no Windows, mas isso evita ele reaparecer via Alt e cobre outras plataformas.
   Menu.setApplicationMenu(null);
   createWindow();
   app.on('activate', () => {

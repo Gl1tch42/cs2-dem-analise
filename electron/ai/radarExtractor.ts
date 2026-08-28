@@ -5,17 +5,6 @@ import * as path from 'path';
 import * as https from 'https';
 import { RADAR_EXTRACTABLE_MAPS } from '../storage/radarCalibration';
 
-/**
- * Extrai as imagens reais de radar (overview) do CS2 instalado localmente pelo
- * usuário, usando o Source2Viewer-CLI (ValveResourceFormat, MIT license) —
- * ferramenta open-source padrão da comunidade pra ler VPKs do Source 2.
- *
- * Importante: isso só toca a instalação do Steam em modo LEITURA, e a imagem
- * extraída fica só no userData local do próprio usuário (nunca é commitada no
- * projeto nem redistribuída) — o app não tem esses assets da Valve embutidos.
- * Só funciona no Windows (onde o CS2/Steam roda de forma padrão aqui).
- */
-
 const VRF_RELEASE_TAG = '20.0';
 const VRF_CLI_ZIP_URL = `https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/${VRF_RELEASE_TAG}/cli-windows-x64.zip`;
 
@@ -35,7 +24,6 @@ function toolsDir(): string {
   return dir;
 }
 
-/** Procura a pasta de instalação do CS2 nas bibliotecas do Steam (Windows). */
 function findCs2InstallDir(): string | null {
   const steamRoots = ['C:\\Program Files (x86)\\Steam', 'C:\\Program Files\\Steam'];
   for (const steamRoot of steamRoots) {
@@ -126,7 +114,6 @@ export interface RadarExtractionResult {
   error?: string;
 }
 
-/** Roda a extração de verdade — baixa a CLI se preciso, lê o VPK local, copia os PNGs pro userData. */
 export async function extractRadarsFromLocalCs2(): Promise<RadarExtractionResult> {
   const cs2Dir = findCs2InstallDir();
   if (!cs2Dir) {
@@ -161,7 +148,6 @@ export async function extractRadarsFromLocalCs2(): Promise<RadarExtractionResult
   }
 }
 
-/** Caminho do PNG em cache pra um mapa, se já foi extraído antes. */
 export function getCachedRadarPath(map: string): string | null {
   const p = path.join(radarsDir(), `${map}.png`);
   return fs.existsSync(p) ? p : null;

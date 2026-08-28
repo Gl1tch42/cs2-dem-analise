@@ -51,11 +51,6 @@ declare global {
   }
 }
 
-/**
- * Fininho de propósito: só repassa para window.electronAPI. Mantém os
- * componentes desacoplados do detalhe "isso é Electron" e dá um único
- * lugar pra trocar de estratégia se um dia rodar fora do Electron (ex: modo web).
- */
 @Injectable({ providedIn: 'root' })
 export class ElectronService {
   get api() {
