@@ -1,5 +1,7 @@
 import argparse
+import bisect
 import json
+import math
 import os
 import sys
 from typing import Optional
@@ -45,6 +47,44 @@ SMOKE_DEFAULT_DURATION_SECONDS = 18.0
 FIRE_DEFAULT_DURATION_SECONDS = 7.0
 DECOY_DEFAULT_DURATION_SECONDS = 18.0
 C4_FUSE_SECONDS = 40.0
+
+# Janela de amostragem densa de "spotted" (T_spot) usada pra Spotted Accuracy,
+# Time to Damage, Time to Kill e Crosshair Placement — só é aplicada nos
+# segundos que antecedem cada `weapon_fire`, não na rodada inteira (rodada
+# inteira em resolução fina explodiria o volume de dados). Se o total de ticks
+# extras estourar o teto, o passo aumenta (amostragem mais grossa) em vez de
+# falhar.
+SPOTTED_WINDOW_SECONDS = 6.0
+SPOTTED_SAMPLE_STEP_TICKS = 2
+SPOTTED_SAMPLE_MAX_EXTRA_TICKS = 150000
+
+def build_dense_spot_window_ticks(fire_df, demo_start_tick: int, demo_end_tick: int) -> set:
+    if fire_df is None or "tick" not in fire_df.columns:
+        return set()
+    shot_ticks = sorted({int(t) for t in fire_df["tick"].tolist() if str(t) != "nan"})
+    if not shot_ticks:
+        return set()
+
+    window_ticks = int(SPOTTED_WINDOW_SECONDS * TICK_RATE)
+
+    def build(step: int) -> set:
+        out = set()
+        for shot_tick in shot_ticks:
+            start = max(demo_start_tick, shot_tick - window_ticks)
+            t = start
+            while t <= shot_tick:
+                out.add(t)
+                t += step
+            out.add(shot_tick)
+        return out
+
+    step = SPOTTED_SAMPLE_STEP_TICKS
+    dense = build(step)
+    while len(dense) > SPOTTED_SAMPLE_MAX_EXTRA_TICKS and step < window_ticks:
+        step *= 2
+        dense = build(step)
+        eprint(f"[parse_demo] aviso: janela densa de spotted grande demais, aumentando passo pra {step} ticks")
+    return dense
 
 def eprint(*args):
     print(*args, file=sys.stderr)
@@ -121,6 +161,9 @@ OPTIONAL_TICK_PROPS = [
     "kills_total",
     "deaths_total",
     "assists_total",
+    "spotted",
+    "flash_duration",
+    "ducking",
 ]
 
 def safe_parse_ticks(parser: DemoParser, props: list, ticks: list):
@@ -293,6 +336,51 @@ def main():
         except (ValueError, TypeError):
             return str(value).lower() == "head"
 
+    # Categorias de arma usadas pelas exceções pedidas (isolar sniper/shotgun de
+    # head accuracy/HS%, restringir spray a rifle/SMG, tolerância de counter-strafe
+    # quase zero pra sniper). Valores de velocidade são a velocidade máxima
+    # aproximada (unidades/s) de cada arma no CS2 — aproximação de referência,
+    # não authoritative; ajustar aqui se precisar calibrar.
+    SNIPER_WEAPONS = {"awp", "ssg08", "g3sg1", "scar20"}
+    SHOTGUN_WEAPONS = {"nova", "xm1014", "sawedoff", "mag7"}
+    PISTOL_WEAPONS = {
+        "glock", "usp_silencer", "hkp2000", "p250", "fiveseven", "tec9",
+        "deagle", "revolver", "elite", "cz75a",
+    }
+    WEAPON_MAX_SPEED = {
+        "knife": 250.0, "knife_t": 250.0, "bayonet": 250.0,
+        "glock": 240.0, "usp_silencer": 240.0, "hkp2000": 240.0, "elite": 240.0,
+        "tec9": 240.0, "fiveseven": 240.0, "cz75a": 240.0, "p250": 240.0,
+        "deagle": 230.0, "revolver": 220.0,
+        "mac10": 240.0, "mp9": 240.0, "bizon": 240.0, "mp7": 220.0, "ump45": 230.0, "p90": 230.0,
+        "famas": 240.0, "galilar": 215.0, "ak47": 215.0, "m4a1": 225.0, "m4a1_silencer": 225.0,
+        "aug": 220.0, "sg556": 210.0,
+        "nova": 220.0, "xm1014": 215.0, "sawedoff": 210.0, "mag7": 225.0,
+        "awp": 200.0, "ssg08": 230.0, "g3sg1": 215.0, "scar20": 215.0,
+        "negev": 150.0, "m249": 160.0,
+        "taser": 220.0,
+    }
+    DEFAULT_MAX_SPEED = 230.0
+    COUNTER_STRAFE_RELATIVE_THRESHOLD = 0.34
+    SNIPER_STATIONARY_THRESHOLD = 5.0
+
+    def is_sniper_weapon(name) -> bool:
+        return name is not None and str(name).lower() in SNIPER_WEAPONS
+
+    def is_shotgun_weapon(name) -> bool:
+        return name is not None and str(name).lower() in SHOTGUN_WEAPONS
+
+    def is_rifle_or_smg_weapon(name) -> bool:
+        if not is_gun_weapon(name):
+            return False
+        low = str(name).lower()
+        return low not in SNIPER_WEAPONS and low not in SHOTGUN_WEAPONS and low not in PISTOL_WEAPONS
+
+    def max_speed_for_weapon(name) -> float:
+        if name is None or str(name) == "nan":
+            return DEFAULT_MAX_SPEED
+        return WEAPON_MAX_SPEED.get(str(name).lower(), DEFAULT_MAX_SPEED)
+
     sample_ticks_set = set()
     for w in windows:
         sample_ticks_set.add(w["freezeTick"])
@@ -304,6 +392,11 @@ def main():
     for df in (death_df, hurt_df, plant_df, defuse_df, explode_df, fire_df, he_df):
         if df is not None and "tick" in df.columns:
             sample_ticks_set.update(int(t) for t in df["tick"].tolist())
+
+    demo_start_tick = windows[0]["freezeTick"]
+    demo_end_tick = windows[-1]["endTick"]
+    dense_spot_ticks = build_dense_spot_window_ticks(fire_df, demo_start_tick, demo_end_tick)
+    sample_ticks_set.update(dense_spot_ticks)
 
     ticks_df = safe_parse_ticks(
         parser,
@@ -325,6 +418,9 @@ def main():
             "kills_total",
             "deaths_total",
             "assists_total",
+            "spotted",
+            "flash_duration",
+            "ducking",
         ],
         sorted(sample_ticks_set),
     )
@@ -337,6 +433,9 @@ def main():
     has_z = "Z" in ticks_df.columns
     has_velocity = "velocity_X" in ticks_df.columns and "velocity_Y" in ticks_df.columns
     has_weapon_name = "weapon_name" in ticks_df.columns
+    has_spotted = "spotted" in ticks_df.columns
+    has_flash_duration = "flash_duration" in ticks_df.columns
+    has_ducking = "ducking" in ticks_df.columns
     has_armor = "armor_value" in ticks_df.columns
     has_helmet_col = "has_helmet" in ticks_df.columns
     has_kda = all(c in ticks_df.columns for c in ("kills_total", "deaths_total", "assists_total"))
@@ -351,6 +450,67 @@ def main():
         if not available:
             return ticks_df.iloc[0:0]
         return ticks_by_tick[max(available)]
+
+    # --- T_spot: quando cada jogador ficou visível pra algum inimigo ---
+    # `spotted` no demoparser2 é por-entidade ("visível pra ALGUM inimigo"), não
+    # por-par ("visível especificamente pro atirador X") — o CS2 tem um bitmask
+    # por-par (`m_bSpottedByMask`) mas decodificar isso exigiria mapear steamid
+    # pra índice de bit sem forma confiável de validar sem uma demo real, então
+    # usamos o proxy booleano. Em duelos 1x1 (o caso mais comum pra TTD/TTK/
+    # crosshair placement) isso equivale a "visível pro atirador"; em cenários
+    # com mais de um inimigo vivo por perto pode atribuir o spot a outro
+    # inimigo que viu primeiro — limitação conhecida, documentada no plano.
+    MAX_SPOT_GAP_TICKS = SPOTTED_SAMPLE_STEP_TICKS * 8
+    SPOTTED_LOOKBACK_TICKS = int(SPOTTED_WINDOW_SECONDS * TICK_RATE)
+
+    spotted_by_player: dict = {}
+    if has_spotted:
+        for row in ticks_df.itertuples():
+            spotted_val = getattr(row, "spotted", None)
+            if spotted_val is None or str(spotted_val) == "nan":
+                continue
+            steamid = int(row.steamid)
+            spotted_by_player.setdefault(steamid, []).append((int(row.tick), bool(spotted_val)))
+        for steamid in spotted_by_player:
+            spotted_by_player[steamid].sort(key=lambda pair: pair[0])
+
+    def find_spot_start_tick(target_steamid: int, at_or_before_tick: int):
+        if not has_spotted:
+            return None
+        samples = spotted_by_player.get(target_steamid)
+        if not samples:
+            return None
+        ticks_only = [s[0] for s in samples]
+        idx = bisect.bisect_right(ticks_only, at_or_before_tick) - 1
+        if idx < 0:
+            return None
+        tick, spotted = samples[idx]
+        if not spotted:
+            return None
+        earliest_allowed = at_or_before_tick - SPOTTED_LOOKBACK_TICKS
+        spot_start = tick
+        prev_tick = tick
+        i = idx - 1
+        while i >= 0:
+            t, sp = samples[i]
+            if t < earliest_allowed or not sp or (prev_tick - t) > MAX_SPOT_GAP_TICKS:
+                break
+            spot_start = t
+            prev_tick = t
+            i -= 1
+        return spot_start
+
+    def is_blinded_at(steamid: int, tick: int, threshold_seconds: float = 1.0) -> bool:
+        if not has_flash_duration:
+            return False
+        rows = rows_at(tick)
+        rows = rows[rows["steamid"] == steamid]
+        if len(rows) == 0:
+            return False
+        val = rows.iloc[0].get("flash_duration")
+        if val is None or str(val) == "nan":
+            return False
+        return float(val) >= threshold_seconds
 
     first_round_rows = rows_at(windows[0]["freezeTick"])
     if len(first_round_rows) == 0:
@@ -378,6 +538,12 @@ def main():
     player_shots_fired: dict = {}
     player_shots_hit: dict = {}
     player_head_hits: dict = {}
+    # Head Accuracy e HS Kill% isolam sniper/shotgun (contadores separados,
+    # não entram no numerador nem no denominador desses dois).
+    player_combat_hits_excl: dict = {}
+    player_head_hits_excl: dict = {}
+    player_kills_excl: dict = {}
+    player_hs_kills_excl: dict = {}
     player_first_bullet_shots: dict = {}
     player_first_bullet_hits: dict = {}
     player_spray_shots: dict = {}
@@ -386,6 +552,12 @@ def main():
     player_counter_strafe_total: dict = {}
     player_crosshair_deg_sum: dict = {}
     player_crosshair_deg_count: dict = {}
+    player_spotted_shots_hit: dict = {}
+    player_spotted_shots_total: dict = {}
+    player_ttd_sum_ms: dict = {}
+    player_ttd_count: dict = {}
+    player_ttk_sum_ms: dict = {}
+    player_ttk_count: dict = {}
 
     # --- Utility ---
     player_flashes_thrown: dict = {}
@@ -406,11 +578,13 @@ def main():
     def avg(vals):
         return sum(vals) / len(vals) if vals else 0.0
 
-    FIRST_BULLET_GAP_TICKS = int(1.0 * TICK_RATE)
-    COUNTER_STRAFE_SPEED_THRESHOLD = 15.0
+    FIRST_BULLET_GAP_TICKS = int(0.4 * TICK_RATE)
+    SPRAY_MIN_SHOT_INDEX = 3  # 1º tiro = first bullet, 2º não conta em nenhum dos dois, 3º+ = spray
     FLASH_ASSIST_WINDOW_SECONDS = 5.0
     HIT_CORRELATION_WINDOW_TICKS = int(0.25 * TICK_RATE)
     EYE_HEIGHT_OFFSET = 64.0
+    MIN_HP_FOR_TTK = 80.0
+    SHOOTER_BLIND_THRESHOLD_SECONDS = 1.0
 
     def angle_to_target_deg(shooter_row, target_row) -> Optional[float]:
         if not (has_pitch and has_yaw and has_z):
@@ -422,7 +596,6 @@ def main():
         vals = [pitch, yaw, sx, sy, sz, tx, ty, tz]
         if any(v is None or str(v) == "nan" for v in vals):
             return None
-        import math
         pitch_rad = math.radians(float(pitch))
         yaw_rad = math.radians(float(yaw))
         aim_x = math.cos(pitch_rad) * math.cos(yaw_rad)
@@ -610,9 +783,16 @@ def main():
                 user_id = getattr(d, "user_steamid", None)
                 assister_id = getattr(d, "assister_steamid", None)
                 if attacker_id is not None and str(attacker_id) != "nan":
-                    bump(player_kills, int(attacker_id))
-                    if bool(getattr(d, "headshot", False)):
-                        bump(player_hs_kills, int(attacker_id))
+                    attacker_id_i = int(attacker_id)
+                    is_hs = bool(getattr(d, "headshot", False))
+                    bump(player_kills, attacker_id_i)
+                    if is_hs:
+                        bump(player_hs_kills, attacker_id_i)
+                    death_weapon = getattr(d, "weapon", None)
+                    if not is_sniper_weapon(death_weapon) and not is_shotgun_weapon(death_weapon):
+                        bump(player_kills_excl, attacker_id_i)
+                        if is_hs:
+                            bump(player_hs_kills_excl, attacker_id_i)
                 if user_id is not None and str(user_id) != "nan":
                     bump(player_deaths, int(user_id))
                 if assister_id is not None and str(assister_id) != "nan":
@@ -625,7 +805,8 @@ def main():
                 if attacker_id is not None and str(attacker_id) != "nan":
                     bump(player_dmg, int(attacker_id), float(dmg))
 
-        # --- Aim: precisão, first bullet / spray, counter-strafe, crosshair placement ---
+        # --- Aim: precisão, first bullet / spray, counter-strafe, crosshair placement,
+        # spotted accuracy ---
         # Correlaciona cada `weapon_fire` (só armas de fogo) com o `player_hurt` não
         # usado mais próximo (mesmo atacador, poucos ticks depois) pra saber se aquele
         # tiro específico acertou — aproximação razoável já que hit-scan registra dano
@@ -650,7 +831,7 @@ def main():
                             weapon = srow.iloc[0].get("weapon_name")
                 if not is_gun_weapon(weapon):
                     continue
-                shots_by_player.setdefault(shooter_id, []).append(shot_tick)
+                shots_by_player.setdefault(shooter_id, []).append((shot_tick, weapon))
 
             hits_by_attacker: dict = {}
             if round_hurts is not None:
@@ -666,19 +847,26 @@ def main():
                         {
                             "tick": int(h.tick),
                             "hitgroup": getattr(h, "hitgroup", None) if has_hitgroup else None,
+                            "weapon": weapon,
                             "used": False,
                         }
                     )
 
-            for shooter_id, ticks_list in shots_by_player.items():
-                ticks_list.sort()
+            for shooter_id, shot_entries in shots_by_player.items():
+                shot_entries.sort(key=lambda e: e[0])
                 shooter_side = side_map.get(shooter_id)
                 available_hits = sorted(hits_by_attacker.get(shooter_id, []), key=lambda hh: hh["tick"])
                 prev_tick = None
-                bump(player_shots_fired, shooter_id, len(ticks_list))
-                for shot_tick in ticks_list:
-                    is_first_bullet = prev_tick is None or (shot_tick - prev_tick) > FIRST_BULLET_GAP_TICKS
+                burst_index = 0
+                bump(player_shots_fired, shooter_id, len(shot_entries))
+                for shot_tick, shot_weapon in shot_entries:
+                    if prev_tick is None or (shot_tick - prev_tick) > FIRST_BULLET_GAP_TICKS:
+                        burst_index = 1
+                    else:
+                        burst_index += 1
                     prev_tick = shot_tick
+                    is_first_bullet = burst_index == 1
+                    is_spray = burst_index >= SPRAY_MIN_SHOT_INDEX and is_rifle_or_smg_weapon(shot_weapon)
 
                     matched_hit = None
                     for hit in available_hits:
@@ -691,34 +879,55 @@ def main():
                     if matched_hit is not None:
                         matched_hit["used"] = True
                         bump(player_shots_hit, shooter_id)
-                        if has_hitgroup and is_head_hitgroup(matched_hit["hitgroup"]):
+                        is_head = has_hitgroup and is_head_hitgroup(matched_hit["hitgroup"])
+                        if is_head:
                             bump(player_head_hits, shooter_id)
+                        if not is_sniper_weapon(shot_weapon) and not is_shotgun_weapon(shot_weapon):
+                            bump(player_combat_hits_excl, shooter_id)
+                            if is_head:
+                                bump(player_head_hits_excl, shooter_id)
 
                     if is_first_bullet:
                         bump(player_first_bullet_shots, shooter_id)
                         if hit_landed:
                             bump(player_first_bullet_hits, shooter_id)
-                    else:
+                    elif is_spray:
                         bump(player_spray_shots, shooter_id)
                         if hit_landed:
                             bump(player_spray_hits, shooter_id)
 
+                    # Counter-strafing: velocidade relativa à velocidade máxima da arma
+                    # (tolerância quase zero pra sniper); agachado conta como parada válida.
                     if has_velocity:
                         srow = rows_at(shot_tick)
                         srow = srow[srow["steamid"] == shooter_id]
                         if len(srow) > 0:
                             vx = srow.iloc[0].get("velocity_X")
                             vy = srow.iloc[0].get("velocity_Y")
+                            is_ducking = False
+                            if has_ducking:
+                                duck_val = srow.iloc[0].get("ducking")
+                                is_ducking = bool(duck_val) if duck_val is not None and str(duck_val) != "nan" else False
                             if vx is not None and vy is not None and str(vx) != "nan" and str(vy) != "nan":
                                 speed = (float(vx) ** 2 + float(vy) ** 2) ** 0.5
                                 bump(player_counter_strafe_total, shooter_id)
-                                if speed <= COUNTER_STRAFE_SPEED_THRESHOLD:
+                                if is_ducking:
+                                    bump(player_counter_strafe_shots, shooter_id)
+                                elif is_sniper_weapon(shot_weapon):
+                                    if speed <= SNIPER_STATIONARY_THRESHOLD:
+                                        bump(player_counter_strafe_shots, shooter_id)
+                                elif speed <= COUNTER_STRAFE_RELATIVE_THRESHOLD * max_speed_for_weapon(shot_weapon):
                                     bump(player_counter_strafe_shots, shooter_id)
 
-                    if has_pitch and has_yaw and has_z and shooter_side is not None:
+                    # Alvo considerado no engajamento: inimigo vivo com menor ângulo até
+                    # o crosshair do atirador no tick do disparo (heurística de "quem
+                    # está sendo engajado", reaproveitada pra crosshair placement e
+                    # spotted accuracy).
+                    target_id = None
+                    if shooter_side is not None:
                         tick_rows = rows_at(shot_tick)
                         shooter_rows = tick_rows[tick_rows["steamid"] == shooter_id]
-                        if len(shooter_rows) > 0:
+                        if len(shooter_rows) > 0 and has_pitch and has_yaw and has_z:
                             shooter_row = shooter_rows.iloc[0]
                             enemy_side = "t" if shooter_side == "ct" else "ct"
                             best_deg = None
@@ -732,11 +941,116 @@ def main():
                                 deg = angle_to_target_deg(shooter_row, er)
                                 if deg is not None and (best_deg is None or deg < best_deg):
                                     best_deg = deg
-                            if best_deg is not None:
+                                    target_id = enemy_id
+
+                    shooter_blind_at_shot = is_blinded_at(shooter_id, shot_tick, SHOOTER_BLIND_THRESHOLD_SECONDS)
+
+                    # T_spot do alvo (quando ele apareceu, buscando pra trás a partir do
+                    # tick do disparo) alimenta Spotted Accuracy e Crosshair Placement —
+                    # calculado uma vez e reaproveitado. Suspenso se o atirador estava
+                    # cego (excluindo tanto shots "sem visão prévia" quanto reação a flash).
+                    spot_tick = None
+                    if target_id is not None and not shooter_blind_at_shot:
+                        spot_tick = find_spot_start_tick(target_id, shot_tick)
+
+                    # Spotted Accuracy: só entra no denominador se o alvo já estava
+                    # "spotted" (T_spot <= tick do disparo) — exclui wallbangs sem visão
+                    # prévia e pré-fires (quando T_spot não é encontrado).
+                    if spot_tick is not None:
+                        bump(player_spotted_shots_total, shooter_id)
+                        if hit_landed:
+                            bump(player_spotted_shots_hit, shooter_id)
+
+                        # Crosshair Placement medido em T_spot, não no tick do disparo.
+                        spot_rows = rows_at(spot_tick)
+                        shooter_spot_rows = spot_rows[spot_rows["steamid"] == shooter_id]
+                        target_spot_rows = spot_rows[spot_rows["steamid"] == target_id]
+                        if len(shooter_spot_rows) > 0 and len(target_spot_rows) > 0:
+                            deg = angle_to_target_deg(shooter_spot_rows.iloc[0], next(target_spot_rows.itertuples()))
+                            if deg is not None:
                                 player_crosshair_deg_sum[shooter_id] = (
-                                    player_crosshair_deg_sum.get(shooter_id, 0.0) + best_deg
+                                    player_crosshair_deg_sum.get(shooter_id, 0.0) + deg
                                 )
                                 bump(player_crosshair_deg_count, shooter_id)
+
+        # --- Time to Damage / Time to Kill: primeiro engajamento (atacante->vítima)
+        # de cada par por round, ancorado no T_spot da vítima buscado pra trás a
+        # partir do primeiro `player_hurt` do par. ---
+        if round_hurts is not None and has_spotted:
+            first_hurt_by_pair: dict = {}
+            for h in round_hurts.itertuples():
+                attacker_id = getattr(h, "attacker_steamid", None)
+                user_id = getattr(h, "user_steamid", None)
+                if attacker_id is None or str(attacker_id) == "nan":
+                    continue
+                if user_id is None or str(user_id) == "nan":
+                    continue
+                weapon = getattr(h, "weapon", None) if has_hurt_weapon else None
+                if has_hurt_weapon and not is_gun_weapon(weapon):
+                    continue
+                pair = (int(attacker_id), int(user_id))
+                tick = int(h.tick)
+                existing = first_hurt_by_pair.get(pair)
+                if existing is None or tick < existing[0]:
+                    first_hurt_by_pair[pair] = (tick, weapon)
+
+            first_death_by_pair: dict = {}
+            if round_deaths is not None:
+                for d in round_deaths.itertuples():
+                    attacker_id = getattr(d, "attacker_steamid", None)
+                    user_id = getattr(d, "user_steamid", None)
+                    if attacker_id is None or str(attacker_id) == "nan":
+                        continue
+                    if user_id is None or str(user_id) == "nan":
+                        continue
+                    pair = (int(attacker_id), int(user_id))
+                    tick = int(d.tick)
+                    if pair not in first_death_by_pair:
+                        first_death_by_pair[pair] = tick
+
+            for (attacker_id, victim_id), (hurt_tick, eng_weapon) in first_hurt_by_pair.items():
+                if attacker_id not in side_map or victim_id not in side_map:
+                    continue
+                if side_map[attacker_id] == side_map[victim_id]:
+                    continue  # fogo amigo não é um "duelo"
+                spot_tick = find_spot_start_tick(victim_id, hurt_tick)
+                if spot_tick is None:
+                    continue  # pré-fire / sem visão prévia confirmada dentro da janela
+
+                spot_rows = rows_at(spot_tick)
+                victim_spot_rows = spot_rows[spot_rows["steamid"] == victim_id]
+                attacker_spot_rows = spot_rows[spot_rows["steamid"] == attacker_id]
+                is_sniper_engagement = is_sniper_weapon(eng_weapon)
+
+                # TTD: isola sniper, descarta se a vítima estava de costas (sem
+                # combate direto) no momento em que apareceu.
+                if not is_sniper_engagement and len(victim_spot_rows) > 0 and len(attacker_spot_rows) > 0:
+                    back_turned = False
+                    if has_yaw:
+                        victim_row = victim_spot_rows.iloc[0]
+                        victim_yaw = victim_row.get("yaw")
+                        vx, vy = victim_row.get("X"), victim_row.get("Y")
+                        ax, ay = attacker_spot_rows.iloc[0].get("X"), attacker_spot_rows.iloc[0].get("Y")
+                        if all(v is not None and str(v) != "nan" for v in (victim_yaw, vx, vy, ax, ay)):
+                            to_attacker_deg = math.degrees(math.atan2(float(ay) - float(vy), float(ax) - float(vx)))
+                            diff = abs(((to_attacker_deg - float(victim_yaw)) + 180) % 360 - 180)
+                            back_turned = diff > 90
+                    if not back_turned:
+                        ttd_ms = (hurt_tick - spot_tick) / TICK_RATE * 1000.0
+                        if ttd_ms >= 0:
+                            player_ttd_sum_ms[attacker_id] = player_ttd_sum_ms.get(attacker_id, 0.0) + ttd_ms
+                            bump(player_ttd_count, attacker_id)
+
+                # TTK: descarta se a vítima já estava com HP < 80 no T_spot ("kill roubada").
+                death_tick = first_death_by_pair.get((attacker_id, victim_id))
+                if death_tick is not None and len(victim_spot_rows) > 0:
+                    hp_val = victim_spot_rows.iloc[0].get("health")
+                    hp_ok = hp_val is not None and str(hp_val) != "nan" and float(hp_val) >= MIN_HP_FOR_TTK
+                    if hp_ok:
+                        ttk_ms = (death_tick - spot_tick) / TICK_RATE * 1000.0
+                        if ttk_ms >= 0:
+                            player_ttk_sum_ms[attacker_id] = player_ttk_sum_ms.get(attacker_id, 0.0) + ttk_ms
+                            bump(player_ttk_count, attacker_id)
 
         # --- Utility: dano de HE separado entre inimigo/aliado ---
         if round_hurts is not None and has_hurt_weapon:
@@ -1213,18 +1527,25 @@ def main():
         shots_fired = player_shots_fired.get(steamid, 0)
         shots_hit = player_shots_hit.get(steamid, 0)
         head_hits = player_head_hits.get(steamid, 0)
+        combat_hits_excl = player_combat_hits_excl.get(steamid, 0)
+        head_hits_excl = player_head_hits_excl.get(steamid, 0)
+        kills_excl = player_kills_excl.get(steamid, 0)
         first_bullet_shots = player_first_bullet_shots.get(steamid, 0)
         spray_shots = player_spray_shots.get(steamid, 0)
         counter_strafe_total = player_counter_strafe_total.get(steamid, 0)
         crosshair_count = player_crosshair_deg_count.get(steamid, 0)
+        spotted_shots_total = player_spotted_shots_total.get(steamid, 0)
+        ttd_count = player_ttd_count.get(steamid, 0)
+        ttk_count = player_ttk_count.get(steamid, 0)
         aim = {
             "shotsFired": shots_fired,
             "shotsHit": shots_hit,
             "accuracy": pct(shots_hit, shots_fired),
             "headHits": head_hits,
-            "headAccuracy": pct(head_hits, shots_hit),
+            # Head Accuracy e HS Kill% isolam sniper/shotgun (contadores próprios).
+            "headAccuracy": pct(head_hits_excl, combat_hits_excl),
             "hsKills": player_hs_kills.get(steamid, 0),
-            "hsKillPct": pct(player_hs_kills.get(steamid, 0), kills),
+            "hsKillPct": pct(player_hs_kills_excl.get(steamid, 0), kills_excl),
             "firstBulletShots": first_bullet_shots,
             "firstBulletAccuracy": pct(player_first_bullet_hits.get(steamid, 0), first_bullet_shots),
             "sprayShots": spray_shots,
@@ -1232,6 +1553,13 @@ def main():
             "counterStrafePct": pct(player_counter_strafe_shots.get(steamid, 0), counter_strafe_total),
             "avgCrosshairPlacementDeg": (
                 round(player_crosshair_deg_sum.get(steamid, 0.0) / crosshair_count, 2) if crosshair_count else None
+            ),
+            "spottedAccuracy": pct(player_spotted_shots_hit.get(steamid, 0), spotted_shots_total),
+            "avgTimeToDamageMs": (
+                round(player_ttd_sum_ms.get(steamid, 0.0) / ttd_count, 0) if ttd_count else None
+            ),
+            "avgTimeToKillMs": (
+                round(player_ttk_sum_ms.get(steamid, 0.0) / ttk_count, 0) if ttk_count else None
             ),
         }
 

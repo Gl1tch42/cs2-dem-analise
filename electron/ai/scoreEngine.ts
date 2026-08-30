@@ -21,17 +21,58 @@ interface SubmetricWeight {
   targetMax: number;
 }
 
-const AIM_SUBMETRIC_WEIGHTS: Record<string, SubmetricWeight> = {
-  accuracy: { weight: 0.2, targetMin: 10, targetMax: 35 },
-  headAccuracy: { weight: 0.2, targetMin: 20, targetMax: 55 },
-  hsKillPct: { weight: 0.15, targetMin: 20, targetMax: 60 },
-  firstBulletAccuracy: { weight: 0.15, targetMin: 15, targetMax: 45 },
-  sprayAccuracy: { weight: 0.1, targetMin: 15, targetMax: 40 },
-  counterStrafePct: { weight: 0.1, targetMin: 30, targetMax: 80 },
-  crosshairPlacement: { weight: 0.1, targetMin: 25, targetMax: 2 },
+// Pesos calibrados a partir de uma matriz de pesos "estilo Leetify" fornecida
+// pelo usuário (escala 0-5 por métrica), normalizados aqui pra somar 1.0:
+// Accuracy(All) 1.0, Head Accuracy 3.5, HS Kill% 2.0, First Bullet 4.0,
+// Spray 3.0, Counter-Strafing 4.5, Crosshair Placement 5.0, Spotted Accuracy
+// 2.5, Time to Damage 4.5, Time to Kill 4.0 — soma 34.0, cada peso = X/34.
+interface AimWeights {
+  accuracy: SubmetricWeight;
+  headAccuracy: SubmetricWeight;
+  hsKillPct: SubmetricWeight;
+  firstBulletAccuracy: SubmetricWeight;
+  sprayAccuracy: SubmetricWeight;
+  counterStrafePct: SubmetricWeight;
+  crosshairPlacement: SubmetricWeight;
+  spottedAccuracy: SubmetricWeight;
+  timeToDamage: SubmetricWeight;
+  timeToKill: SubmetricWeight;
+}
+
+// Recalibrado com uma média real de referência: FACEIT Level 10 (o usuário
+// forneceu Headshot Accuracy 23%, Accuracy Enemy Spotted 35%, Accuracy All
+// Shots 19%, Spray Accuracy 37%, Counter-Strafing 80%, Crosshair Placement
+// 8.36°, Time to Damage 535ms — e definiu que essa linha de stats deve valer
+// nota de mira ≈82). Sem um segundo ponto de referência (ex: jogador fraco)
+// pra travar os dois extremos da escala, o piso (targetMin nas métricas
+// "maior é melhor") é uma suposição de ~45% do valor de FACEIT 10, e o teto
+// (targetMax) é resolvido pra bater ≈82 no valor de FACEIT 10 — o mesmo em
+// espelho pras métricas "menor é melhor" (crosshair/TTD), com o piso em
+// ~2.2x o valor de FACEIT 10. hsKillPct/firstBulletAccuracy/timeToKill não
+// têm referência ainda, mantidos nos valores anteriores (não recalibrados).
+const AIM_SUBMETRIC_WEIGHTS: AimWeights = {
+  accuracy: { weight: 0.0294, targetMin: 8, targetMax: 21.4 },
+  headAccuracy: { weight: 0.1029, targetMin: 10, targetMax: 25.9 },
+  hsKillPct: { weight: 0.0588, targetMin: 20, targetMax: 60 },
+  firstBulletAccuracy: { weight: 0.1176, targetMin: 15, targetMax: 45 },
+  sprayAccuracy: { weight: 0.0882, targetMin: 17, targetMax: 41.4 },
+  counterStrafePct: { weight: 0.1324, targetMin: 36, targetMax: 89.7 },
+  crosshairPlacement: { weight: 0.1471, targetMin: 18.4, targetMax: 6.2 },
+  spottedAccuracy: { weight: 0.0735, targetMin: 16, targetMax: 39.2 },
+  // TTD/TTK: menor é melhor (targetMin = pior/mais lento, targetMax = melhor/mais rápido).
+  timeToDamage: { weight: 0.1324, targetMin: 1180, targetMax: 393 },
+  timeToKill: { weight: 0.1176, targetMin: 2000, targetMax: 600 },
 };
 
-const UTILITY_QUALITY_WEIGHTS: Record<string, SubmetricWeight> = {
+interface UtilityQualityWeights {
+  enemiesFlashedPct: SubmetricWeight;
+  avgBlindTimeSec: SubmetricWeight;
+  avgHeDamage: SubmetricWeight;
+  flashAssistsPerRound: SubmetricWeight;
+  teamDamagePenalty: SubmetricWeight;
+}
+
+const UTILITY_QUALITY_WEIGHTS: UtilityQualityWeights = {
   enemiesFlashedPct: { weight: 0.3, targetMin: 20, targetMax: 60 },
   avgBlindTimeSec: { weight: 0.2, targetMin: 0.5, targetMax: 3.0 },
   avgHeDamage: { weight: 0.2, targetMin: 5, targetMax: 25 },
@@ -69,6 +110,13 @@ export function computeAimScore(aim: PlayerAimStats): number {
   add(aim.counterStrafePct, AIM_SUBMETRIC_WEIGHTS.counterStrafePct);
   if (aim.avgCrosshairPlacementDeg !== null) {
     add(aim.avgCrosshairPlacementDeg, AIM_SUBMETRIC_WEIGHTS.crosshairPlacement);
+  }
+  add(aim.spottedAccuracy, AIM_SUBMETRIC_WEIGHTS.spottedAccuracy);
+  if (aim.avgTimeToDamageMs !== null) {
+    add(aim.avgTimeToDamageMs, AIM_SUBMETRIC_WEIGHTS.timeToDamage);
+  }
+  if (aim.avgTimeToKillMs !== null) {
+    add(aim.avgTimeToKillMs, AIM_SUBMETRIC_WEIGHTS.timeToKill);
   }
   return totalWeight ? round1(sum / totalWeight) : 0;
 }
@@ -113,12 +161,22 @@ interface PlayerScoreAccumulator {
   hsKills: number;
   firstBulletShots: number;
   sprayShots: number;
+  // headAccuracy e hsKillPct já vêm do Python como % por demo excluindo
+  // sniper/shotgun (não dá pra reconstruir só de headHits/shotsHit brutos,
+  // que ficam aqui só como total informativo) — por isso são somadas como
+  // percentuais por demo e promediadas no fechamento, igual as outras.
+  headAccuracySum: number;
   hsKillPctSum: number;
   firstBulletAccuracySum: number;
   sprayAccuracySum: number;
   counterStrafePctSum: number;
   crosshairDegSum: number;
   crosshairDegCount: number;
+  spottedAccuracySum: number;
+  ttdSumMs: number;
+  ttdCount: number;
+  ttkSumMs: number;
+  ttkCount: number;
 
   flashesThrown: number;
   smokesThrown: number;
@@ -147,12 +205,18 @@ function newAccumulator(name: string): PlayerScoreAccumulator {
     hsKills: 0,
     firstBulletShots: 0,
     sprayShots: 0,
+    headAccuracySum: 0,
     hsKillPctSum: 0,
     firstBulletAccuracySum: 0,
     sprayAccuracySum: 0,
     counterStrafePctSum: 0,
     crosshairDegSum: 0,
     crosshairDegCount: 0,
+    spottedAccuracySum: 0,
+    ttdSumMs: 0,
+    ttdCount: 0,
+    ttkSumMs: 0,
+    ttkCount: 0,
     flashesThrown: 0,
     smokesThrown: 0,
     molotovsThrown: 0,
@@ -205,6 +269,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       acc.hsKills += player.aim.hsKills;
       acc.firstBulletShots += player.aim.firstBulletShots;
       acc.sprayShots += player.aim.sprayShots;
+      acc.headAccuracySum += player.aim.headAccuracy;
       acc.hsKillPctSum += player.aim.hsKillPct;
       acc.firstBulletAccuracySum += player.aim.firstBulletAccuracy;
       acc.sprayAccuracySum += player.aim.sprayAccuracy;
@@ -212,6 +277,15 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       if (player.aim.avgCrosshairPlacementDeg !== null) {
         acc.crosshairDegSum += player.aim.avgCrosshairPlacementDeg;
         acc.crosshairDegCount++;
+      }
+      acc.spottedAccuracySum += player.aim.spottedAccuracy;
+      if (player.aim.avgTimeToDamageMs !== null) {
+        acc.ttdSumMs += player.aim.avgTimeToDamageMs;
+        acc.ttdCount++;
+      }
+      if (player.aim.avgTimeToKillMs !== null) {
+        acc.ttkSumMs += player.aim.avgTimeToKillMs;
+        acc.ttkCount++;
       }
 
       acc.flashesThrown += player.utility.flashesThrown;
@@ -231,10 +305,13 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       acc.history.push({
         demoId: demo.id,
         demoLabel: demo.fileName,
+        map: summary.map,
         addedAt: demo.addedAt,
         aimScore,
         utilityScore,
         overallScore,
+        aim: player.aim,
+        utility: player.utility,
       });
 
       accMap.set(player.steamId, acc);
@@ -254,7 +331,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         shotsHit: acc.shotsHit,
         accuracy: acc.shotsFired ? round1((100 * acc.shotsHit) / acc.shotsFired) : 0,
         headHits: acc.headHits,
-        headAccuracy: acc.shotsHit ? round1((100 * acc.headHits) / acc.shotsHit) : 0,
+        headAccuracy: acc.demosCount ? round1(acc.headAccuracySum / acc.demosCount) : 0,
         hsKills: acc.hsKills,
         hsKillPct: acc.demosCount ? round1(acc.hsKillPctSum / acc.demosCount) : 0,
         firstBulletShots: acc.firstBulletShots,
@@ -263,6 +340,9 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         sprayAccuracy: acc.demosCount ? round1(acc.sprayAccuracySum / acc.demosCount) : 0,
         counterStrafePct: acc.demosCount ? round1(acc.counterStrafePctSum / acc.demosCount) : 0,
         avgCrosshairPlacementDeg: acc.crosshairDegCount ? round1(acc.crosshairDegSum / acc.crosshairDegCount) : null,
+        spottedAccuracy: acc.demosCount ? round1(acc.spottedAccuracySum / acc.demosCount) : 0,
+        avgTimeToDamageMs: acc.ttdCount ? round1(acc.ttdSumMs / acc.ttdCount) : null,
+        avgTimeToKillMs: acc.ttkCount ? round1(acc.ttkSumMs / acc.ttkCount) : null,
       },
       utility: {
         flashesThrown: acc.flashesThrown,

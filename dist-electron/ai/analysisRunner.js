@@ -58,6 +58,45 @@ function playersTable(players, focusIds) {
         ...rows,
     ].join('\n');
 }
+function aimUtilityTable(players, focusIds) {
+    if (players.length === 0) {
+        return '(sem dados de mira/utility ainda — precisa de pelo menos 1 demo com o time do slot marcado)';
+    }
+    const rows = players.map((p) => {
+        const isFocus = focusIds && focusIds.has(p.steamId);
+        const name = isFocus ? `**${p.name} 🎯**` : p.name;
+        const a = p.aim;
+        const u = p.utility;
+        const cross = a.avgCrosshairPlacementDeg !== null ? `${a.avgCrosshairPlacementDeg}°` : '—';
+        const ttd = a.avgTimeToDamageMs !== null ? `${a.avgTimeToDamageMs}ms` : '—';
+        const ttk = a.avgTimeToKillMs !== null ? `${a.avgTimeToKillMs}ms` : '—';
+        return (`| ${name} | ${p.avgOverallScore} | ${p.avgAimScore} | ${p.avgUtilityScore} | ${a.accuracy}% | ` +
+            `${a.headAccuracy}% | ${a.hsKillPct}% | ${a.counterStrafePct}% | ${cross} | ${a.spottedAccuracy}% | ` +
+            `${ttd} | ${ttk} | ${u.flashesThrown} | ${u.enemiesFlashedPct}% | ${u.flashAssists} | ${u.avgHeDamage} | ${u.avgHeTeamDamage} |`);
+    });
+    return [
+        '| Jogador | Nota Geral | Nota Mira | Nota Utility | Accuracy | Head Acc. | HS Kill% | ' +
+            'Counter-Strafe | Crosshair | Spotted Acc. | TTD | TTK | Flashes | Enemies Flashed | Flash Assists | Avg HE Dmg | Avg HE Team Dmg |',
+        '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+        ...rows,
+    ].join('\n');
+}
+// Tendência por demo, em ordem cronológica — compacto (uma linha por jogador)
+// pra não estourar o prompt mesmo com muitas demos no slot; dá pro modelo
+// enxergar "melhorou/piorou ao longo do tempo" sem precisar de uma tabela
+// gigante por jogador.
+function aimUtilityHistoryLines(players) {
+    const withHistory = players.filter((p) => p.history.length > 0);
+    if (withHistory.length === 0)
+        return '(sem histórico por demo ainda)';
+    const lines = withHistory.map((p) => {
+        const trend = p.history
+            .map((h) => `${h.demoLabel} (${new Date(h.addedAt).toLocaleDateString('pt-BR')}): nota ${h.overallScore}`)
+            .join(' → ');
+        return `- **${p.name}**: ${trend}`;
+    });
+    return lines.join('\n');
+}
 function siteTable(dist) {
     const entries = Object.entries(dist).sort((a, b) => b[1] - a[1]);
     if (entries.length === 0)
@@ -130,12 +169,21 @@ Seu trabalho:
 4. Avaliar qualidades e lacunas individuais dos jogadores em foco com base nas métricas agregadas
    (ADR, entry rate, clutch rate, kills/deaths, áreas mais visitadas) — sempre ligando o número a
    uma recomendação prática, não só descrevendo o número.
-5. Quando uma jogada deu errado, não generalizar — apontar que ela falhou "porque falhou" nesse
+5. Usar a tabela "Mira e utility consolidados" pra avaliar mecânica individual: accuracy, head
+   accuracy, HS kill%, counter-strafing, crosshair placement (grau — menor é melhor), spotted
+   accuracy, time to damage/kill (ms — menor é melhor), e a qualidade/quantidade de utility
+   (flashes jogadas, % de inimigos cegados, flash assists, dano de HE em inimigo vs. em aliado).
+   Um valor "—" significa que não há amostra suficiente pra essa métrica nessa demo/jogador — não
+   invente uma leitura pra ela, diga que falta amostra.
+6. Usar "Evolução da nota geral por demo" pra dizer se cada jogador está melhorando, piorando ou
+   estável ao longo das partidas — isso é tão relevante quanto o valor consolidado atual pro plano
+   de treino.
+7. Quando uma jogada deu errado, não generalizar — apontar que ela falhou "porque falhou" nesse
    contexto específico, sem inventar causas que não estão nos dados.
-6. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
-7. Nunca inventar estatística, tendência de movimentação ou uso de utilitário que não esteja
-   literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não dá
-   pra afirmar isso com os dados disponíveis, em vez de supor.
+8. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
+9. Nunca inventar estatística, tendência de movimentação, mira/utility ou uso de utilitário que não
+   esteja literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não
+   dá pra afirmar isso com os dados disponíveis, em vez de supor.
 
 FORMATO DE SAÍDA — escreva como um relatório pronto pra ser entregue ao time (o tipo de documento
 que viraria um PDF de scouting/report interno), em Markdown, com exatamente estas seções:
@@ -144,7 +192,9 @@ que viraria um PDF de scouting/report interno), em Markdown, com exatamente esta
    pra cada time, com a evidência (contagem/winRate) entre parênteses.
 3. **Diagnóstico individual** — uma subseção por jogador em foco (ou por todos os jogadores do
    time do slot, se o foco pedido for o time inteiro), cada uma com: pontos fortes, pontos a
-   melhorar e leitura de posicionamento/movimentação com base nas áreas mais visitadas.
+   melhorar, leitura de posicionamento/movimentação com base nas áreas mais visitadas, leitura de
+   mira/mecânica (accuracy, crosshair placement, counter-strafing, time to damage/kill) e de
+   utility (qualidade e quantidade), e se a tendência ao longo das demos é de melhora ou piora.
 4. **Plano de treino recomendado** — uma ação concreta e específica por ponto fraco identificado
    (tipo de treino de aim/movement, cenário de retake/execução pra praticar, o que revisar na
    próxima demo). Nada genérico tipo "jogue mais" — cada recomendação tem que estar amarrada ao
@@ -192,12 +242,20 @@ Seu trabalho:
 4. Avaliar jogadores em foco do time-alvo com base nas métricas agregadas (ADR, entry rate, clutch
    rate, kills/deaths, áreas mais visitadas) e traduzir isso em como jogar contra eles especificamente
    (ex: quem isolar 1x1, quem não deixar entrar sozinho, onde ele costuma clutchar).
-5. Quando um padrão do time-alvo falhou, não generalizar — aponte que falhou "nesse contexto
+5. Usar a tabela "Mira e utility consolidados" pra identificar a mecânica de cada jogador do
+   time-alvo: accuracy, head accuracy, HS kill%, counter-strafing, crosshair placement (grau — menor
+   é melhor), spotted accuracy, time to damage/kill (ms — menor é melhor), e como ele usa utility
+   (quantidade, % de inimigos cegados, flash assists, dano de HE) — isso vira recomendação de quem
+   duelar, quem evitar de frente, e onde a utility dele costuma pegar. Um valor "—" significa amostra
+   insuficiente pra essa métrica — não invente leitura pra ela.
+6. Usar "Evolução da nota geral por demo" pra apontar se algum jogador do time-alvo está em alta ou
+   em baixa recentemente — isso muda a prioridade de quem explorar no próximo confronto.
+7. Quando um padrão do time-alvo falhou, não generalizar — aponte que falhou "nesse contexto
    específico", sem inventar causa que não está nos dados.
-6. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
-7. Nunca inventar estatística, tendência de movimentação ou uso de utilitário que não esteja
-   literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não dá pra
-   afirmar isso com os dados disponíveis, em vez de supor.
+8. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
+9. Nunca inventar estatística, tendência de movimentação, mira/utility ou uso de utilitário que não
+   esteja literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não dá
+   pra afirmar isso com os dados disponíveis, em vez de supor.
 
 FORMATO DE SAÍDA — escreva como um relatório de scouting pronto pra ser entregue ao time antes do
 confronto (o tipo de documento que viraria um PDF de prep de jogo), em Markdown, com exatamente
@@ -208,7 +266,10 @@ estas seções:
 3. **Vulnerabilidades identificadas** — padrões com win rate baixo e amostra suficiente, cada um
    com a leitura tática de como explorar.
 4. **Alvos individuais** — uma subseção por jogador em foco (ou pelos jogadores do time-alvo com
-   dados suficientes, se o foco pedido for o time inteiro), com como neutralizar/isolar cada um.
+   dados suficientes, se o foco pedido for o time inteiro), com como neutralizar/isolar cada um,
+   incluindo leitura de mira/mecânica (accuracy, crosshair placement, counter-strafing, time to
+   damage/kill) e de utility (qualidade e quantidade), e se a tendência ao longo das demos é de
+   melhora ou piora.
 5. **Plano de jogo sugerido** — ações concretas pro próximo confronto (que site atacar em cada
    situação de compra, que postura assumir na defesa, quem isolar), cada uma amarrada ao dado que
    a gerou. Nada genérico tipo "jogue agressivo" — diga contra o quê e por quê.
@@ -232,11 +293,13 @@ async function runSlotAnalysis(slots, settingsManager, slotId, requestedProvider
         throw new Error('Este slot ainda não tem demos analisadas.');
     }
     const stats = (0, localHeuristics_1.consolidateSlot)(slots.slotFolderPath(slotId), slot.demos);
+    const playerScores = (0, scoreEngine_1.computePlayerScores)(slots.slotFolderPath(slotId), slot.demos);
     const isOpponentProfile = slot.kind === 'opponent';
     const focusIds = focusSteamIds && focusSteamIds.length > 0 ? new Set(focusSteamIds) : undefined;
     const focusPlayers = focusIds
         ? stats.myTeam.playerMovementProfile.filter((p) => focusIds.has(p.steamId))
         : [];
+    const aimUtilityHistoryScope = focusIds && focusIds.size > 0 ? playerScores.filter((p) => focusIds.has(p.steamId)) : playerScores;
     const settings = settingsManager.getSettings();
     const providerId = requestedProviderId ?? settings.defaultProviderId;
     if (!providerId)
@@ -279,6 +342,15 @@ async function runSlotAnalysis(slots, settingsManager, slotId, requestedProvider
         siteTable(stats.siteHitDistribution),
         '',
         teamSection(featuredHeading, myNames, stats.myTeam, focusIds),
+        '',
+        `### Mira e utility consolidados do ${featuredLabel} (todas as demos com time marcado, nota 0-100)`,
+        ...(focusIds && focusIds.size > 0
+            ? ['(🎯 = jogador em foco — priorize a leitura de mira/utility dele(s))']
+            : []),
+        aimUtilityTable(playerScores, focusIds),
+        '',
+        `### Evolução da nota geral por demo do ${featuredLabel} (ordem cronológica — use pra dizer se está melhorando ou piorando)`,
+        aimUtilityHistoryLines(aimUtilityHistoryScope),
         '',
         teamSection(contextHeading, oppNames, stats.opponent),
         '',

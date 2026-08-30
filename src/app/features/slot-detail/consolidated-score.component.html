@@ -11,92 +11,110 @@
     <strong>Demos</strong>) e importe demos suficientes pra gerar dados de mira/utility.
   </p>
 
-  <div class="score-player-card box" *ngFor="let p of players">
-    <header class="score-player-header">
-      <h3>{{ p.name }}</h3>
-      <span class="tag" [ngClass]="scoreClass(p.avgOverallScore)">Nota geral: {{ p.avgOverallScore }}</span>
-      <span class="tag is-dark">{{ p.demosCount }} demo(s)</span>
-      <span class="tag" [ngClass]="scoreClass(p.avgAimScore)">Mira: {{ p.avgAimScore }}</span>
-      <span class="tag" [ngClass]="scoreClass(p.avgUtilityScore)">Utility: {{ p.avgUtilityScore }}</span>
-    </header>
+  <div class="score-player-card" *ngFor="let p of players">
+    <!-- Hero: nome + nota de destaque (consolidado ou demo isolada) -->
+    <div class="player-hero">
+      <ng-container *ngIf="getSelectedHistory(p) as sel; else aggregateHero">
+        <div class="player-hero-identity">
+          <h3 class="title is-4 has-text-white">{{ p.name }}</h3>
+          <div class="tags">
+            <span class="tag is-link is-rounded" [title]="sel.demoLabel">{{ truncateLabel(sel.demoLabel) }}</span>
+            <span class="tag is-dark is-rounded" *ngIf="sel.map">{{ sel.map }}</span>
+            <button class="button is-small back-btn" (click)="selectDemo(p.steamId, sel.demoId)">
+              ← Ver consolidado
+            </button>
+          </div>
+        </div>
+        <div class="hero-metric" [ngClass]="scoreClass(sel.overallScore)">
+          <span class="hero-metric-label">Nota da demo</span>
+          <span class="hero-metric-value">{{ sel.overallScore }}</span>
+        </div>
+      </ng-container>
+      <ng-template #aggregateHero>
+        <div class="player-hero-identity">
+          <h3 class="title is-4 has-text-white">{{ p.name }}</h3>
+          <span class="tag is-dark is-rounded">{{ p.demosCount }} demo(s)</span>
+        </div>
+        <div class="hero-metric" [ngClass]="scoreClass(p.avgOverallScore)">
+          <span class="hero-metric-label">Nota Geral</span>
+          <span class="hero-metric-value">{{ p.avgOverallScore }}</span>
+        </div>
+      </ng-template>
+    </div>
 
+    <!-- Sub-scores: Mira / Utility, com barra de progresso -->
+    <div class="sub-scores">
+      <div class="sub-score-box">
+        <div class="sub-score-top">
+          <span class="sub-score-label">Mira</span>
+          <span class="sub-score-value" [ngClass]="scoreTextClass(displayAimScore(p))">{{ displayAimScore(p) }}</span>
+        </div>
+        <progress class="progress is-small" [ngClass]="scoreClass(displayAimScore(p))" [value]="displayAimScore(p)" max="100"></progress>
+      </div>
+      <div class="sub-score-box">
+        <div class="sub-score-top">
+          <span class="sub-score-label">Utility</span>
+          <span class="sub-score-value" [ngClass]="scoreTextClass(displayUtilityScore(p))">{{ displayUtilityScore(p) }}</span>
+        </div>
+        <progress class="progress is-small" [ngClass]="scoreClass(displayUtilityScore(p))" [value]="displayUtilityScore(p)" max="100"></progress>
+      </div>
+    </div>
+
+    <!-- Matriz de mira -->
     <p class="stat-subtitle">Mira</p>
-    <div class="table-container">
-      <table class="table is-narrow is-fullwidth is-hoverable mini-table">
-        <thead>
-          <tr>
-            <th>Accuracy</th>
-            <th>Head Acc.</th>
-            <th>HS Kill %</th>
-            <th>First Bullet</th>
-            <th>Spray Acc.</th>
-            <th>Counter-Strafe</th>
-            <th>Crosshair Placement</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{{ p.aim.accuracy }}%</td>
-            <td>{{ p.aim.headAccuracy }}%</td>
-            <td>{{ p.aim.hsKillPct }}%</td>
-            <td>{{ p.aim.firstBulletAccuracy }}%</td>
-            <td>{{ p.aim.sprayAccuracy }}%</td>
-            <td>{{ p.aim.counterStrafePct }}%</td>
-            <td>{{ p.aim.avgCrosshairPlacementDeg !== null ? (p.aim.avgCrosshairPlacementDeg + 'º') : '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="columns is-multiline kpi-grid">
+      <div class="column is-2-desktop is-3-tablet is-4-mobile" *ngFor="let m of aimKpis">
+        <div class="kpi-card">
+          <p class="kpi-label">{{ m.label }}</p>
+          <p class="kpi-value" [ngClass]="metricClass(aimValue(p, m.key), m.key)">
+            {{ formatMetric(aimValue(p, m.key), m.unit) }}
+          </p>
+        </div>
+      </div>
     </div>
 
+    <!-- Utility -->
     <p class="stat-subtitle">Utility</p>
-    <div class="table-container">
-      <table class="table is-narrow is-fullwidth is-hoverable mini-table">
-        <thead>
-          <tr>
-            <th>Flashes</th>
-            <th>Smokes</th>
-            <th>Molotovs</th>
-            <th>HEs</th>
-            <th>Flash Assists</th>
-            <th>Enemies Flashed</th>
-            <th>Friends Flashed</th>
-            <th>Avg Blind</th>
-            <th>Avg HE Dmg</th>
-            <th>Avg HE Team Dmg</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{{ p.utility.flashesThrown }}</td>
-            <td>{{ p.utility.smokesThrown }}</td>
-            <td>{{ p.utility.molotovsThrown }}</td>
-            <td>{{ p.utility.heThrown }}</td>
-            <td>{{ p.utility.flashAssists }}</td>
-            <td>{{ p.utility.enemiesFlashedPct }}%</td>
-            <td>{{ p.utility.friendsFlashed }}</td>
-            <td>{{ p.utility.avgBlindTimeSec }}s</td>
-            <td>{{ p.utility.avgHeDamage }}</td>
-            <td>{{ p.utility.avgHeTeamDamage }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="columns is-multiline kpi-grid kpi-grid-impact">
+      <div class="column is-3-desktop is-4-tablet is-6-mobile" *ngFor="let m of utilityImpact">
+        <div class="kpi-card">
+          <p class="kpi-label">{{ m.label }}</p>
+          <p class="kpi-value" [ngClass]="metricClass(utilityValue(p, m.key), m.key)">
+            {{ formatMetric(utilityValue(p, m.key), m.unit) }}
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="utility-counts">
+      <div class="utility-count-pill" *ngFor="let m of utilityCounts">
+        <span class="pill-label">{{ m.label }}</span>
+        <span class="pill-value">{{ utilityValue(p, m.key) }}</span>
+      </div>
     </div>
 
-    <p class="stat-subtitle">Histórico ({{ p.history.length }} demo(s))</p>
+    <!-- Histórico de demos -->
+    <p class="stat-subtitle">Histórico ({{ p.history.length }} demo(s)) — clique numa demo pra ver os números isolados dela</p>
     <div class="table-container">
-      <table class="table is-narrow is-fullwidth is-hoverable mini-table">
+      <table class="table is-fullwidth is-hoverable mini-table">
         <thead>
           <tr>
             <th>Demo</th>
+            <th>Mapa</th>
             <th>Adicionada em</th>
             <th>Nota</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let h of p.history">
-            <td class="mono">{{ h.demoLabel }}</td>
+          <tr
+            *ngFor="let h of p.history"
+            class="history-row"
+            [class.is-selected]="isSelectedDemo(p.steamId, h.demoId)"
+            (click)="selectDemo(p.steamId, h.demoId)"
+          >
+            <td class="mono" [title]="h.demoLabel">{{ truncateLabel(h.demoLabel) }}</td>
+            <td class="text-muted">{{ h.map }}</td>
             <td class="text-muted">{{ h.addedAt | date: 'dd/MM/yyyy' }}</td>
-            <td><span class="tag" [ngClass]="scoreClass(h.overallScore)">{{ h.overallScore }}</span></td>
+            <td><span class="tag is-rounded" [ngClass]="scoreClass(h.overallScore)">{{ h.overallScore }}</span></td>
           </tr>
         </tbody>
       </table>

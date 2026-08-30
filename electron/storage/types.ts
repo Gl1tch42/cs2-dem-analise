@@ -177,6 +177,9 @@ export interface PlayerAimStats {
   sprayAccuracy: number;
   counterStrafePct: number;
   avgCrosshairPlacementDeg: number | null;
+  spottedAccuracy: number;
+  avgTimeToDamageMs: number | null;
+  avgTimeToKillMs: number | null;
 }
 
 export interface PlayerUtilityStats {
@@ -214,10 +217,13 @@ export interface PlayerAggregate {
 export interface PlayerScoreHistoryEntry {
   demoId: string;
   demoLabel: string;
+  map: string;
   addedAt: string;
   aimScore: number;
   utilityScore: number;
   overallScore: number;
+  aim: PlayerAimStats;
+  utility: PlayerUtilityStats;
 }
 
 export interface PlayerScoreAggregate {

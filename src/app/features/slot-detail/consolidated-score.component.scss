@@ -1,0 +1,183 @@
+.consolidated-score-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.score-player-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+// --- Hero: nome + nota de destaque -----------------------------------------
+.player-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.player-hero-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  .title {
+    margin-bottom: 0 !important;
+  }
+}
+
+.back-btn {
+  margin-left: 0.25rem;
+}
+
+.hero-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 0.4rem 1.1rem;
+  border-radius: 8px;
+  border: 2px solid var(--own-color);
+  background: var(--surface-elevated);
+}
+
+.hero-metric-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.hero-metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.hero-metric.is-success .hero-metric-value { color: #4caf82; }
+.hero-metric.is-warning .hero-metric-value { color: #d4a72c; }
+.hero-metric.is-danger .hero-metric-value { color: #e55353; }
+
+// --- Sub-scores: Mira / Utility ---------------------------------------------
+.sub-scores {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 1.1rem 0;
+}
+
+.sub-score-box {
+  background: var(--surface-elevated);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.85rem;
+}
+
+.sub-score-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.sub-score-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.sub-score-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+// --- Matriz de KPIs ----------------------------------------------------------
+.kpi-grid {
+  margin: 0 -0.4rem !important;
+}
+
+.kpi-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  height: 100%;
+}
+
+.kpi-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.kpi-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.kpi-grid-impact {
+  margin-bottom: 0.6rem !important;
+}
+
+// --- Contagem de utility (pills discretas) ----------------------------------
+.utility-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.utility-count-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--panel-border);
+  font-size: 0.78rem;
+
+  .pill-label {
+    color: var(--text-muted);
+  }
+
+  .pill-value {
+    font-weight: 600;
+  }
+}
+
+// --- Histórico ----------------------------------------------------------------
+// Nota: padding/font-size do mini-table vivia só no scss do componente pai
+// (slot-detail.component.scss), que nunca alcançava este template por causa do
+// view encapsulation do Angular — resultava na tabela "desalinhada" original.
+.mini-table {
+  th, td {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.82rem;
+    border-color: var(--panel-border);
+  }
+}
+
+.history-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--surface-elevated);
+  }
+
+  &.is-selected {
+    background: rgba(212, 167, 44, 0.14);
+    box-shadow: inset 2px 0 0 var(--own-color);
+  }
+}
