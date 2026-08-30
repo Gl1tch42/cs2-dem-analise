@@ -12,8 +12,13 @@
   font-size: 0.82rem;
   color: var(--text-muted);
 
-  select {
+  .select {
+    width: 100%;
     max-width: 320px;
+
+    select {
+      width: 100%;
+    }
   }
 }
 .radar-status {
@@ -31,6 +36,11 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+.round-select {
+  select {
+    font-weight: 600;
+  }
 }
 .badge {
   font-size: 0.7rem;
@@ -344,6 +354,71 @@
   .speed-buttons {
     display: flex;
     gap: 0.25rem;
+  }
+}
+
+.match-progress {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+.match-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.match-progress-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.match-progress-score {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+
+  .score-ct {
+    color: #5dade2;
+    font-weight: 700;
+  }
+  .score-t {
+    color: #f5b041;
+    font-weight: 700;
+  }
+}
+.match-progress-bar {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  gap: 2px;
+}
+.match-progress-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+
+  &.segment-ct {
+    background: #5dade2;
+  }
+  &.segment-t {
+    background: #f5b041;
+  }
+  &.is-current {
+    outline: 2px solid rgba(255, 255, 255, 0.9);
+    outline-offset: 1px;
+  }
+
+  &:hover {
+    filter: brightness(1.15);
   }
 }
 

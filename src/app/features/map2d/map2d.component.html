@@ -7,9 +7,11 @@
     <div class="map2d-toolbar">
       <label class="demo-select-label">
         Demo:
-        <select class="input is-small" [(ngModel)]="selectedDemoId" (ngModelChange)="onDemoChange()">
-          <option *ngFor="let d of demos" [value]="d.id">{{ d.fileName }} ({{ d.map }})</option>
-        </select>
+        <div class="select is-small">
+          <select [(ngModel)]="selectedDemoId" (ngModelChange)="onDemoChange()">
+            <option *ngFor="let d of demos" [value]="d.id">{{ d.fileName }} ({{ d.map }})</option>
+          </select>
+        </div>
       </label>
 
       <span class="radar-status" *ngIf="radarStatus === 'missing'">
@@ -27,7 +29,13 @@
       <div class="round-nav" *ngIf="summary.rounds.length > 0">
         <button class="button is-small" (click)="prevRound()" [disabled]="roundIndex === 0">‹ anterior</button>
         <span class="round-label">
-          Round {{ currentRound?.roundNumber }} / {{ summary.rounds.length }}
+          <div class="select is-small round-select">
+            <select [ngModel]="roundIndex" (ngModelChange)="setRound($event)">
+              <option *ngFor="let r of summary.rounds; let i = index" [ngValue]="i">
+                Round {{ r.roundNumber }} / {{ summary.rounds.length }}
+              </option>
+            </select>
+          </div>
           <span
             class="badge"
             [class.badge-ct]="currentRound?.winner === 'ct'"
@@ -170,6 +178,31 @@
           <span class="legend-item"><span class="swatch swatch-decoy"></span> decoy</span>
           <span class="legend-item"><span class="swatch swatch-he"></span> HE</span>
           <span class="legend-item"><span class="swatch swatch-bomb"></span> C4</span>
+        </div>
+
+        <div class="match-progress panel-block-data">
+          <div class="match-progress-header">
+            <span class="match-progress-title">Progresso da partida</span>
+            <span class="match-progress-score mono">
+              <span class="score-ct">{{ ctWinsUpToCurrent }} CT</span>
+              ·
+              <span class="score-t">{{ trWinsUpToCurrent }} TR</span>
+              ·
+              round {{ currentRound?.roundNumber }}
+            </span>
+          </div>
+          <div class="match-progress-bar">
+            <button
+              *ngFor="let r of summary.rounds; let i = index"
+              type="button"
+              class="match-progress-segment"
+              [class.segment-ct]="r.winner === 'ct'"
+              [class.segment-t]="r.winner === 't'"
+              [class.is-current]="i === roundIndex"
+              [title]="'Round ' + r.roundNumber + ' · ' + (r.winner === 'ct' ? 'CT venceu' : 'TR venceu')"
+              (click)="setRound(i)"
+            ></button>
+          </div>
         </div>
       </ng-container>
     </ng-container>

@@ -134,6 +134,14 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     return this.summary?.rounds[this.roundIndex];
   }
 
+  get ctWinsUpToCurrent(): number {
+    return (this.summary?.rounds ?? []).slice(0, this.roundIndex + 1).filter((r) => r.winner === 'ct').length;
+  }
+
+  get trWinsUpToCurrent(): number {
+    return (this.summary?.rounds ?? []).slice(0, this.roundIndex + 1).filter((r) => r.winner === 't').length;
+  }
+
   async onDemoChange() {
     this.stopPlayback();
     await this.loadSummary();
