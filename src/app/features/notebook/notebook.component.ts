@@ -13,8 +13,14 @@ import { CommonModule } from '@angular/common';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import { TaskList } from '@tiptap/extension-task-list';
+import { TaskItem } from '@tiptap/extension-task-item';
 import { Markdown } from 'tiptap-markdown';
 import { ElectronService } from '../../core/services/electron.service';
+import { SlashCommand } from './notebook-slash-command';
+import { NoImages, hasImageFile } from './notebook-no-images';
+
+const SAVE_DEBOUNCE_MS = 300;
 
 @Component({
   selector: 'app-notebook',
@@ -58,25 +64,43 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
       element: this.editorHost.nativeElement,
       extensions: [
         StarterKit,
+        TaskList,
+        TaskItem.configure({ nested: false }),
+        NoImages,
+        SlashCommand,
         Placeholder.configure({
           placeholder:
-            'Ex: time joga muito rush B no pistol, mas quase sempre com pouco cross-fire de A. Rifler 2 costuma isolar cedo demais no retake...',
+            'Ex: time joga muito rush B no pistol, mas quase sempre com pouco cross-fire de A. Rifler 2 costuma isolar cedo demais no retake... Digite "/" para inserir um bloco.',
         }),
         Markdown.configure({ html: false, transformPastedText: true }),
       ],
       content: this.initialContent,
+      editorProps: {
+        handleDrop: (_view, event) => {
+          if (!hasImageFile(event.dataTransfer)) return false;
+          event.preventDefault();
+          return true;
+        },
+        handlePaste: (_view, event) => {
+          if (!hasImageFile(event.clipboardData)) return false;
+          event.preventDefault();
+          return true;
+        },
+      },
       onUpdate: () => this.onEdit(),
+      onBlur: () => this.save(),
     });
   }
 
   onEdit() {
     this.status = 'idle';
     if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.save(), 800);
+    this.saveTimer = setTimeout(() => this.save(), SAVE_DEBOUNCE_MS);
   }
 
   async save() {
     if (!this.editor) return;
+    if (this.saveTimer) clearTimeout(this.saveTimer);
     this.status = 'saving';
     const markdown = (this.editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
     await this.electron.api.slots.saveNotebook(this.slotId, markdown);

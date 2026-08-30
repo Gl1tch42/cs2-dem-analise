@@ -1,14 +1,16 @@
 <div class="notebook">
   <div class="notebook-toolbar">
     <span class="text-muted" style="font-size:0.75rem">
-      Notas livres (markdown) — a IA lê isto como contexto qualitativo ao analisar este time.
+      Anotações Táticas (Markdown) &middot; Utilize "/" para estruturar suas observações.
     </span>
-    <span class="save-status" [class.is-saving]="status === 'saving'">
+  </div>
+  <div class="notebook-editor-wrap">
+    <div class="notebook-editor" #editorHost></div>
+    <span class="save-indicator" [class.is-saving]="status === 'saving'" [class.is-visible]="status !== 'idle'">
       <ng-container [ngSwitch]="status">
-        <span *ngSwitchCase="'saving'">salvando…</span>
-        <span *ngSwitchCase="'saved'">salvo</span>
+        <span *ngSwitchCase="'saving'">Salvando…</span>
+        <span *ngSwitchCase="'saved'">Salvo</span>
       </ng-container>
     </span>
   </div>
-  <div class="notebook-editor" #editorHost></div>
 </div>

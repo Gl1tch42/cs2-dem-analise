@@ -4,9 +4,32 @@
   align-items: center;
   margin-bottom: 0.4rem;
 }
-.save-status {
+
+.notebook-editor-wrap {
+  position: relative;
+}
+
+.save-indicator {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.6rem;
   font-size: 0.7rem;
   color: var(--text-muted);
+  background: var(--panel-bg);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+
+  &.is-visible {
+    opacity: 0.85;
+  }
+
+  &.is-saving {
+    color: var(--own-color);
+  }
 }
 
 .notebook-editor {
@@ -19,7 +42,7 @@
 
   .ProseMirror {
     outline: none;
-    color: #d7dbe0;
+    color: var(--bulma-text, #d7dbe0);
     font-size: 0.92rem;
     line-height: 1.65;
     min-height: 300px;
@@ -63,11 +86,69 @@
       margin-top: 0.15em;
     }
 
+    ul[data-type='taskList'] {
+      list-style: none;
+      padding-left: 0.1rem;
+
+      li {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+
+        > label {
+          flex: 0 0 auto;
+          margin-top: 0.18em;
+          user-select: none;
+        }
+
+        > div {
+          flex: 1 1 auto;
+        }
+
+        input[type='checkbox'] {
+          appearance: none;
+          width: 15px;
+          height: 15px;
+          border: 1px solid var(--panel-border);
+          border-radius: 4px;
+          background: var(--surface-elevated);
+          cursor: pointer;
+          display: inline-block;
+          position: relative;
+          top: 2px;
+
+          &:checked {
+            background: var(--own-color);
+            border-color: var(--own-color);
+
+            &::after {
+              content: '';
+              position: absolute;
+              left: 4px;
+              top: 1px;
+              width: 4px;
+              height: 8px;
+              border: solid #14181d;
+              border-width: 0 2px 2px 0;
+              transform: rotate(45deg);
+            }
+          }
+        }
+
+        &[data-checked='true'] > div {
+          color: var(--text-muted);
+          text-decoration: line-through;
+          text-decoration-color: var(--panel-border);
+        }
+      }
+    }
+
     blockquote {
-      border-left: 3px solid var(--panel-border);
+      border-left: 3px solid var(--own-color);
       margin: 0;
       padding-left: 0.9rem;
       color: var(--text-muted);
+      font-style: italic;
     }
 
     code {
@@ -75,16 +156,20 @@
       border-radius: 3px;
       padding: 0.1em 0.35em;
       font-size: 0.85em;
+      font-family: var(--bulma-family-code, 'JetBrains Mono', monospace);
     }
     pre {
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--surface-elevated);
+      border: 1px solid var(--panel-border);
       border-radius: 6px;
       padding: 0.7em 0.9em;
       overflow-x: auto;
+      font-family: var(--bulma-family-code, 'JetBrains Mono', monospace);
 
       code {
         background: none;
         padding: 0;
+        font-size: 0.85em;
       }
     }
 
@@ -102,4 +187,90 @@
       height: 0;
     }
   }
+}
+
+.slash-menu {
+  z-index: 40;
+  width: 260px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--surface-elevated);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 0.3rem;
+}
+
+.slash-menu-empty {
+  padding: 0.6rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.slash-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--bulma-text, #d7dbe0);
+
+  & + & {
+    margin-top: 1px;
+  }
+
+  &:hover,
+  &.is-selected {
+    background: rgba(212, 167, 44, 0.12);
+  }
+
+  &.is-selected {
+    box-shadow: inset 0 0 0 1px rgba(212, 167, 44, 0.35);
+  }
+}
+
+.slash-menu-icon {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--own-color);
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.slash-menu-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slash-menu-title {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--bulma-text, #d7dbe0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slash-menu-subtitle {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
