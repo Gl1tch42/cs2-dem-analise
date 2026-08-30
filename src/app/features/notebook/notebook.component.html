@@ -3,6 +3,27 @@
     <span class="text-muted" style="font-size:0.75rem">
       Anotações Táticas (Markdown) &middot; Utilize "/" para estruturar suas observações.
     </span>
+    <div class="notebook-history">
+      <button type="button" class="button is-small is-ghost" (click)="toggleHistory()">Histórico</button>
+      <div class="slash-menu notebook-history-panel" *ngIf="historyOpen">
+        <p class="slash-menu-empty" *ngIf="historyLoading">Carregando…</p>
+        <p class="slash-menu-empty" *ngIf="historyError">{{ historyError }}</p>
+        <p class="slash-menu-empty" *ngIf="!historyLoading && !historyError && historyEntries.length === 0">
+          Sem versões anteriores salvas ainda (checkpoints são criados automaticamente a cada poucos minutos de edição).
+        </p>
+        <button
+          type="button"
+          class="slash-menu-item"
+          *ngFor="let entry of historyEntries"
+          (click)="restoreHistory(entry.timestamp)"
+        >
+          <span class="slash-menu-text">
+            <span class="slash-menu-title">{{ entry.label }}</span>
+            <span class="slash-menu-subtitle">Clique para restaurar</span>
+          </span>
+        </button>
+      </div>
+    </div>
   </div>
   <div class="notebook-editor-wrap">
     <div class="notebook-editor" #editorHost></div>

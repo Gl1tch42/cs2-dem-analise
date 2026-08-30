@@ -26,6 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerIpcHandlers = void 0;
 const electron_1 = require("electron");
 const fs = __importStar(require("fs"));
+const zlib = __importStar(require("zlib"));
 const demoParserBridge_1 = require("../ai/demoParserBridge");
 const analysisRunner_1 = require("../ai/analysisRunner");
 const radarExtractor_1 = require("../ai/radarExtractor");
@@ -36,8 +37,44 @@ function registerIpcHandlers(win, slots, settings) {
     electron_1.ipcMain.handle('slots:rename', (_e, id, name) => slots.renameSlot(id, name));
     electron_1.ipcMain.handle('slots:setColorTag', (_e, id, colorTag) => slots.setColorTag(id, colorTag));
     electron_1.ipcMain.handle('slots:saveNotebook', (_e, id, content) => slots.saveNotebook(id, content));
+    electron_1.ipcMain.handle('slots:listNotebookHistory', (_e, id) => slots.listNotebookHistory(id));
+    electron_1.ipcMain.handle('slots:getNotebookHistoryContent', (_e, id, timestamp) => slots.getNotebookHistoryContent(id, timestamp));
+    electron_1.ipcMain.handle('slots:restoreNotebookHistory', (_e, id, timestamp) => slots.restoreNotebookHistory(id, timestamp));
     electron_1.ipcMain.handle('slots:removeDemo', (_e, id, demoId) => slots.removeDemo(id, demoId));
     electron_1.ipcMain.handle('slots:setDemoRoster', (_e, id, demoId, steamIds) => slots.setDemoRoster(id, demoId, steamIds));
+    electron_1.ipcMain.handle('slots:exportSlot', async (_e, id) => {
+        const slotMeta = slots.getSlot(id);
+        const result = await electron_1.dialog.showSaveDialog(win, {
+            title: 'Exportar slot',
+            defaultPath: `${slotMeta.name.replace(/[^a-z0-9-_ ]/gi, '_')}.csda-slot`,
+            filters: [{ name: 'CS Demo Analyst — Slot', extensions: ['csda-slot'] }],
+        });
+        if (result.canceled || !result.filePath)
+            return { canceled: true };
+        const bundle = slots.exportSlot(id);
+        const gz = zlib.gzipSync(Buffer.from(JSON.stringify(bundle), 'utf-8'));
+        fs.writeFileSync(result.filePath, gz);
+        return { canceled: false, filePath: result.filePath };
+    });
+    electron_1.ipcMain.handle('slots:importSlot', async (_e, id) => {
+        const result = await electron_1.dialog.showOpenDialog(win, {
+            title: 'Importar de um export de slot (.csda-slot)',
+            properties: ['openFile'],
+            filters: [{ name: 'CS Demo Analyst — Slot', extensions: ['csda-slot'] }],
+        });
+        if (result.canceled || result.filePaths.length === 0)
+            return { canceled: true };
+        let bundle;
+        try {
+            const json = zlib.gunzipSync(fs.readFileSync(result.filePaths[0])).toString('utf-8');
+            bundle = JSON.parse(json);
+        }
+        catch {
+            throw new Error('Arquivo de export inválido ou corrompido.');
+        }
+        const importResult = slots.importSlot(id, bundle);
+        return { canceled: false, ...importResult };
+    });
     electron_1.ipcMain.handle('demos:getSummary', (_e, slotId, demoId) => slots.readDemoSummary(slotId, demoId));
     electron_1.ipcMain.handle('demos:import', async (_e, slotId) => {
         const result = await electron_1.dialog.showOpenDialog(win, {

@@ -68,21 +68,40 @@ pip install -r python/requirements.txt
 
 ## O que falta implementar (próximos passos, nessa ordem sugerida)
 
-1. ~~**Parser real** (`python/parse_demo.py`)~~ — feito: extração real com
-   `demoparser2` (buy type, tempo, postura, site, posições esparsas por
-   round, agregados por jogador). Como toda demo tem dois lados e o app
-   ainda não sabe dizer "esses são os jogadores do time X" entre demos
-   diferentes, os campos táticos de round saem separados por lado
-   (`round.ct` / `round.t`) e `playerAggregates` traz os 10 jogadores da
-   partida — ver comentário em `electron/storage/types.ts`. Ainda **não
-   testado contra uma demo real** (sem amostra disponível neste ambiente);
-   validar importando uma `.dem` de verdade pela UI e ajustar nomes de
-   campo/heurísticas conforme o que aparecer.
-2. **Escolher o lado do slot**: hoje `localHeuristics.ts` combina os dois
-   lados de cada round nas mesmas tendências (`electron/ai/localHeuristics.ts`,
-   comentário no loop de `consolidateSlot`). Precisa de um jeito de o
-   usuário dizer qual lado/roster corresponde ao time do slot (por clã ou
-   por seleção manual ao importar) pra filtrar certo.
+1. ~~**Parser real** (`python/parse_demo.py`)~~ — feito e **validado contra
+   demos reais** (2 demos FACEIT, de_dust2 e de_anubis). Esse teste achou e
+   corrigiu 3 bugs que só apareciam com dado real (nenhum tinha como ser
+   pego sem uma `.dem` de verdade):
+   - `bomb_exploded` (e qualquer evento que nunca ocorre na demo inteira)
+     vem como lista vazia `[]` em vez de DataFrame — quebrava com
+     `AttributeError` na primeira demo sem bomba explodida. `safe_parse_event`
+     agora normaliza isso pra `None`.
+   - A classificação de utilitário lia a coluna errada de
+     `parser.parse_grenades()`: `name` é o nome do JOGADOR (não o tipo da
+     granada — isso vem em `grenade_type`), e o steamid de quem jogou vem em
+     `steamid`, não em `thrower_steamid` (esse campo nem existe nesse df).
+     Resultado prático: flashes/smokes/molotovs/HE usados saíam sempre
+     zerados.
+   - Pior: `parse_grenades()` retorna uma linha **por tick** da trajetória
+     de cada granada (uma smoke ativa por 18s vira ~1150 linhas), não uma
+     linha por lançamento — contar linhas inflava o total em ordens de
+     grandeza (centenas de milhares de "usos" numa partida de 25 rounds).
+     Trocado por contagem dos eventos pontuais que já eram parseados
+     (`flashbang_detonate`, `smokegrenade_detonate`, `inferno_startburn`,
+     `hegrenade_detonate`), que também tirou ~30% do tempo de parsing.
+
+   Extração real com `demoparser2` (buy type, tempo, postura, site, posições
+   esparsas por round, agregados por jogador). Como toda demo tem dois lados,
+   os campos táticos de round saem separados por lado (`round.ct` / `round.t`)
+   e `playerAggregates` traz os 10 jogadores da partida — ver comentário em
+   `electron/storage/types.ts`.
+2. ~~**Escolher o lado do slot**~~ — feito: a aba Demos deixa marcar quais
+   steamIds são "meu time" por demo (`slotManager.setDemoRoster`), e
+   `localHeuristics.ts` usa `resolveMySideForRound` pra decidir ct/t
+   round a round (cobre troca de lado no intervalo) antes de separar as
+   tendências em `myTeam` / `opponent`. Demos sem roster marcado ficam de
+   fora das tendências e aparecem em `demosPendingRoster` (aviso na UI e no
+   prompt da IA) até alguém marcar.
 3. **Mapa 2D animado** (aba "Mapa 2D", hoje só um placeholder): renderizar o
    radar do mapa + posições de `keyPositions` com um scrub de tempo por round.
    Um `<canvas>` com `requestAnimationFrame` ou uma lib leve tipo Pixi/Konva
@@ -97,6 +116,49 @@ pip install -r python/requirements.txt
    standalone e configurar `extraResources` no `electron-builder` (já
    referenciado em `demoParserBridge.ts`), assim o usuário final não precisa
    ter Python instalado.
+6. **Calibração de tempo/postura** (`classify_buy_type`/tempo/postura em
+   `parse_demo.py`): os limiares de deslocamento (rush/slow, agressivo/
+   passivo) eram constantes fixas em "unidades do mapa" nunca checadas
+   contra dado real — testar contra as 2 demos reais mostrou que
+   `HIGH_DISPLACEMENT=900` classificava praticamente todo round como
+   "rush"/"aggressive", porque de_dust2 tem sightlines de milhares de
+   unidades e o deslocamento mediano observado em 15s foi ~1665. Trocado por
+   limiares dinâmicos: percentil 33/67 da distribuição de deslocamento
+   observada dentro da própria demo (se adapta a qualquer mapa sem tabela de
+   constante por mapa). Com poucos rounds (<6) isso é ruidoso, então o
+   summary carrega um campo `calibration` (`tempoStanceThresholdSource:
+   'demo' | 'default'`) e o app avisa o analista (UI + prompt da IA) quando
+   uma demo caiu no limiar padrão por amostra pequena — trate "ritmo" e
+   "postura" dessas com mais cautela. Isso é ainda uma heurística de regra
+   simples, não um modelo estatístico calibrado com histórico de várias
+   partidas/times — o dado real ajudou a corrigir a escala, não a validar a
+   classificação em si. Uma dose real de confiança viria de comparar contra
+   rótulo humano (analista concorda que o round foi "rush"?) em um conjunto
+   maior de demos, o que fica pra quando houver amostra suficiente.
+7. ~~**Versionamento do notebook**~~ — feito: `saveNotebook` grava um
+   checkpoint do conteúdo anterior em `slots/<id>/notebook-history/` antes
+   de sobrescrever, no máximo 1 a cada 5 minutos (autosave dispara a cada
+   poucos ms de digitação — sem esse throttle viraria uma cópia por
+   keystroke) e mantém só os últimos 200. Botão "Histórico" na aba Notebook
+   lista os checkpoints e permite restaurar (a versão atual também vira
+   checkpoint antes de ser substituída, então restaurar é reversível).
+8. ~~**Sync entre analistas / múltiplas máquinas**~~ — resolvido na medida
+   que dá pra resolver sem virar um app com servidor: botões "Exportar slot"
+   / "Importar de arquivo .csda-slot" na aba Demos. Exportar empacota
+   meta + notebook + todas as demos (record + summary já parseado) de um
+   slot num único arquivo `.csda-slot` (JSON gzipado — sem dependência nova),
+   pra mandar por Drive/Slack/pendrive pra outro analista. Importar faz merge
+   no slot local: demo é considerada duplicata por arquivo+mapa+placar (o
+   UUID interno não sobrevive entre máquinas) e pula quem já existe; roster
+   marcado (`myTeamSteamIds`) vem junto, então o segundo analista não precisa
+   remarcar quem é "meu time" nas demos já processadas por outro; e o
+   notebook do export **nunca sobrescreve** o notebook local — vira um
+   checkpoint no histórico (item 7) pra revisão/merge manual. Isso não é
+   sync automático (precisa alguém rodar export/import manualmente, e não há
+   resolução automática de conflito) — se algum dia fizer sentido ter sync de
+   verdade entre máquinas em tempo real, isso é uma decisão de arquitetura
+   maior (servidor central vs. pasta compartilhada com merge) que muda a
+   proposta "tudo local, sem infra" do app.
 
 ## Provedores de IA
 

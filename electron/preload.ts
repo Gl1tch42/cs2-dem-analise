@@ -8,9 +8,16 @@ const api = {
     rename: (id: string, name: string) => ipcRenderer.invoke('slots:rename', id, name),
     setColorTag: (id: string, colorTag: string) => ipcRenderer.invoke('slots:setColorTag', id, colorTag),
     saveNotebook: (id: string, content: string) => ipcRenderer.invoke('slots:saveNotebook', id, content),
+    listNotebookHistory: (id: string) => ipcRenderer.invoke('slots:listNotebookHistory', id),
+    getNotebookHistoryContent: (id: string, timestamp: string) =>
+      ipcRenderer.invoke('slots:getNotebookHistoryContent', id, timestamp),
+    restoreNotebookHistory: (id: string, timestamp: string) =>
+      ipcRenderer.invoke('slots:restoreNotebookHistory', id, timestamp),
     removeDemo: (id: string, demoId: string) => ipcRenderer.invoke('slots:removeDemo', id, demoId),
     setDemoRoster: (id: string, demoId: string, steamIds: string[]) =>
       ipcRenderer.invoke('slots:setDemoRoster', id, demoId, steamIds),
+    exportSlot: (id: string) => ipcRenderer.invoke('slots:exportSlot', id),
+    importSlot: (id: string) => ipcRenderer.invoke('slots:importSlot', id),
   },
   demos: {
     importDemo: (slotId: string) => ipcRenderer.invoke('demos:import', slotId),

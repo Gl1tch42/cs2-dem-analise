@@ -75,6 +75,10 @@ def area_from_place_name(place: Optional[str]) -> str:
 def safe_parse_event(parser: DemoParser, name: str, **kwargs):
     try:
         df = parser.parse_event(name, **kwargs)
+        # demoparser2 retorna uma lista (geralmente vazia) em vez de DataFrame
+        # quando o evento nunca ocorre na demo inteira — normaliza pra None.
+        if not hasattr(df, "columns"):
+            return None
         return df
     except Exception as exc:
         eprint(f"[parse_demo] aviso: evento '{name}' indisponível nesta demo ({exc})")
@@ -228,11 +232,6 @@ def main():
     blind_df = safe_parse_event(parser, "player_blind", other=["blind_duration"])
     decoy_start_df = safe_parse_event(parser, "decoy_started")
     decoy_end_df = safe_parse_event(parser, "decoy_detonate")
-    try:
-        grenades_df = parser.parse_grenades()
-    except Exception as exc:
-        eprint(f"[parse_demo] aviso: parse_grenades falhou ({exc})")
-        grenades_df = None
 
     sample_ticks_set = set()
     for w in windows:
@@ -310,12 +309,31 @@ def main():
     def bump(d: dict, key, amount=1):
         d[key] = d.get(key, 0) + amount
 
-    rounds_out = []
-    roster_wins = {"ct": 0, "t": 0}
+    def avg(vals):
+        return sum(vals) / len(vals) if vals else 0.0
 
+    def percentile(sorted_vals: list, pct: float) -> float:
+        if not sorted_vals:
+            return 0.0
+        idx = min(len(sorted_vals) - 1, max(0, int(len(sorted_vals) * pct / 100)))
+        return sorted_vals[idx]
+
+    # Passo 1: pra cada round, calcula deslocamento (freeze -> +15s) e área
+    # alcançada por lado. Isso alimenta os thresholds de tempo/postura no
+    # passo 2 — em vez de constantes fixas em "unidades do mapa" (que citamos
+    # nunca terem sido validadas contra unidade real: de_dust2 tem
+    # sightlines de milhares de unidades e o pessoal se desloca >900 unidades
+    # em 15s andando normal, então HIGH_DISPLACEMENT=900 fixo classificava
+    # praticamente todo round como "rush"/"aggressive"), os limites de
+    # rush/slow e aggressive/passive são os percentis 33/67 da distribuição
+    # observada NESTA própria demo. Isso se adapta a qualquer mapa (Nuke é
+    # compacto, Dust2 tem corredores longos) sem precisar de uma tabela de
+    # constantes por mapa. Com poucos rounds a estimativa é ruidosa — ver
+    # `tempoStanceSampleSize` no summary, que o app usa pra avisar o analista.
+    round_pre = []
+    all_displacements: list = []
     for w in windows:
-        freeze_tick, end_tick, winner = w["freezeTick"], w["endTick"], w["winner"]
-
+        freeze_tick, end_tick = w["freezeTick"], w["endTick"]
         side_rows = rows_at(freeze_tick)
         if len(side_rows) == 0:
             side_rows = nearest_rows_at_or_before(freeze_tick)
@@ -334,9 +352,66 @@ def main():
             equip = getattr(r, "current_equip_value", None)
             if equip is not None and str(equip) != "nan":
                 equip_by_side[side].append(float(equip))
-
             counts = player_side_counts.setdefault(steamid, {"ct": 0, "t": 0})
             counts[side] += 1
+
+        mid_tick = int(freeze_tick + EARLY_CONTACT_SECONDS * TICK_RATE)
+        mid_rows = rows_at(mid_tick)
+        if len(mid_rows) == 0:
+            mid_rows = nearest_rows_at_or_before(min(mid_tick, end_tick))
+        start_pos = {int(r.steamid): (r.X, r.Y) for r in side_rows.itertuples() if str(getattr(r, "X", "nan")) != "nan"}
+        mid_pos = {int(r.steamid): (r.X, r.Y) for r in mid_rows.itertuples() if str(getattr(r, "X", "nan")) != "nan"}
+
+        displacement_by_side = {"ct": [], "t": []}
+        areas_reached_by_side = {"ct": set(), "t": set()}
+        for steamid, side in side_map.items():
+            if steamid in start_pos and steamid in mid_pos:
+                dx = mid_pos[steamid][0] - start_pos[steamid][0]
+                dy = mid_pos[steamid][1] - start_pos[steamid][1]
+                d = (dx * dx + dy * dy) ** 0.5
+                displacement_by_side[side].append(d)
+                all_displacements.append(d)
+            if has_place_name:
+                row = mid_rows[mid_rows["steamid"] == steamid]
+                if len(row) > 0:
+                    place = row.iloc[0].get("last_place_name")
+                    area = area_from_place_name(place)
+                    if area != "unknown":
+                        areas_reached_by_side[side].add(area)
+
+        round_pre.append(
+            {
+                "side_rows": side_rows,
+                "side_map": side_map,
+                "equip_by_side": equip_by_side,
+                "displacement_by_side": displacement_by_side,
+                "areas_reached_by_side": areas_reached_by_side,
+            }
+        )
+
+    MIN_SAMPLES_FOR_DYNAMIC_THRESHOLDS = 6
+    tempo_stance_sample_size = len(all_displacements)
+    if tempo_stance_sample_size >= MIN_SAMPLES_FOR_DYNAMIC_THRESHOLDS:
+        sorted_disp = sorted(all_displacements)
+        low_displacement_threshold = percentile(sorted_disp, 33)
+        high_displacement_threshold = percentile(sorted_disp, 67)
+        if low_displacement_threshold >= high_displacement_threshold:
+            low_displacement_threshold = high_displacement_threshold = percentile(sorted_disp, 50)
+    else:
+        # amostra pequena demais pra confiar em percentis desta própria demo
+        low_displacement_threshold = LOW_DISPLACEMENT
+        high_displacement_threshold = HIGH_DISPLACEMENT
+
+    rounds_out = []
+    roster_wins = {"ct": 0, "t": 0}
+
+    for w, pre in zip(windows, round_pre):
+        freeze_tick, end_tick, winner = w["freezeTick"], w["endTick"], w["winner"]
+        side_rows = pre["side_rows"]
+        side_map = pre["side_map"]
+        equip_by_side = pre["equip_by_side"]
+        displacement_by_side = pre["displacement_by_side"]
+        areas_reached_by_side = pre["areas_reached_by_side"]
 
         for roster_side, ids in roster_by_side_r1.items():
             occupying_side = None
@@ -350,43 +425,17 @@ def main():
             side: classify_buy_type(sum(vals) / len(vals) if vals else 0.0) for side, vals in equip_by_side.items()
         }
 
-        mid_tick = int(freeze_tick + EARLY_CONTACT_SECONDS * TICK_RATE)
-        start_rows = side_rows
-        mid_rows = rows_at(mid_tick)
-        if len(mid_rows) == 0:
-            mid_rows = nearest_rows_at_or_before(min(mid_tick, end_tick))
-        start_pos = {int(r.steamid): (r.X, r.Y) for r in start_rows.itertuples() if str(getattr(r, "X", "nan")) != "nan"}
-        mid_pos = {int(r.steamid): (r.X, r.Y) for r in mid_rows.itertuples() if str(getattr(r, "X", "nan")) != "nan"}
-
-        displacement_by_side = {"ct": [], "t": []}
-        areas_reached_by_side = {"ct": set(), "t": set()}
-        for steamid, side in side_map.items():
-            if steamid in start_pos and steamid in mid_pos:
-                dx = mid_pos[steamid][0] - start_pos[steamid][0]
-                dy = mid_pos[steamid][1] - start_pos[steamid][1]
-                displacement_by_side[side].append((dx * dx + dy * dy) ** 0.5)
-            if has_place_name:
-                row = mid_rows[mid_rows["steamid"] == steamid]
-                if len(row) > 0:
-                    place = row.iloc[0].get("last_place_name")
-                    area = area_from_place_name(place)
-                    if area != "unknown":
-                        areas_reached_by_side[side].add(area)
-
-        def avg(vals):
-            return sum(vals) / len(vals) if vals else 0.0
-
         tempo_by_side = {}
         stance_by_side = {}
         for side in ("ct", "t"):
             disp = displacement_by_side[side]
             avg_disp = avg(disp)
             spread = len(areas_reached_by_side[side])
-            if avg_disp >= HIGH_DISPLACEMENT and spread <= 1:
+            if avg_disp >= high_displacement_threshold and spread <= 1:
                 tempo_by_side[side] = "rush"
             elif spread >= 2:
                 tempo_by_side[side] = "split"
-            elif avg_disp <= LOW_DISPLACEMENT:
+            elif avg_disp <= low_displacement_threshold:
                 tempo_by_side[side] = "slow"
             else:
                 tempo_by_side[side] = "default"
@@ -394,8 +443,8 @@ def main():
             if not disp:
                 stance_by_side[side] = "unknown"
             else:
-                high = sum(1 for d in disp if d >= HIGH_DISPLACEMENT)
-                low = sum(1 for d in disp if d <= LOW_DISPLACEMENT)
+                high = sum(1 for d in disp if d >= high_displacement_threshold)
+                low = sum(1 for d in disp if d <= low_displacement_threshold)
                 if high >= len(disp) * 0.6:
                     stance_by_side[side] = "aggressive"
                 elif low >= len(disp) * 0.6:
@@ -475,28 +524,41 @@ def main():
             if clutch_candidate is not None and clutch_side == winner:
                 bump(player_clutches_won, clutch_candidate)
 
+        def count_utility_by_side(df) -> dict:
+            counts = {"ct": 0, "t": 0}
+            if df is not None and "tick" in df.columns:
+                round_df = df[(df["tick"] > freeze_tick) & (df["tick"] <= end_tick)]
+                for row in round_df.itertuples():
+                    thrower_id = getattr(row, "user_steamid", None)
+                    if thrower_id is None or str(thrower_id) == "nan":
+                        continue
+                    side = side_map.get(int(thrower_id))
+                    if side:
+                        counts[side] += 1
+            return counts
+
+        # Cada tipo de granada detona uma vez (evento pontual), então contamos
+        # ocorrências desses eventos em vez de linhas de parse_grenades() — esse
+        # df traz uma linha POR TICK da trajetória de cada granada (centenas por
+        # unidade), o que infla a contagem em ordens de magnitude.
+        flash_counts = count_utility_by_side(flash_df)
+        smoke_counts = count_utility_by_side(smoke_start_df)
+        molotov_counts = count_utility_by_side(fire_start_df)
+        he_counts = count_utility_by_side(he_df)
         utility_by_side = {
-            "ct": {"flashes": 0, "smokes": 0, "molotovs": 0, "he": 0},
-            "t": {"flashes": 0, "smokes": 0, "molotovs": 0, "he": 0},
+            "ct": {
+                "flashes": flash_counts["ct"],
+                "smokes": smoke_counts["ct"],
+                "molotovs": molotov_counts["ct"],
+                "he": he_counts["ct"],
+            },
+            "t": {
+                "flashes": flash_counts["t"],
+                "smokes": smoke_counts["t"],
+                "molotovs": molotov_counts["t"],
+                "he": he_counts["t"],
+            },
         }
-        if grenades_df is not None and "tick" in grenades_df.columns:
-            round_nades = grenades_df[(grenades_df["tick"] > freeze_tick) & (grenades_df["tick"] <= end_tick)]
-            name_col = "name" if "name" in round_nades.columns else None
-            thrower_col = "thrower_steamid" if "thrower_steamid" in round_nades.columns else None
-            for n in round_nades.itertuples():
-                gname = str(getattr(n, name_col, "") or "").lower() if name_col else ""
-                thrower_id = getattr(n, thrower_col, None) if thrower_col else None
-                side = side_map.get(int(thrower_id)) if thrower_id is not None and str(thrower_id) != "nan" else None
-                if not side:
-                    continue
-                if "flash" in gname:
-                    utility_by_side[side]["flashes"] += 1
-                elif "smoke" in gname:
-                    utility_by_side[side]["smokes"] += 1
-                elif "molotov" in gname or "incendiary" in gname or "inferno" in gname:
-                    utility_by_side[side]["molotovs"] += 1
-                elif "hegrenade" in gname or gname == "he":
-                    utility_by_side[side]["he"] += 1
 
         site_hit = "unknown"
         bomb_plant_out = None
@@ -835,6 +897,12 @@ def main():
         "rounds": rounds_out,
         "playerAggregates": players_out,
         "fileName": os.path.basename(args.input),
+        "calibration": {
+            "tempoStanceSampleSize": tempo_stance_sample_size,
+            "tempoStanceThresholdSource": "demo" if tempo_stance_sample_size >= MIN_SAMPLES_FOR_DYNAMIC_THRESHOLDS else "default",
+            "lowDisplacementThreshold": round(low_displacement_threshold, 1),
+            "highDisplacementThreshold": round(high_displacement_threshold, 1),
+        },
     }
 
     with open(args.output, "w", encoding="utf-8") as f:

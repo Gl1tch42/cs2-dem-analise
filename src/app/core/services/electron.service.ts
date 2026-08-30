@@ -9,6 +9,8 @@ import {
   AnalysisResult,
   ConsolidatedSlotStats,
   MapStat,
+  NotebookHistoryEntry,
+  SlotImportResult,
 } from '../models/slot.model';
 
 declare global {
@@ -21,8 +23,13 @@ declare global {
         rename: (id: string, name: string) => Promise<SlotMeta>;
         setColorTag: (id: string, colorTag: string) => Promise<SlotMeta>;
         saveNotebook: (id: string, content: string) => Promise<{ content: string; updatedAt: string }>;
+        listNotebookHistory: (id: string) => Promise<NotebookHistoryEntry[]>;
+        getNotebookHistoryContent: (id: string, timestamp: string) => Promise<string>;
+        restoreNotebookHistory: (id: string, timestamp: string) => Promise<{ content: string; updatedAt: string }>;
         removeDemo: (id: string, demoId: string) => Promise<void>;
         setDemoRoster: (id: string, demoId: string, steamIds: string[]) => Promise<DemoRecord>;
+        exportSlot: (id: string) => Promise<{ canceled: boolean; filePath?: string }>;
+        importSlot: (id: string) => Promise<{ canceled: true } | ({ canceled: false } & SlotImportResult)>;
       };
       demos: {
         importDemo: (slotId: string) => Promise<DemoRecord[]>;

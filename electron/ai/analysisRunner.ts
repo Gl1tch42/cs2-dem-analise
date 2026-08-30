@@ -265,6 +265,14 @@ export async function runSlotAnalysis(
         `"meu time" nelas ainda (${stats.demosPendingRoster.join(', ')}). Todas as estatísticas abaixo são só das demos com time marcado.`
       : null;
 
+  const calibrationWarning =
+    stats.demosLowCalibrationSample.length > 0
+      ? `⚠️ ${stats.demosLowCalibrationSample.length} demo(s) tiveram poucos rounds pra calibrar ritmo/postura ` +
+        `dentro da própria demo (${stats.demosLowCalibrationSample.join(', ')}) — os campos "tempo" e "postura" ` +
+        `dessas demos usaram um limiar padrão genérico em vez de um calculado a partir dos dados reais dela, então ` +
+        `trate conclusões de ritmo/postura vindas dessas demos com mais cautela do que as demais.`
+      : null;
+
   const myNames = stats.myTeam.playerMovementProfile.map((p) => p.name).join(', ');
   const oppNames = stats.opponent.playerMovementProfile.map((p) => p.name).join(', ');
 
@@ -287,6 +295,7 @@ export async function runSlotAnalysis(
     `Demos analisadas: ${stats.demosAnalyzed} | Rounds computados nas tendências abaixo: ${stats.roundsAnalyzed}`,
     focusLine,
     ...(rosterWarning ? ['', rosterWarning] : []),
+    ...(calibrationWarning ? ['', calibrationWarning] : []),
     '',
     '### Site atacado/defendido com mais frequência (geral, os dois times)',
     siteTable(stats.siteHitDistribution),

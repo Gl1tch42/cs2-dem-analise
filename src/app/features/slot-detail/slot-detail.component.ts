@@ -28,6 +28,11 @@ export class SlotDetailComponent implements OnInit {
   importing = false;
   importError = '';
 
+  exporting = false;
+  exportMessage = '';
+  importingSlot = false;
+  importSlotMessage = '';
+
   analyzing = false;
   analysisError = '';
   analysisResult?: AnalysisResult;
@@ -123,6 +128,41 @@ export class SlotDetailComponent implements OnInit {
       this.importError = (err as Error).message ?? 'Falha ao importar demo.';
     } finally {
       this.importing = false;
+    }
+  }
+
+  async exportSlot() {
+    if (!this.slot) return;
+    this.exporting = true;
+    this.exportMessage = '';
+    try {
+      const result = await this.electron.api.slots.exportSlot(this.slot.id);
+      this.exportMessage = result.canceled ? '' : `Exportado para ${result.filePath}`;
+    } catch (err) {
+      this.exportMessage = (err as Error).message ?? 'Falha ao exportar slot.';
+    } finally {
+      this.exporting = false;
+    }
+  }
+
+  async importSlot() {
+    if (!this.slot) return;
+    this.importingSlot = true;
+    this.importSlotMessage = '';
+    try {
+      const result = await this.electron.api.slots.importSlot(this.slot.id);
+      if (!result.canceled) {
+        const parts = [`${result.demosImported} demo(s) importada(s)`];
+        if (result.demosSkippedDuplicate > 0) parts.push(`${result.demosSkippedDuplicate} já existiam`);
+        if (result.demosSkippedLimit > 0) parts.push(`${result.demosSkippedLimit} não couberam (limite do slot)`);
+        if (result.notebookSavedAsHistory) parts.push('notebook do export salvo em Histórico pra revisar/mesclar');
+        this.importSlotMessage = parts.join(' · ');
+        await this.loadSlot(this.slot.id);
+      }
+    } catch (err) {
+      this.importSlotMessage = (err as Error).message ?? 'Falha ao importar slot.';
+    } finally {
+      this.importingSlot = false;
     }
   }
 

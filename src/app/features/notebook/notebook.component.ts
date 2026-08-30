@@ -38,6 +38,11 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
 
   status: 'idle' | 'saving' | 'saved' = 'idle';
 
+  historyOpen = false;
+  historyLoading = false;
+  historyError = '';
+  historyEntries: { timestamp: string; label: string }[] = [];
+
   private editor?: Editor;
   private saveTimer?: ReturnType<typeof setTimeout>;
   private viewReady = false;
@@ -105,6 +110,40 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
     const markdown = (this.editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
     await this.electron.api.slots.saveNotebook(this.slotId, markdown);
     this.status = 'saved';
+  }
+
+  async toggleHistory() {
+    this.historyOpen = !this.historyOpen;
+    if (!this.historyOpen) return;
+    this.historyLoading = true;
+    this.historyError = '';
+    try {
+      const entries = await this.electron.api.slots.listNotebookHistory(this.slotId);
+      this.historyEntries = entries.map((e) => ({
+        timestamp: e.timestamp,
+        label: new Date(e.timestamp).toLocaleString('pt-BR'),
+      }));
+    } catch (err) {
+      this.historyError = (err as Error).message ?? 'Falha ao carregar histórico do notebook.';
+    } finally {
+      this.historyLoading = false;
+    }
+  }
+
+  async restoreHistory(timestamp: string) {
+    if (!this.editor) return;
+    const ok = confirm(
+      'Restaurar essa versão substitui o conteúdo atual do notebook (a versão atual também vira um checkpoint no histórico). Continuar?'
+    );
+    if (!ok) return;
+    try {
+      const restored = await this.electron.api.slots.restoreNotebookHistory(this.slotId, timestamp);
+      this.editor.commands.setContent(restored.content);
+      this.status = 'saved';
+      this.historyOpen = false;
+    } catch (err) {
+      this.historyError = (err as Error).message ?? 'Falha ao restaurar versão.';
+    }
   }
 
   ngOnDestroy(): void {

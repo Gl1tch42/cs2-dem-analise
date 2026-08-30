@@ -25,6 +25,7 @@ export interface ConsolidatedSlotStats {
   demosAnalyzed: number;
   roundsAnalyzed: number;
   demosPendingRoster: string[];
+  demosLowCalibrationSample: string[];
   siteHitDistribution: Record<string, number>;
   myTeam: TeamTendencyStats;
   opponent: TeamTendencyStats;
@@ -158,6 +159,7 @@ function resolveMySideForRound(round: RoundSummary, myNames: Set<string>): 'ct' 
 export function consolidateSlot(slotFolder: string, demos: DemoRecord[]): ConsolidatedSlotStats {
   const siteHitDistribution: Record<string, number> = {};
   const demosPendingRoster: string[] = [];
+  const demosLowCalibrationSample: string[] = [];
   const myAcc = createAccumulator();
   const oppAcc = createAccumulator();
 
@@ -172,6 +174,9 @@ export function consolidateSlot(slotFolder: string, demos: DemoRecord[]): Consol
     if (!myTeamSteamIds || myTeamSteamIds.length === 0) {
       demosPendingRoster.push(demo.fileName);
       continue;
+    }
+    if (summary.calibration?.tempoStanceThresholdSource === 'default') {
+      demosLowCalibrationSample.push(demo.fileName);
     }
     const myIdSet = new Set(myTeamSteamIds);
     const myNames = new Set(
@@ -201,6 +206,7 @@ export function consolidateSlot(slotFolder: string, demos: DemoRecord[]): Consol
     demosAnalyzed: demos.length,
     roundsAnalyzed,
     demosPendingRoster,
+    demosLowCalibrationSample,
     siteHitDistribution,
     myTeam: finishAccumulator(myAcc),
     opponent: finishAccumulator(oppAcc),

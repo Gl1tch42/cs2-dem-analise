@@ -31,6 +31,17 @@ export interface NotebookEntry {
   content: string;
 }
 
+export interface NotebookHistoryEntry {
+  timestamp: string;
+}
+
+export interface SlotImportResult {
+  demosImported: number;
+  demosSkippedDuplicate: number;
+  demosSkippedLimit: number;
+  notebookSavedAsHistory: boolean;
+}
+
 export interface SlotDetail extends SlotMeta {
   demos: DemoRecord[];
   notebook: NotebookEntry;
@@ -182,12 +193,20 @@ export interface PlayerAggregate {
   favoriteAreas: { area: string; count: number }[];
 }
 
+export interface DemoCalibration {
+  tempoStanceSampleSize: number;
+  tempoStanceThresholdSource: 'demo' | 'default';
+  lowDisplacementThreshold: number;
+  highDisplacementThreshold: number;
+}
+
 export interface DemoSummary {
   demoId: string;
   map: string;
   finalScore: { team: number; opponent: number };
   rounds: RoundSummary[];
   playerAggregates: PlayerAggregate[];
+  calibration?: DemoCalibration;
 }
 
 export type AiProviderId = 'anthropic' | 'openai' | 'custom' | 'mock';
@@ -228,6 +247,7 @@ export interface ConsolidatedSlotStats {
   demosAnalyzed: number;
   roundsAnalyzed: number;
   demosPendingRoster: string[];
+  demosLowCalibrationSample: string[];
   siteHitDistribution: Record<string, number>;
   myTeam: TeamTendencyStats;
   opponent: TeamTendencyStats;

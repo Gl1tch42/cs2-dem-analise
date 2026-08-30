@@ -29,6 +29,12 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const crypto_1 = require("crypto");
 const types_1 = require("./types");
+// Snapshot do notebook só é gravado se já se passou esse tempo desde o
+// último — o editor salva a cada poucas centenas de ms enquanto o analista
+// digita, então sem esse throttle o histórico viraria uma cópia por
+// keystroke em vez de checkpoints úteis pra recuperar uma versão anterior.
+const NOTEBOOK_HISTORY_MIN_INTERVAL_MS = 5 * 60 * 1000;
+const NOTEBOOK_HISTORY_MAX_ENTRIES = 200;
 class SlotManager {
     rootDir;
     constructor() {
@@ -58,6 +64,19 @@ class SlotManager {
     }
     demosDir(id) {
         return path.join(this.slotDir(id), 'demos');
+    }
+    notebookHistoryDir(id) {
+        return path.join(this.slotDir(id), 'notebook-history');
+    }
+    // ISO timestamps (`2026-08-30T18:03:45.123Z`) só têm ':' como caractere
+    // inválido em nome de arquivo no Windows; troca por '_' de forma
+    // reversível (nada mais no ISO usa '_') pra poder recuperar o timestamp
+    // original a partir do nome do arquivo.
+    notebookHistoryFilePath(id, timestamp) {
+        return path.join(this.notebookHistoryDir(id), `${timestamp.replace(/:/g, '_')}.md`);
+    }
+    notebookHistoryTimestampFromFileName(fileName) {
+        return fileName.slice(0, -'.md'.length).replace(/_/g, ':');
     }
     createSlotFolder(id, kind, defaultName) {
         fs.mkdirSync(this.demosDir(id), { recursive: true });
@@ -141,10 +160,71 @@ class SlotManager {
         return meta;
     }
     saveNotebook(id, content) {
+        const previous = fs.existsSync(this.notebookPath(id)) ? fs.readFileSync(this.notebookPath(id), 'utf-8') : '';
+        if (previous && previous !== content) {
+            this.maybeSnapshotNotebook(id, previous);
+        }
         fs.writeFileSync(this.notebookPath(id), content);
         const meta = this.readMeta(id);
         this.writeMeta(meta);
         return { content, updatedAt: new Date().toISOString() };
+    }
+    maybeSnapshotNotebook(id, previousContent) {
+        const historyDir = this.notebookHistoryDir(id);
+        fs.mkdirSync(historyDir, { recursive: true });
+        const entries = fs
+            .readdirSync(historyDir)
+            .filter((f) => f.endsWith('.md'))
+            .sort();
+        const lastEntry = entries[entries.length - 1];
+        if (lastEntry) {
+            const lastTimestamp = Date.parse(this.notebookHistoryTimestampFromFileName(lastEntry));
+            if (!Number.isNaN(lastTimestamp) && Date.now() - lastTimestamp < NOTEBOOK_HISTORY_MIN_INTERVAL_MS) {
+                return;
+            }
+        }
+        const timestamp = new Date().toISOString();
+        fs.writeFileSync(this.notebookHistoryFilePath(id, timestamp), previousContent);
+        const updated = fs
+            .readdirSync(historyDir)
+            .filter((f) => f.endsWith('.md'))
+            .sort();
+        while (updated.length > NOTEBOOK_HISTORY_MAX_ENTRIES) {
+            const oldest = updated.shift();
+            if (oldest)
+                fs.rmSync(path.join(historyDir, oldest), { force: true });
+        }
+    }
+    listNotebookHistory(id) {
+        const historyDir = this.notebookHistoryDir(id);
+        if (!fs.existsSync(historyDir))
+            return [];
+        return fs
+            .readdirSync(historyDir)
+            .filter((f) => f.endsWith('.md'))
+            .map((f) => this.notebookHistoryTimestampFromFileName(f))
+            .sort()
+            .reverse()
+            .map((timestamp) => ({ timestamp }));
+    }
+    getNotebookHistoryContent(id, timestamp) {
+        const filePath = this.notebookHistoryFilePath(id, timestamp);
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`Versão "${timestamp}" não encontrada no histórico do notebook do slot "${id}".`);
+        }
+        return fs.readFileSync(filePath, 'utf-8');
+    }
+    restoreNotebookHistory(id, timestamp) {
+        const historicalContent = this.getNotebookHistoryContent(id, timestamp);
+        const current = fs.existsSync(this.notebookPath(id)) ? fs.readFileSync(this.notebookPath(id), 'utf-8') : '';
+        if (current && current !== historicalContent) {
+            fs.mkdirSync(this.notebookHistoryDir(id), { recursive: true });
+            fs.writeFileSync(this.notebookHistoryFilePath(id, new Date().toISOString()), current);
+        }
+        fs.writeFileSync(this.notebookPath(id), historicalContent);
+        const meta = this.readMeta(id);
+        this.writeMeta(meta);
+        return { content: historicalContent, updatedAt: new Date().toISOString() };
     }
     addDemo(id, record) {
         const existing = this.readDemoRecords(id);
@@ -195,6 +275,74 @@ class SlotManager {
     }
     slotFolderPath(slotId) {
         return this.slotDir(slotId);
+    }
+    exportSlot(id) {
+        const meta = this.readMeta(id);
+        const notebookContent = fs.existsSync(this.notebookPath(id))
+            ? fs.readFileSync(this.notebookPath(id), 'utf-8')
+            : '';
+        const demos = this.readDemoRecords(id).map((record) => ({
+            record,
+            summary: this.readDemoSummary(id, record.id),
+        }));
+        return {
+            formatVersion: 1,
+            exportedAt: new Date().toISOString(),
+            slotName: meta.name,
+            slotKind: meta.kind,
+            notebookContent,
+            demos,
+        };
+    }
+    // Demo importada de outra máquina não carrega o UUID original de volta
+    // (cada `addDemo` gera um novo) — identifica duplicata por
+    // arquivo+mapa+placar, que é estável entre máquinas pra uma mesma demo.
+    importSlot(id, bundle) {
+        if (bundle.formatVersion !== 1) {
+            throw new Error('Formato de exportação não reconhecido — exporte novamente com a versão atual do app.');
+        }
+        const demoKey = (r) => `${r.fileName}|${r.map}|${r.score?.team ?? ''}|${r.score?.opponent ?? ''}`;
+        const existingKeys = new Set(this.readDemoRecords(id).map(demoKey));
+        let demosImported = 0;
+        let demosSkippedDuplicate = 0;
+        let demosSkippedLimit = 0;
+        for (const { record, summary } of bundle.demos) {
+            const key = demoKey(record);
+            if (existingKeys.has(key)) {
+                demosSkippedDuplicate++;
+                continue;
+            }
+            try {
+                const added = this.addDemo(id, {
+                    fileName: record.fileName,
+                    map: record.map,
+                    summaryPath: 'summary.json',
+                    score: record.score,
+                    roundsParsed: record.roundsParsed,
+                    notes: record.notes,
+                    myTeamSteamIds: record.myTeamSteamIds,
+                });
+                fs.writeFileSync(path.join(this.demoFolderPath(id, added.id), 'summary.json'), JSON.stringify(summary, null, 2));
+                existingKeys.add(key);
+                demosImported++;
+            }
+            catch {
+                demosSkippedLimit++;
+            }
+        }
+        // Nunca sobrescreve as anotações do analista local silenciosamente — o
+        // notebook que veio no export vira um checkpoint no histórico pra ele
+        // revisar/mesclar manualmente (mesmo mecanismo de `restoreNotebookHistory`).
+        let notebookSavedAsHistory = false;
+        if (bundle.notebookContent && bundle.notebookContent.trim().length > 0) {
+            const current = fs.existsSync(this.notebookPath(id)) ? fs.readFileSync(this.notebookPath(id), 'utf-8') : '';
+            if (current !== bundle.notebookContent) {
+                fs.mkdirSync(this.notebookHistoryDir(id), { recursive: true });
+                fs.writeFileSync(this.notebookHistoryFilePath(id, new Date().toISOString()), bundle.notebookContent);
+                notebookSavedAsHistory = true;
+            }
+        }
+        return { demosImported, demosSkippedDuplicate, demosSkippedLimit, notebookSavedAsHistory };
     }
 }
 exports.SlotManager = SlotManager;

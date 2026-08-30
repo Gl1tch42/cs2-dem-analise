@@ -9,6 +9,18 @@
   position: relative;
 }
 
+.notebook-history {
+  position: relative;
+}
+
+.notebook-history-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 240px;
+  max-height: 280px;
+}
+
 .save-indicator {
   position: absolute;
   right: 0.75rem;

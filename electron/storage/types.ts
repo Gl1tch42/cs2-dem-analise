@@ -147,12 +147,20 @@ export interface RoundSummary {
   outcomeNote?: string;
 }
 
+export interface DemoCalibration {
+  tempoStanceSampleSize: number;
+  tempoStanceThresholdSource: 'demo' | 'default';
+  lowDisplacementThreshold: number;
+  highDisplacementThreshold: number;
+}
+
 export interface DemoSummary {
   demoId: string;
   map: string;
   finalScore: { team: number; opponent: number };
   rounds: RoundSummary[];
   playerAggregates: PlayerAggregate[];
+  calibration?: DemoCalibration;
 }
 
 export interface PlayerAggregate {
@@ -174,6 +182,30 @@ export interface PlayerAggregate {
 export interface NotebookEntry {
   updatedAt: string;
   content: string;
+}
+
+export interface NotebookHistoryEntry {
+  timestamp: string;
+}
+
+// Formato do arquivo `.csda-slot` gerado por `slots:exportSlot` — JSON
+// gzipado com tudo que dá pra levar de um slot pra outra máquina (demos já
+// parseadas + roster marcado + notebook) sem precisar de servidor. Ver
+// item "Sync entre analistas" no README.
+export interface SlotExportBundle {
+  formatVersion: 1;
+  exportedAt: string;
+  slotName: string;
+  slotKind: SlotKind;
+  notebookContent: string;
+  demos: { record: DemoRecord; summary: DemoSummary }[];
+}
+
+export interface SlotImportResult {
+  demosImported: number;
+  demosSkippedDuplicate: number;
+  demosSkippedLimit: number;
+  notebookSavedAsHistory: boolean;
 }
 
 export type AiProviderId = 'anthropic' | 'openai' | 'custom' | 'mock';

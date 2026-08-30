@@ -68,7 +68,15 @@
     <button class="button is-small mb-3" [class.is-loading]="importing" (click)="importDemo()">
       + Importar demo (.dem)
     </button>
+    <button class="button is-small mb-3" [class.is-loading]="exporting" (click)="exportSlot()" title="Gera um arquivo .csda-slot com demos + notebook desse slot pra passar pra outro analista">
+      Exportar slot
+    </button>
+    <button class="button is-small mb-3" [class.is-loading]="importingSlot" (click)="importSlot()" title="Importa demos + notebook de um arquivo .csda-slot recebido de outro analista">
+      Importar de arquivo .csda-slot
+    </button>
     <p class="help is-danger" *ngIf="importError">{{ importError }}</p>
+    <p class="help" *ngIf="exportMessage">{{ exportMessage }}</p>
+    <p class="help" *ngIf="importSlotMessage">{{ importSlotMessage }}</p>
 
     <table class="table is-fullwidth is-narrow demos-table" *ngIf="slot.demos.length > 0">
       <thead>
@@ -231,6 +239,11 @@
         ⚠ {{ result.stats.demosPendingRoster.length }} demo(s) ficaram de fora das tendências porque o time do
         slot ainda não foi marcado nelas: {{ result.stats.demosPendingRoster.join(', ') }}. Marque em
         <a (click)="setTab('demos')">Demos</a> pra incluir.
+      </p>
+      <p class="help is-warning roster-pending-warning" *ngIf="result.stats.demosLowCalibrationSample.length > 0">
+        ⚠ {{ result.stats.demosLowCalibrationSample.length }} demo(s) tiveram poucos rounds pra calibrar ritmo/postura
+        com os dados da própria partida, então usaram um limiar padrão genérico: {{ result.stats.demosLowCalibrationSample.join(', ') }}.
+        Trate "ritmo" e "postura" dessas demos com mais cautela.
       </p>
       <div class="columns">
         <div class="column is-7">

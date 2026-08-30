@@ -134,6 +134,7 @@ function resolveMySideForRound(round, myNames) {
 function consolidateSlot(slotFolder, demos) {
     const siteHitDistribution = {};
     const demosPendingRoster = [];
+    const demosLowCalibrationSample = [];
     const myAcc = createAccumulator();
     const oppAcc = createAccumulator();
     let roundsAnalyzed = 0;
@@ -146,6 +147,9 @@ function consolidateSlot(slotFolder, demos) {
         if (!myTeamSteamIds || myTeamSteamIds.length === 0) {
             demosPendingRoster.push(demo.fileName);
             continue;
+        }
+        if (summary.calibration?.tempoStanceThresholdSource === 'default') {
+            demosLowCalibrationSample.push(demo.fileName);
         }
         const myIdSet = new Set(myTeamSteamIds);
         const myNames = new Set(summary.playerAggregates.filter((p) => myIdSet.has(p.steamId)).map((p) => p.name));
@@ -169,6 +173,7 @@ function consolidateSlot(slotFolder, demos) {
         demosAnalyzed: demos.length,
         roundsAnalyzed,
         demosPendingRoster,
+        demosLowCalibrationSample,
         siteHitDistribution,
         myTeam: finishAccumulator(myAcc),
         opponent: finishAccumulator(oppAcc),

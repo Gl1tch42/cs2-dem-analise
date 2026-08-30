@@ -9,8 +9,13 @@ const api = {
         rename: (id, name) => electron_1.ipcRenderer.invoke('slots:rename', id, name),
         setColorTag: (id, colorTag) => electron_1.ipcRenderer.invoke('slots:setColorTag', id, colorTag),
         saveNotebook: (id, content) => electron_1.ipcRenderer.invoke('slots:saveNotebook', id, content),
+        listNotebookHistory: (id) => electron_1.ipcRenderer.invoke('slots:listNotebookHistory', id),
+        getNotebookHistoryContent: (id, timestamp) => electron_1.ipcRenderer.invoke('slots:getNotebookHistoryContent', id, timestamp),
+        restoreNotebookHistory: (id, timestamp) => electron_1.ipcRenderer.invoke('slots:restoreNotebookHistory', id, timestamp),
         removeDemo: (id, demoId) => electron_1.ipcRenderer.invoke('slots:removeDemo', id, demoId),
         setDemoRoster: (id, demoId, steamIds) => electron_1.ipcRenderer.invoke('slots:setDemoRoster', id, demoId, steamIds),
+        exportSlot: (id) => electron_1.ipcRenderer.invoke('slots:exportSlot', id),
+        importSlot: (id) => electron_1.ipcRenderer.invoke('slots:importSlot', id),
     },
     demos: {
         importDemo: (slotId) => electron_1.ipcRenderer.invoke('demos:import', slotId),
