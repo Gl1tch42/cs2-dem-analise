@@ -163,14 +163,65 @@
     <p class="text-muted ai-scope-note" *ngIf="slot.demos.length > 0">
       Esta análise sempre considera <strong>todas as {{ slot.demos.length }} demo(s)</strong> deste
       slot, não só a mais recente.
+      <ng-container *ngIf="slot.kind === 'opponent'">
+        Como este é um slot de <strong>adversário</strong>, a IA monta um relatório de
+        <strong>scouting/prep de confronto</strong>: pontos fortes a respeitar e vulnerabilidades de
+        {{ slot.name }} pra explorar no próximo jogo contra eles.
+      </ng-container>
+      <ng-container *ngIf="slot.kind === 'own'">
+        Como este é o slot do <strong>seu time</strong>, a IA monta um relatório de
+        <strong>desenvolvimento</strong>: o que está funcionando, o que não está e um plano de treino
+        pra melhorar.
+      </ng-container>
     </p>
+
+    <div class="focus-panel" *ngIf="slot.demos.length > 0">
+      <p class="text-muted focus-hint">Foco da análise:</p>
+      <div class="focus-mode-select">
+        <label class="radio">
+          <input type="radio" name="focusMode" [checked]="focusMode === 'team'" (change)="setFocusMode('team')" />
+          {{ slot.kind === 'opponent' ? 'Time-alvo inteiro' : 'Time inteiro' }}
+        </label>
+        <label class="radio">
+          <input
+            type="radio"
+            name="focusMode"
+            [checked]="focusMode === 'players'"
+            (change)="setFocusMode('players')"
+          />
+          Jogador(es) específico(s)
+        </label>
+      </div>
+
+      <ng-container *ngIf="focusMode === 'players'">
+        <p class="text-muted" *ngIf="focusRosterLoading">Carregando jogadores…</p>
+        <p class="text-muted" *ngIf="!focusRosterLoading && focusRoster.length === 0">
+          Nenhum jogador do time do slot identificado ainda — marque o time em pelo menos uma demo na
+          aba <a (click)="setTab('demos')">Demos</a>.
+        </p>
+        <div class="focus-players" *ngIf="!focusRosterLoading && focusRoster.length > 0">
+          <label class="checkbox focus-player" *ngFor="let p of focusRoster">
+            <input
+              type="checkbox"
+              [checked]="focusSelected.has(p.steamId)"
+              (change)="toggleFocusPlayer(p.steamId)"
+            />
+            {{ p.name }}
+          </label>
+        </div>
+        <p class="help is-warning" *ngIf="focusRoster.length > 0 && focusSelected.size === 0">
+          Marque ao menos 1 jogador (dá pra marcar 2, 3, 4... quantos quiser) pra focar a análise nele(s).
+        </p>
+      </ng-container>
+    </div>
+
     <button
       class="button is-small mb-3"
       [class.is-loading]="analyzing"
-      [disabled]="slot.demos.length === 0"
+      [disabled]="slot.demos.length === 0 || (focusMode === 'players' && focusSelected.size === 0)"
       (click)="runAnalysis()"
     >
-      Rodar análise de padrões
+      {{ slot.kind === 'opponent' ? 'Gerar plano de scouting' : 'Rodar análise de padrões' }}
     </button>
     <p class="help is-danger" *ngIf="analysisError">{{ analysisError }}</p>
     <p class="text-muted" *ngIf="slot.demos.length === 0">Importe ao menos uma demo antes de analisar.</p>
@@ -184,6 +235,9 @@
       <div class="columns">
         <div class="column is-7">
           <h2 class="stat-title">Leitura da IA</h2>
+          <p class="text-muted" style="font-size:0.78rem; margin-bottom:0.5rem" *ngIf="lastFocusLabel">
+            Foco: {{ lastFocusLabel }}
+          </p>
           <div class="panel-block-data p-4 ai-output">{{ result.analysis }}</div>
         </div>
         <div class="column is-5">

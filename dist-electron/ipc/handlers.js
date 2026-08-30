@@ -67,7 +67,8 @@ function registerIpcHandlers(win, slots, settings) {
     electron_1.ipcMain.handle('ai:updateProviderConfig', (_e, providerId, patch) => settings.updateProviderConfig(providerId, patch));
     electron_1.ipcMain.handle('ai:saveApiKey', (_e, providerId, apiKey) => settings.saveApiKey(providerId, apiKey));
     electron_1.ipcMain.handle('ai:clearApiKey', (_e, providerId) => settings.clearApiKey(providerId));
-    electron_1.ipcMain.handle('ai:analyzeSlot', (_e, slotId, providerId) => (0, analysisRunner_1.runSlotAnalysis)(slots, settings, slotId, providerId));
+    electron_1.ipcMain.handle('ai:analyzeSlot', (_e, slotId, providerId, focusSteamIds) => (0, analysisRunner_1.runSlotAnalysis)(slots, settings, slotId, providerId, focusSteamIds));
+    electron_1.ipcMain.handle('ai:getSlotStats', (_e, slotId) => (0, analysisRunner_1.getSlotStats)(slots, slotId));
     electron_1.ipcMain.handle('assets:extractRadars', () => (0, radarExtractor_1.extractRadarsFromLocalCs2)());
     electron_1.ipcMain.handle('assets:getRadarImage', (_e, map) => {
         const filePath = (0, radarExtractor_1.getCachedRadarPath)(map);

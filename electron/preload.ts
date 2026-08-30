@@ -27,7 +27,9 @@ const api = {
       ipcRenderer.invoke('ai:updateProviderConfig', providerId, patch),
     saveApiKey: (providerId: string, apiKey: string) => ipcRenderer.invoke('ai:saveApiKey', providerId, apiKey),
     clearApiKey: (providerId: string) => ipcRenderer.invoke('ai:clearApiKey', providerId),
-    analyzeSlot: (slotId: string, providerId?: string) => ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId),
+    analyzeSlot: (slotId: string, providerId?: string, focusSteamIds?: string[]) =>
+      ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId, focusSteamIds),
+    getSlotStats: (slotId: string) => ipcRenderer.invoke('ai:getSlotStats', slotId),
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),

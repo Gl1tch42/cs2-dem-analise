@@ -26,7 +26,8 @@ const api = {
         updateProviderConfig: (providerId, patch) => electron_1.ipcRenderer.invoke('ai:updateProviderConfig', providerId, patch),
         saveApiKey: (providerId, apiKey) => electron_1.ipcRenderer.invoke('ai:saveApiKey', providerId, apiKey),
         clearApiKey: (providerId) => electron_1.ipcRenderer.invoke('ai:clearApiKey', providerId),
-        analyzeSlot: (slotId, providerId) => electron_1.ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId),
+        analyzeSlot: (slotId, providerId, focusSteamIds) => electron_1.ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId, focusSteamIds),
+        getSlotStats: (slotId) => electron_1.ipcRenderer.invoke('ai:getSlotStats', slotId),
     },
     app: {
         getVersion: () => electron_1.ipcRenderer.invoke('app:getVersion'),

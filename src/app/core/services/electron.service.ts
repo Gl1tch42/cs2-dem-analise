@@ -7,6 +7,7 @@ import {
   AiSettings,
   AiProviderId,
   AnalysisResult,
+  ConsolidatedSlotStats,
   MapStat,
 } from '../models/slot.model';
 
@@ -37,7 +38,8 @@ declare global {
         updateProviderConfig: (providerId: AiProviderId, patch: unknown) => Promise<AiSettings>;
         saveApiKey: (providerId: AiProviderId, apiKey: string) => Promise<AiSettings>;
         clearApiKey: (providerId: AiProviderId) => Promise<AiSettings>;
-        analyzeSlot: (slotId: string, providerId?: AiProviderId) => Promise<AnalysisResult>;
+        analyzeSlot: (slotId: string, providerId?: AiProviderId, focusSteamIds?: string[]) => Promise<AnalysisResult>;
+        getSlotStats: (slotId: string) => Promise<ConsolidatedSlotStats>;
       };
       app: {
         getVersion: () => Promise<string>;

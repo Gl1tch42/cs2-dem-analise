@@ -1,0 +1,37 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Sombra Projetada Suave (App Container) -->
+  <defs>
+    <filter id="app-shadow" x="0" y="4" width="256" height="256" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#app-shadow)">
+    <!-- Base Squircle (Card Principal Escuro) -->
+    <rect x="16" y="16" width="224" height="224" rx="48" fill="#14181d" stroke="#262c35" stroke-width="2"/>
+
+    <!-- Ponto de Status Ativo (Canto Superior Direito) -->
+    <circle cx="212" cy="44" r="5" fill="#4caf82"/>
+
+    <!-- Elemento Mapa 2D Minimalista -->
+    <rect x="76" y="58" width="104" height="104" rx="6" fill="#1b2027" stroke="#313945" stroke-width="2"/>
+    <!-- Linhas Internas do Mapa (Bombsites A e B) -->
+    <path d="M92 58V100H132V80H180" stroke="#313945" stroke-width="2" stroke-dasharray="3 3"/>
+    <path d="M76 130H140V162" stroke="#313945" stroke-width="2"/>
+    
+    <!-- Marker Bombsite A -->
+    <text x="94" y="82" fill="#8993a4" font-family="system-ui, sans-serif" font-weight="bold" font-size="14">A</text>
+    
+    <!-- Pin Bombsite B -->
+    <rect x="150" y="70" width="18" height="18" rx="4" fill="#4caf82" fill-opacity="0.2" stroke="#4caf82" stroke-width="1.5"/>
+    <text x="155" y="84" fill="#4caf82" font-family="system-ui, sans-serif" font-weight="bold" font-size="12">B</text>
+
+    <!-- Seta de Gráfico Tático / Analytics (Amarelo own-color: #d4a72c) -->
+    <path d="M52 152L108 108L136 128L192 68" stroke="#d4a72c" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Ponta da Seta -->
+    <path d="M168 68H192V92" stroke="#d4a72c" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Tipografia "CS ANALYTICS" -->
+    <text x="128" y="202" text-anchor="middle" fill="#f2f4f6" font-family="'Inter', system-ui, sans-serif" font-weight="800" font-size="15" letter-spacing="1.5">CS <tspan fill="#8993a4" font-weight="400">ANALYTICS</tspan></text>
+  </g>
+</svg>

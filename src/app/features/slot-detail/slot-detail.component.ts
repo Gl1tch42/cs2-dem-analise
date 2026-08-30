@@ -7,7 +7,7 @@ import { NotebookComponent } from '../notebook/notebook.component';
 import { Map2dComponent } from '../map2d/map2d.component';
 import { HeatmapComponent } from '../heatmap/heatmap.component';
 import { TeamStatsComponent } from './team-stats.component';
-import { SlotDetail, AnalysisResult, DemoRecord, DemoSummary } from '../../core/models/slot.model';
+import { SlotDetail, AnalysisResult, DemoRecord, DemoSummary, PlayerMovementProfile } from '../../core/models/slot.model';
 
 type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai';
 
@@ -32,6 +32,12 @@ export class SlotDetailComponent implements OnInit {
   analysisError = '';
   analysisResult?: AnalysisResult;
 
+  focusMode: 'team' | 'players' = 'team';
+  focusRoster: PlayerMovementProfile[] = [];
+  focusRosterLoading = false;
+  focusSelected = new Set<string>();
+  lastFocusLabel = '';
+
   rosterOpenFor: string | null = null;
   rosterSummary?: DemoSummary;
   rosterLoading = false;
@@ -52,12 +58,42 @@ export class SlotDetailComponent implements OnInit {
     this.loading = true;
     this.analysisResult = undefined;
     this.activeTab = 'overview';
+    this.focusMode = 'team';
+    this.focusRoster = [];
+    this.focusSelected = new Set();
     this.slot = await this.electron.api.slots.get(id);
     this.loading = false;
   }
 
   setTab(tab: TabId) {
     this.activeTab = tab;
+    if (tab === 'ai' && this.slot && this.slot.demos.length > 0 && this.focusRoster.length === 0) {
+      this.loadFocusRoster();
+    }
+  }
+
+  async loadFocusRoster() {
+    if (!this.slot) return;
+    this.focusRosterLoading = true;
+    try {
+      const stats = await this.electron.api.ai.getSlotStats(this.slot.id);
+      this.focusRoster = stats.myTeam.playerMovementProfile;
+    } catch {
+      this.focusRoster = [];
+    } finally {
+      this.focusRosterLoading = false;
+    }
+  }
+
+  setFocusMode(mode: 'team' | 'players') {
+    this.focusMode = mode;
+    if (mode === 'team') this.focusSelected = new Set();
+  }
+
+  toggleFocusPlayer(steamId: string) {
+    if (this.focusSelected.has(steamId)) this.focusSelected.delete(steamId);
+    else this.focusSelected.add(steamId);
+    this.focusSelected = new Set(this.focusSelected);
   }
 
   startRename() {
@@ -148,7 +184,15 @@ export class SlotDetailComponent implements OnInit {
     this.analyzing = true;
     this.analysisError = '';
     try {
-      this.analysisResult = await this.electron.api.ai.analyzeSlot(this.slot.id);
+      const focusSteamIds = this.focusMode === 'players' ? Array.from(this.focusSelected) : undefined;
+      this.lastFocusLabel =
+        focusSteamIds && focusSteamIds.length > 0
+          ? this.focusRoster
+              .filter((p) => focusSteamIds.includes(p.steamId))
+              .map((p) => p.name)
+              .join(', ')
+          : 'Time inteiro';
+      this.analysisResult = await this.electron.api.ai.analyzeSlot(this.slot.id, undefined, focusSteamIds);
     } catch (err) {
       this.analysisError = (err as Error).message ?? 'Falha ao rodar análise de IA.';
     } finally {

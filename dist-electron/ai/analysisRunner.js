@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runSlotAnalysis = void 0;
+exports.runSlotAnalysis = exports.getSlotStats = void 0;
 const localHeuristics_1 = require("./localHeuristics");
 const providers_1 = require("./providers");
 const BUY_TYPE_LABEL = {
@@ -42,12 +42,14 @@ function patternsTable(patterns, order) {
     const rows = sorted.map((p) => `| ${p.pattern} | ${p.count} | ${pct(p.winRate)} |`);
     return ['| Padrão (compra/ritmo/postura/site) | Ocorrências | Win rate |', '|---|---|---|', ...rows].join('\n');
 }
-function playersTable(players) {
+function playersTable(players, focusIds) {
     if (players.length === 0)
         return '(sem dados)';
     const rows = players.map((p) => {
         const areas = p.topAreas.map((a) => `${a.area} (${a.count}x)`).join(', ') || '—';
-        return `| ${p.name} | ${p.avgAdr} | ${pct(p.entryRate)} | ${pct(p.clutchRate)} | ${p.kills} | ${p.deaths} | ${areas} |`;
+        const isFocus = focusIds && focusIds.has(p.steamId);
+        const name = isFocus ? `**${p.name} 🎯**` : p.name;
+        return `| ${name} | ${p.avgAdr} | ${pct(p.entryRate)} | ${pct(p.clutchRate)} | ${p.kills} | ${p.deaths} | ${areas} |`;
     });
     return [
         '| Jogador | ADR médio | Entry rate | Clutch rate | Kills | Deaths | Áreas mais visitadas |',
@@ -63,7 +65,7 @@ function siteTable(dist) {
     const rows = entries.map(([site, n]) => `| ${site} | ${n} | ${pct(n / total)} |`);
     return ['| Site | Rounds | % do total |', '|---|---|---|', ...rows].join('\n');
 }
-function teamSection(heading, playerNames, team) {
+function teamSection(heading, playerNames, team, focusIds) {
     return [
         `## ${heading}`,
         playerNames ? `Jogadores: ${playerNames}` : '(sem jogadores identificados)',
@@ -84,33 +86,87 @@ function teamSection(heading, playerNames, team) {
         patternsTable(team.topRecurringPatterns, 'worst'),
         '',
         '### Perfil de movimentação e desempenho por jogador',
-        playersTable(team.playerMovementProfile),
+        ...(focusIds && focusIds.size > 0
+            ? ['(🎯 = jogador em foco pedido pra esta análise — priorize-o(s) na resposta)']
+            : []),
+        playersTable(team.playerMovementProfile, focusIds),
     ].join('\n');
 }
-const SYSTEM_PROMPT = `Você é um analista tático de CS (Counter-Strike) ajudando o técnico de um time.
+const SYSTEM_PROMPT = `Você é um head coach de CS (Counter-Strike) de nível internacional — o perfil de treinador
+que a mídia da cena cita como referência: leitura de tática e timing como um IGL de elite, olho
+pra crosshair placement, posicionamento e movimentação como os melhores especialistas de
+aim/movement, e faro pra transformar dado frio em plano de treino que um jogador consegue executar
+amanhã. Você já revisou centenas de demos de times competitivos e sabe separar sinal de ruído em
+amostra pequena. Quem vai ler sua resposta é o técnico e os próprios jogadores — seja direto,
+honesto e específico, sem enrolação corporativa e sem elogio vazio.
+
 Você recebe SOMENTE dados já resumidos (não posições cruas nem a demo inteira) e as anotações
 manuais do analista humano. Os dados vêm em DUAS seções bem separadas — "Seu Time" (o time do
 slot) e "Adversário" (quem jogou contra nesses confrontos) — cada round foi atribuído ao lado
 ct/t certo (o time troca de lado no intervalo, então isso já foi corrigido pra você). NUNCA troque
 as seções: um padrão listado em "Adversário" é coisa que o ADVERSÁRIO faz, não o time do slot — se
-o adversário vence fazendo rush, isso não quer dizer que o time do slot vence fazendo rush. Seu trabalho:
+o adversário vence fazendo rush, isso não quer dizer que o time do slot vence fazendo rush.
+
+FOCO DA ANÁLISE (leia a linha "Foco solicitado" no início do prompt do usuário):
+- Se o foco pedir um ou poucos jogadores específicos (marcados com 🎯 nas tabelas), a MAIOR PARTE
+  do relatório deve girar em torno deles: decisões, timing de entrada, taxa de clutch, áreas do
+  mapa onde mais atuam, e o que cada um precisa treinar pra melhorar. Cite outros jogadores do time
+  só quando forem relevantes pro contexto de quem está em foco (ex: quem cobre a entrada dele, com
+  quem ele costuma trocar). Não gaste espaço detalhando quem está fora do foco.
+- Se o foco for o time inteiro, distribua a profundidade igualmente entre todos os jogadores com
+  dados suficientes (não force um parágrafo pra quem tem amostra baixa demais — diga que a amostra
+  é pequena em vez de inventar leitura).
+- Isso vale mesmo com muitas demos consolidadas: os dados já vêm agregados de todas as partidas do
+  slot, então trate os números como a tendência do jogador/time ao longo de todo esse histórico,
+  não de uma partida isolada.
+
+Seu trabalho:
 1. Achar padrões de jogada que se repetem em CADA time (o que cada um costuma fazer).
 2. Dizer com evidência (contagens/winRate) o que funciona e o que não funciona pra CADA time,
    sem misturar as duas seções.
 3. Cruzar as duas seções quando fizer sentido: ex. se o adversário costuma rush B e o time do
    slot tem win rate baixo defendendo contra tempo rush, isso é um alerta tático concreto.
-4. Comentar qualidades individuais de jogadores do time do slot com base nas métricas agregadas.
+4. Avaliar qualidades e lacunas individuais dos jogadores em foco com base nas métricas agregadas
+   (ADR, entry rate, clutch rate, kills/deaths, áreas mais visitadas) — sempre ligando o número a
+   uma recomendação prática, não só descrevendo o número.
 5. Quando uma jogada deu errado, não generalizar — apontar que ela falhou "porque falhou" nesse
    contexto específico, sem inventar causas que não estão nos dados.
 6. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
-Responda em português, em tópicos curtos e objetivos, deixando claro de qual time cada ponto fala.
-Não invente números que não estão nos dados.`;
-async function runSlotAnalysis(slots, settingsManager, slotId, requestedProviderId) {
+7. Nunca inventar estatística, tendência de movimentação ou uso de utilitário que não esteja
+   literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não dá
+   pra afirmar isso com os dados disponíveis, em vez de supor.
+
+FORMATO DE SAÍDA — escreva como um relatório pronto pra ser entregue ao time (o tipo de documento
+que viraria um PDF de scouting/report interno), em Markdown, com exatamente estas seções:
+1. **Resumo executivo** — 3 a 5 bullets com o diagnóstico mais importante desta análise.
+2. **Diagnóstico coletivo** — padrões de compra/ritmo/postura que funcionam e que não funcionam,
+   pra cada time, com a evidência (contagem/winRate) entre parênteses.
+3. **Diagnóstico individual** — uma subseção por jogador em foco (ou por todos os jogadores do
+   time do slot, se o foco pedido for o time inteiro), cada uma com: pontos fortes, pontos a
+   melhorar e leitura de posicionamento/movimentação com base nas áreas mais visitadas.
+4. **Plano de treino recomendado** — uma ação concreta e específica por ponto fraco identificado
+   (tipo de treino de aim/movement, cenário de retake/execução pra praticar, o que revisar na
+   próxima demo). Nada genérico tipo "jogue mais" — cada recomendação tem que estar amarrada ao
+   dado que a gerou.
+5. **Alertas táticos pro próximo confronto** — cruzamentos entre o que o adversário costuma fazer
+   e como o time do slot historicamente responde a isso.
+Responda em português, em tópicos curtos e objetivos, deixando claro de qual time/jogador cada
+ponto fala. Não invente números que não estão nos dados.`;
+function getSlotStats(slots, slotId) {
+    const slot = slots.getSlot(slotId);
+    return (0, localHeuristics_1.consolidateSlot)(slots.slotFolderPath(slotId), slot.demos);
+}
+exports.getSlotStats = getSlotStats;
+async function runSlotAnalysis(slots, settingsManager, slotId, requestedProviderId, focusSteamIds) {
     const slot = slots.getSlot(slotId);
     if (slot.demos.length === 0) {
         throw new Error('Este slot ainda não tem demos analisadas.');
     }
     const stats = (0, localHeuristics_1.consolidateSlot)(slots.slotFolderPath(slotId), slot.demos);
+    const focusIds = focusSteamIds && focusSteamIds.length > 0 ? new Set(focusSteamIds) : undefined;
+    const focusPlayers = focusIds
+        ? stats.myTeam.playerMovementProfile.filter((p) => focusIds.has(p.steamId))
+        : [];
     const settings = settingsManager.getSettings();
     const providerId = requestedProviderId ?? settings.defaultProviderId;
     if (!providerId)
@@ -127,15 +183,21 @@ async function runSlotAnalysis(slots, settingsManager, slotId, requestedProvider
         : null;
     const myNames = stats.myTeam.playerMovementProfile.map((p) => p.name).join(', ');
     const oppNames = stats.opponent.playerMovementProfile.map((p) => p.name).join(', ');
+    const focusLine = focusPlayers.length > 0
+        ? `Foco solicitado: análise aprofundada em ${focusPlayers.length === 1 ? '1 jogador específico' : `${focusPlayers.length} jogadores específicos`} do time do slot — ${focusPlayers.map((p) => p.name).join(', ')} (marcados com 🎯 nas tabelas abaixo). Use ` +
+            'os dados do time completo e do adversário como contexto tático, mas dedique a maior parte da resposta ' +
+            'a esse(s) jogador(es).'
+        : `Foco solicitado: time completo (${slot.name}) — distribua a profundidade da análise entre todos os jogadores com dados suficientes.`;
     const userPrompt = [
         `# Confronto: ${slot.name}`,
         `Demos analisadas: ${stats.demosAnalyzed} | Rounds computados nas tendências abaixo: ${stats.roundsAnalyzed}`,
+        focusLine,
         ...(rosterWarning ? ['', rosterWarning] : []),
         '',
         '### Site atacado/defendido com mais frequência (geral, os dois times)',
         siteTable(stats.siteHitDistribution),
         '',
-        teamSection(`Seu Time (${slot.name})`, myNames, stats.myTeam),
+        teamSection(`Seu Time (${slot.name})`, myNames, stats.myTeam, focusIds),
         '',
         teamSection('Adversário', oppNames, stats.opponent),
         '',

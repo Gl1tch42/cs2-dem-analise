@@ -1,7 +1,7 @@
 import { SlotManager } from '../storage/slotManager';
 import { SettingsManager } from '../storage/settingsManager';
 import { AiProviderId, BuyType, RoundStance, RoundTempo } from '../storage/types';
-import { TeamTendencyStats, consolidateSlot } from './localHeuristics';
+import { ConsolidatedSlotStats, TeamTendencyStats, consolidateSlot } from './localHeuristics';
 import { callAiProvider } from './providers';
 
 const BUY_TYPE_LABEL: Record<BuyType, string> = {
@@ -51,11 +51,13 @@ function patternsTable(patterns: TeamTendencyStats['topRecurringPatterns'], orde
   return ['| Padrão (compra/ritmo/postura/site) | Ocorrências | Win rate |', '|---|---|---|', ...rows].join('\n');
 }
 
-function playersTable(players: TeamTendencyStats['playerMovementProfile']): string {
+function playersTable(players: TeamTendencyStats['playerMovementProfile'], focusIds?: Set<string>): string {
   if (players.length === 0) return '(sem dados)';
   const rows = players.map((p) => {
     const areas = p.topAreas.map((a) => `${a.area} (${a.count}x)`).join(', ') || '—';
-    return `| ${p.name} | ${p.avgAdr} | ${pct(p.entryRate)} | ${pct(p.clutchRate)} | ${p.kills} | ${p.deaths} | ${areas} |`;
+    const isFocus = focusIds && focusIds.has(p.steamId);
+    const name = isFocus ? `**${p.name} 🎯**` : p.name;
+    return `| ${name} | ${p.avgAdr} | ${pct(p.entryRate)} | ${pct(p.clutchRate)} | ${p.kills} | ${p.deaths} | ${areas} |`;
   });
   return [
     '| Jogador | ADR médio | Entry rate | Clutch rate | Kills | Deaths | Áreas mais visitadas |',
@@ -72,7 +74,7 @@ function siteTable(dist: Record<string, number>): string {
   return ['| Site | Rounds | % do total |', '|---|---|---|', ...rows].join('\n');
 }
 
-function teamSection(heading: string, playerNames: string, team: TeamTendencyStats): string {
+function teamSection(heading: string, playerNames: string, team: TeamTendencyStats, focusIds?: Set<string>): string {
   return [
     `## ${heading}`,
     playerNames ? `Jogadores: ${playerNames}` : '(sem jogadores identificados)',
@@ -93,34 +95,149 @@ function teamSection(heading: string, playerNames: string, team: TeamTendencySta
     patternsTable(team.topRecurringPatterns, 'worst'),
     '',
     '### Perfil de movimentação e desempenho por jogador',
-    playersTable(team.playerMovementProfile),
+    ...(focusIds && focusIds.size > 0
+      ? ['(🎯 = jogador em foco pedido pra esta análise — priorize-o(s) na resposta)']
+      : []),
+    playersTable(team.playerMovementProfile, focusIds),
   ].join('\n');
 }
 
-const SYSTEM_PROMPT = `Você é um analista tático de CS (Counter-Strike) ajudando o técnico de um time.
+const SYSTEM_PROMPT_OWN = `Você é um head coach de CS (Counter-Strike) de nível internacional — o perfil de treinador
+que a mídia da cena cita como referência: leitura de tática e timing como um IGL de elite, olho
+pra crosshair placement, posicionamento e movimentação como os melhores especialistas de
+aim/movement, e faro pra transformar dado frio em plano de treino que um jogador consegue executar
+amanhã. Você já revisou centenas de demos de times competitivos e sabe separar sinal de ruído em
+amostra pequena. Quem vai ler sua resposta é o técnico e os próprios jogadores — seja direto,
+honesto e específico, sem enrolação corporativa e sem elogio vazio.
+
 Você recebe SOMENTE dados já resumidos (não posições cruas nem a demo inteira) e as anotações
 manuais do analista humano. Os dados vêm em DUAS seções bem separadas — "Seu Time" (o time do
 slot) e "Adversário" (quem jogou contra nesses confrontos) — cada round foi atribuído ao lado
 ct/t certo (o time troca de lado no intervalo, então isso já foi corrigido pra você). NUNCA troque
 as seções: um padrão listado em "Adversário" é coisa que o ADVERSÁRIO faz, não o time do slot — se
-o adversário vence fazendo rush, isso não quer dizer que o time do slot vence fazendo rush. Seu trabalho:
+o adversário vence fazendo rush, isso não quer dizer que o time do slot vence fazendo rush.
+
+FOCO DA ANÁLISE (leia a linha "Foco solicitado" no início do prompt do usuário):
+- Se o foco pedir um ou poucos jogadores específicos (marcados com 🎯 nas tabelas), a MAIOR PARTE
+  do relatório deve girar em torno deles: decisões, timing de entrada, taxa de clutch, áreas do
+  mapa onde mais atuam, e o que cada um precisa treinar pra melhorar. Cite outros jogadores do time
+  só quando forem relevantes pro contexto de quem está em foco (ex: quem cobre a entrada dele, com
+  quem ele costuma trocar). Não gaste espaço detalhando quem está fora do foco.
+- Se o foco for o time inteiro, distribua a profundidade igualmente entre todos os jogadores com
+  dados suficientes (não force um parágrafo pra quem tem amostra baixa demais — diga que a amostra
+  é pequena em vez de inventar leitura).
+- Isso vale mesmo com muitas demos consolidadas: os dados já vêm agregados de todas as partidas do
+  slot, então trate os números como a tendência do jogador/time ao longo de todo esse histórico,
+  não de uma partida isolada.
+
+Seu trabalho:
 1. Achar padrões de jogada que se repetem em CADA time (o que cada um costuma fazer).
 2. Dizer com evidência (contagens/winRate) o que funciona e o que não funciona pra CADA time,
    sem misturar as duas seções.
 3. Cruzar as duas seções quando fizer sentido: ex. se o adversário costuma rush B e o time do
    slot tem win rate baixo defendendo contra tempo rush, isso é um alerta tático concreto.
-4. Comentar qualidades individuais de jogadores do time do slot com base nas métricas agregadas.
+4. Avaliar qualidades e lacunas individuais dos jogadores em foco com base nas métricas agregadas
+   (ADR, entry rate, clutch rate, kills/deaths, áreas mais visitadas) — sempre ligando o número a
+   uma recomendação prática, não só descrevendo o número.
 5. Quando uma jogada deu errado, não generalizar — apontar que ela falhou "porque falhou" nesse
    contexto específico, sem inventar causas que não estão nos dados.
 6. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
-Responda em português, em tópicos curtos e objetivos, deixando claro de qual time cada ponto fala.
-Não invente números que não estão nos dados.`;
+7. Nunca inventar estatística, tendência de movimentação ou uso de utilitário que não esteja
+   literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não dá
+   pra afirmar isso com os dados disponíveis, em vez de supor.
+
+FORMATO DE SAÍDA — escreva como um relatório pronto pra ser entregue ao time (o tipo de documento
+que viraria um PDF de scouting/report interno), em Markdown, com exatamente estas seções:
+1. **Resumo executivo** — 3 a 5 bullets com o diagnóstico mais importante desta análise.
+2. **Diagnóstico coletivo** — padrões de compra/ritmo/postura que funcionam e que não funcionam,
+   pra cada time, com a evidência (contagem/winRate) entre parênteses.
+3. **Diagnóstico individual** — uma subseção por jogador em foco (ou por todos os jogadores do
+   time do slot, se o foco pedido for o time inteiro), cada uma com: pontos fortes, pontos a
+   melhorar e leitura de posicionamento/movimentação com base nas áreas mais visitadas.
+4. **Plano de treino recomendado** — uma ação concreta e específica por ponto fraco identificado
+   (tipo de treino de aim/movement, cenário de retake/execução pra praticar, o que revisar na
+   próxima demo). Nada genérico tipo "jogue mais" — cada recomendação tem que estar amarrada ao
+   dado que a gerou.
+5. **Alertas táticos pro próximo confronto** — cruzamentos entre o que o adversário costuma fazer
+   e como o time do slot historicamente responde a isso.
+Responda em português, em tópicos curtos e objetivos, deixando claro de qual time/jogador cada
+ponto fala. Não invente números que não estão nos dados.`;
+
+const SYSTEM_PROMPT_OPPONENT = `Você é um analista de scouting / opposition coach de CS (Counter-Strike) de nível
+internacional — o tipo de analista que a mídia da cena credita quando um time chega pro confronto
+com um game plan certeiro contra um rival específico. Você pensa como um IGL de elite quando lê
+tendência de tempo/postura, como os melhores especialistas de aim/movement quando lê posicionamento,
+e como um scout que vive estudando VOD de adversário pra achar a brecha que vira round. Quem vai ler
+sua resposta é o técnico e o IGL do time, que vão usar isso pra montar o plano de jogo do próximo
+confronto contra esse adversário — seja direto, específico e acionável, sem enrolação corporativa.
+
+Você recebe SOMENTE dados já resumidos (não posições cruas nem a demo inteira) e as anotações
+manuais do analista humano. Os dados vêm em DUAS seções bem separadas — "Time-alvo" (o adversário
+que este relatório de scouting analisa) e quem enfrentou esse adversário nessas demos — cada round
+foi atribuído ao lado ct/t certo (o time troca de lado no intervalo, então isso já foi corrigido pra
+você). NUNCA troque as seções: um padrão listado na seção do time-alvo é coisa que ELE faz, não o
+que quem jogou contra ele faz.
+
+FOCO DA ANÁLISE (leia a linha "Foco solicitado" no início do prompt do usuário):
+- Se o foco pedir um ou poucos jogadores específicos do time-alvo (marcados com 🎯 nas tabelas), a
+  MAIOR PARTE do relatório deve girar em torno de como neutralizar ou explorar esse(s) jogador(es):
+  timing de entrada, taxa de clutch, áreas do mapa onde mais atua, e como isolar ou punir esse
+  padrão. Cite outros jogadores do time-alvo só quando forem relevantes pro contexto de quem está
+  em foco. Não gaste espaço detalhando quem está fora do foco.
+- Se o foco for o time-alvo inteiro, distribua a profundidade igualmente entre todos os jogadores
+  com dados suficientes (não force leitura em quem tem amostra baixa demais — diga que a amostra é
+  pequena em vez de inventar).
+- Isso vale mesmo com muitas demos consolidadas: os dados já vêm agregados de todas as partidas
+  desse adversário no slot, então trate os números como a tendência dele ao longo desse histórico
+  inteiro, não de uma partida isolada.
+
+Seu trabalho:
+1. Achar os padrões de jogada que o time-alvo repete (compra, ritmo, postura, site) — o que ele
+   costuma fazer e com que frequência.
+2. Dizer com evidência (contagens/winRate) quais desses padrões são pontos fortes (a respeitar) e
+   quais são vulnerabilidades reais (com amostra suficiente pra confiar, não ruído de amostra
+   pequena).
+3. Cruzar as duas seções quando fizer sentido: ex. se o time-alvo tem win rate baixo defendendo
+   contra rush, isso vira uma recomendação concreta de ataque pro próximo confronto.
+4. Avaliar jogadores em foco do time-alvo com base nas métricas agregadas (ADR, entry rate, clutch
+   rate, kills/deaths, áreas mais visitadas) e traduzir isso em como jogar contra eles especificamente
+   (ex: quem isolar 1x1, quem não deixar entrar sozinho, onde ele costuma clutchar).
+5. Quando um padrão do time-alvo falhou, não generalizar — aponte que falhou "nesse contexto
+   específico", sem inventar causa que não está nos dados.
+6. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
+7. Nunca inventar estatística, tendência de movimentação ou uso de utilitário que não esteja
+   literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não dá pra
+   afirmar isso com os dados disponíveis, em vez de supor.
+
+FORMATO DE SAÍDA — escreva como um relatório de scouting pronto pra ser entregue ao time antes do
+confronto (o tipo de documento que viraria um PDF de prep de jogo), em Markdown, com exatamente
+estas seções:
+1. **Resumo executivo** — 3 a 5 bullets com o que mais importa saber sobre esse adversário.
+2. **Pontos fortes do time-alvo** — o que ele faz bem e que o nosso time precisa respeitar/se
+   preparar pra enfrentar, com a evidência (contagem/winRate) entre parênteses.
+3. **Vulnerabilidades identificadas** — padrões com win rate baixo e amostra suficiente, cada um
+   com a leitura tática de como explorar.
+4. **Alvos individuais** — uma subseção por jogador em foco (ou pelos jogadores do time-alvo com
+   dados suficientes, se o foco pedido for o time inteiro), com como neutralizar/isolar cada um.
+5. **Plano de jogo sugerido** — ações concretas pro próximo confronto (que site atacar em cada
+   situação de compra, que postura assumir na defesa, quem isolar), cada uma amarrada ao dado que
+   a gerou. Nada genérico tipo "jogue agressivo" — diga contra o quê e por quê.
+6. **O que revisar antes do confronto** — quais padrões encontrados valem a pena confirmar revendo
+   o replay/VOD específico antes do confronto.
+Responda em português, em tópicos curtos e objetivos, deixando claro de qual jogador/padrão cada
+ponto fala. Não invente números que não estão nos dados.`;
+
+export function getSlotStats(slots: SlotManager, slotId: string): ConsolidatedSlotStats {
+  const slot = slots.getSlot(slotId);
+  return consolidateSlot(slots.slotFolderPath(slotId), slot.demos);
+}
 
 export async function runSlotAnalysis(
   slots: SlotManager,
   settingsManager: SettingsManager,
   slotId: string,
-  requestedProviderId?: AiProviderId
+  requestedProviderId?: AiProviderId,
+  focusSteamIds?: string[]
 ) {
   const slot = slots.getSlot(slotId);
   if (slot.demos.length === 0) {
@@ -128,6 +245,11 @@ export async function runSlotAnalysis(
   }
 
   const stats = consolidateSlot(slots.slotFolderPath(slotId), slot.demos);
+  const isOpponentProfile = slot.kind === 'opponent';
+  const focusIds = focusSteamIds && focusSteamIds.length > 0 ? new Set(focusSteamIds) : undefined;
+  const focusPlayers = focusIds
+    ? stats.myTeam.playerMovementProfile.filter((p) => focusIds.has(p.steamId))
+    : [];
 
   const settings = settingsManager.getSettings();
   const providerId = requestedProviderId ?? settings.defaultProviderId;
@@ -146,26 +268,41 @@ export async function runSlotAnalysis(
   const myNames = stats.myTeam.playerMovementProfile.map((p) => p.name).join(', ');
   const oppNames = stats.opponent.playerMovementProfile.map((p) => p.name).join(', ');
 
+  const featuredHeading = isOpponentProfile ? `Time-alvo (${slot.name})` : `Seu Time (${slot.name})`;
+  const contextHeading = isOpponentProfile
+    ? `Quem enfrentou ${slot.name} nessas demos`
+    : 'Adversário';
+  const featuredLabel = isOpponentProfile ? `time-alvo (${slot.name})` : `time do slot`;
+
+  const focusLine =
+    focusPlayers.length > 0
+      ? `Foco solicitado: análise aprofundada em ${
+          focusPlayers.length === 1 ? '1 jogador específico' : `${focusPlayers.length} jogadores específicos`
+        } do ${featuredLabel} — ${focusPlayers.map((p) => p.name).join(', ')} (marcados com 🎯 nas tabelas abaixo). ` +
+        `Use os dados completos como contexto tático, mas dedique a maior parte da resposta a esse(s) jogador(es).`
+      : `Foco solicitado: ${isOpponentProfile ? `time-alvo inteiro (${slot.name})` : `time completo (${slot.name})`} — distribua a profundidade da análise entre todos os jogadores com dados suficientes.`;
+
   const userPrompt = [
     `# Confronto: ${slot.name}`,
     `Demos analisadas: ${stats.demosAnalyzed} | Rounds computados nas tendências abaixo: ${stats.roundsAnalyzed}`,
+    focusLine,
     ...(rosterWarning ? ['', rosterWarning] : []),
     '',
     '### Site atacado/defendido com mais frequência (geral, os dois times)',
     siteTable(stats.siteHitDistribution),
     '',
-    teamSection(`Seu Time (${slot.name})`, myNames, stats.myTeam),
+    teamSection(featuredHeading, myNames, stats.myTeam, focusIds),
     '',
-    teamSection('Adversário', oppNames, stats.opponent),
+    teamSection(contextHeading, oppNames, stats.opponent),
     '',
-    '## Anotações do analista humano sobre o time do slot',
+    `## Anotações do analista humano sobre ${isOpponentProfile ? 'o time-alvo' : 'o time do slot'}`,
     slot.notebook.content || '(sem anotações ainda)',
   ].join('\n');
 
   const responseText = await callAiProvider({
     provider,
     apiKey: apiKey ?? '',
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: isOpponentProfile ? SYSTEM_PROMPT_OPPONENT : SYSTEM_PROMPT_OWN,
     userPrompt,
   });
 
