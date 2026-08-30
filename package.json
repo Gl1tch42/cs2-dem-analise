@@ -9,7 +9,7 @@
     "start": "concurrently -k -n ANGULAR,ELECTRON -c blue,yellow \"npm run start:angular\" \"npm run start:electron\"",
     "start:angular": "ng serve",
     "start:electron": "wait-on http://localhost:4200 && npm run build:electron && electron .",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && node -e \"require('fs').cpSync('electron/assets','dist-electron/assets',{recursive:true})\"",
     "build:angular": "ng build",
     "build": "npm run build:angular && npm run build:electron",
     "package": "npm run build && electron-builder",

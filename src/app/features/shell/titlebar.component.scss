@@ -21,6 +21,13 @@
   min-width: 0;
 }
 
+.titlebar-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
 .titlebar-brand {
   font-size: 0.72rem;
   color: var(--text-muted);

@@ -64,8 +64,9 @@
   margin-bottom: 0.75rem;
 
   .brand-mark {
-    color: var(--own-color);
-    font-size: 1.1rem;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
   }
 
   .brand-text {
