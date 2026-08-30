@@ -12,11 +12,35 @@
     "build:electron": "tsc -p tsconfig.electron.json && node -e \"require('fs').cpSync('electron/assets','dist-electron/assets',{recursive:true})\"",
     "build:angular": "ng build",
     "build": "npm run build:angular && npm run build:electron",
-    "package": "npm run build && electron-builder",
+    "build:prod": "npm run build && electron-builder",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
   "private": true,
+  "build": {
+    "appId": "com.michelfc.csdemoanalyst",
+    "productName": "CS Demo Analyst",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/cs-demo-analyst/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  },
   "overrides": {
     "sass": "^1.103.1"
   },
