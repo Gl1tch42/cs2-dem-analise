@@ -16,6 +16,7 @@ import {
   MAX_DEMOS_PER_SLOT,
   MAX_OPPONENT_SLOTS,
 } from './types';
+import { resolveDemoOutcome } from '../ai/localHeuristics';
 
 // Snapshot do notebook só é gravado se já se passou esse tempo desde o
 // último — o editor salva a cada poucas centenas de ms enquanto o analista
@@ -134,8 +135,30 @@ export class SlotManager {
         counts.set(record.map, (counts.get(record.map) ?? 0) + 1);
       }
     }
+
+    // Vitória/derrota só faz sentido pras nossas próprias partidas — demos
+    // de slots de adversário são scouting de jogos que a gente não jogou.
+    const results = new Map<string, { wins: number; losses: number }>();
+    for (const record of this.readDemoRecords('own')) {
+      let summary: DemoSummary;
+      try {
+        summary = this.readDemoSummary('own', record.id);
+      } catch {
+        continue;
+      }
+      const outcome = resolveDemoOutcome(summary, record.myTeamSteamIds);
+      if (!outcome) continue;
+      const entry = results.get(record.map) ?? { wins: 0, losses: 0 };
+      if (outcome === 'win') entry.wins++;
+      else entry.losses++;
+      results.set(record.map, entry);
+    }
+
     return Array.from(counts.entries())
-      .map(([map, demoCount]) => ({ map, demoCount }))
+      .map(([map, demoCount]) => {
+        const { wins, losses } = results.get(map) ?? { wins: 0, losses: 0 };
+        return { map, demoCount, wins, losses };
+      })
       .sort((a, b) => b.demoCount - a.demoCount || a.map.localeCompare(b.map));
   }
 

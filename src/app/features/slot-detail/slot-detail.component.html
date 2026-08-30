@@ -29,6 +29,7 @@
       <li [class.is-active]="activeTab === 'demos'"><a (click)="setTab('demos')">Demos</a></li>
       <li [class.is-active]="activeTab === 'notebook'"><a (click)="setTab('notebook')">Notebook</a></li>
       <li [class.is-active]="activeTab === 'ai'"><a (click)="setTab('ai')">Análise de IA</a></li>
+      <li [class.is-active]="activeTab === 'consolidado'"><a (click)="setTab('consolidado')">Consolidado</a></li>
     </ul>
   </div>
 
@@ -57,7 +58,12 @@
   </section>
 
   <section *ngIf="activeTab === 'map'">
-    <app-map2d [slotId]="slot.id" [demos]="slot.demos"></app-map2d>
+    <app-map2d
+      [slotId]="slot.id"
+      [demos]="slot.demos"
+      [notebookContent]="slot.notebook.content"
+      (notebookContentChanged)="onNotebookSaved($event)"
+    ></app-map2d>
   </section>
 
   <section *ngIf="activeTab === 'heatmap'">
@@ -296,5 +302,18 @@
         </div>
       </div>
     </ng-container>
+  </section>
+
+  <section *ngIf="activeTab === 'consolidado'">
+    <p class="text-muted" *ngIf="slot.demos.length === 0">
+      Importe ao menos uma demo e marque o time do slot (aba <a (click)="setTab('demos')">Demos</a>) pra
+      calcular as notas de mira e utility.
+    </p>
+    <p class="text-muted" *ngIf="playerScoresLoading">Calculando notas…</p>
+    <p class="help is-danger" *ngIf="playerScoresError">{{ playerScoresError }}</p>
+    <app-consolidated-score
+      *ngIf="!playerScoresLoading && slot.demos.length > 0"
+      [players]="playerScores"
+    ></app-consolidated-score>
   </section>
 </ng-container>

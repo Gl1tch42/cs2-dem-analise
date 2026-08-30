@@ -105,6 +105,10 @@
                 <span class="map-name">{{ entry.map }}</span>
                 <span class="tag is-rounded demo-count">{{ entry.demoCount }}</span>
               </div>
+              <div class="map-record" *ngIf="entry.wins + entry.losses > 0">
+                <span class="map-record-wl">{{ entry.wins }}V - {{ entry.losses }}D</span>
+                <span class="map-record-pct">{{ winRatePct(entry) }}%</span>
+              </div>
               <p class="map-description">{{ entry.description }}</p>
             </li>
             <li class="empty-hint" *ngIf="mapEntries.length === 0">Nenhuma demo importada ainda.</li>

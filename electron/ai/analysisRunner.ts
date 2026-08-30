@@ -1,7 +1,8 @@
 import { SlotManager } from '../storage/slotManager';
 import { SettingsManager } from '../storage/settingsManager';
-import { AiProviderId, BuyType, RoundStance, RoundTempo } from '../storage/types';
+import { AiProviderId, BuyType, PlayerScoreAggregate, RoundStance, RoundTempo } from '../storage/types';
 import { ConsolidatedSlotStats, TeamTendencyStats, consolidateSlot } from './localHeuristics';
+import { computePlayerScores } from './scoreEngine';
 import { callAiProvider } from './providers';
 
 const BUY_TYPE_LABEL: Record<BuyType, string> = {
@@ -230,6 +231,11 @@ ponto fala. Não invente números que não estão nos dados.`;
 export function getSlotStats(slots: SlotManager, slotId: string): ConsolidatedSlotStats {
   const slot = slots.getSlot(slotId);
   return consolidateSlot(slots.slotFolderPath(slotId), slot.demos);
+}
+
+export function getPlayerScores(slots: SlotManager, slotId: string): PlayerScoreAggregate[] {
+  const slot = slots.getSlot(slotId);
+  return computePlayerScores(slots.slotFolderPath(slotId), slot.demos);
 }
 
 export async function runSlotAnalysis(

@@ -143,13 +143,10 @@
 }
 
 .player-timeline {
-  flex: 0 0 260px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  height: 100%;
-  max-height: 640px;
-  padding: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -167,72 +164,88 @@
 }
 .no-events {
   font-size: 0.75rem;
+  margin: 0.4rem 0 0;
 }
-.timeline-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  overflow-y: auto;
+
+.timeline-track {
+  position: relative;
+  height: 32px;
+  margin: 0.9rem 0.4rem 0.4rem;
 }
-.timeline-item {
+.timeline-track-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-50%);
+}
+.timeline-marker {
+  position: absolute;
+  top: 50%;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.4rem;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.04);
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: none;
+  background: transparent;
   cursor: pointer;
-  text-align: left;
-  font-size: 0.72rem;
-  color: #e6e9ee;
+  transform: translate(-50%, -50%);
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.09);
-  }
-
-  .timeline-round {
-    flex: 0 0 auto;
-    font-weight: 700;
-    font-size: 0.68rem;
-    color: var(--text-muted);
-  }
-  .timeline-icon {
-    width: 8px;
-    height: 8px;
+  .timeline-marker-dot {
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    flex: 0 0 auto;
-  }
-  .timeline-detail {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .timeline-time {
-    flex: 0 0 auto;
-    color: var(--text-muted);
+    box-shadow: 0 0 0 2px rgba(18, 22, 28, 0.9);
+    transition: transform 0.12s ease;
   }
 
-  &.timeline-death .timeline-icon {
+  &:hover .timeline-marker-dot,
+  &:focus-visible .timeline-marker-dot {
+    transform: scale(1.4);
+  }
+
+  &.timeline-death .timeline-marker-dot {
     background: #e57373;
   }
-  &.timeline-flash .timeline-icon {
+  &.timeline-kill .timeline-marker-dot {
+    background: #8fd19e;
+  }
+  &.timeline-flash .timeline-marker-dot {
     background: radial-gradient(circle, #fff 0%, rgba(255, 255, 255, 0.4) 100%);
   }
-  &.timeline-smoke .timeline-icon {
+  &.timeline-smoke .timeline-marker-dot {
     background: rgba(195, 200, 205, 0.9);
   }
-  &.timeline-fire .timeline-icon {
+  &.timeline-fire .timeline-marker-dot {
     background: radial-gradient(circle, #ffc440 0%, #e65a1e 100%);
   }
-  &.timeline-decoy .timeline-icon {
+  &.timeline-decoy .timeline-marker-dot {
     background: transparent;
     border: 1.5px dashed rgba(200, 200, 200, 0.9);
   }
-  &.timeline-he .timeline-icon {
+  &.timeline-he .timeline-marker-dot {
     background: radial-gradient(circle, #ff6b4a 0%, rgba(255, 107, 74, 0.3) 100%);
   }
+}
+
+.timeline-detail-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-height: 1.2em;
+  font-size: 0.75rem;
+  color: #e6e9ee;
+}
+.timeline-detail-time {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+.timeline-detail-text {
+  flex: 1;
 }
 
 .scoreboard-row {
@@ -355,6 +368,46 @@
     display: flex;
     gap: 0.25rem;
   }
+}
+
+.notes-toggle {
+  margin-left: auto;
+
+  &.is-active {
+    background: rgba(247, 220, 106, 0.16);
+    border-color: rgba(247, 220, 106, 0.5);
+    color: #f7dc6f;
+  }
+}
+
+.replay-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(247, 220, 106, 0.25);
+
+  // o notebook embutido já vem com sua própria borda/fundo — reduz um pouco
+  // a altura mínima padrão (320px) pra caber melhor abaixo do replay.
+  ::ng-deep .notebook-editor {
+    min-height: 180px;
+
+    .ProseMirror {
+      min-height: 160px;
+    }
+  }
+}
+.replay-notes-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.replay-notes-hint {
+  font-size: 0.75rem;
 }
 
 .match-progress {

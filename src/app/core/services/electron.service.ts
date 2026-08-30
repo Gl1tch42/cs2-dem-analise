@@ -11,6 +11,7 @@ import {
   MapStat,
   NotebookHistoryEntry,
   SlotImportResult,
+  PlayerScoreAggregate,
 } from '../models/slot.model';
 
 declare global {
@@ -47,6 +48,7 @@ declare global {
         clearApiKey: (providerId: AiProviderId) => Promise<AiSettings>;
         analyzeSlot: (slotId: string, providerId?: AiProviderId, focusSteamIds?: string[]) => Promise<AnalysisResult>;
         getSlotStats: (slotId: string) => Promise<ConsolidatedSlotStats>;
+        getPlayerScores: (slotId: string) => Promise<PlayerScoreAggregate[]>;
       };
       app: {
         getVersion: () => Promise<string>;

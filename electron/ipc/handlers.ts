@@ -5,7 +5,7 @@ import { SlotManager } from '../storage/slotManager';
 import { SettingsManager } from '../storage/settingsManager';
 import { AiProviderId, SlotExportBundle } from '../storage/types';
 import { parseDemoFile } from '../ai/demoParserBridge';
-import { getSlotStats, runSlotAnalysis } from '../ai/analysisRunner';
+import { getPlayerScores, getSlotStats, runSlotAnalysis } from '../ai/analysisRunner';
 import { extractRadarsFromLocalCs2, getCachedRadarPath } from '../ai/radarExtractor';
 
 export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, settings: SettingsManager) {
@@ -101,6 +101,7 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
     runSlotAnalysis(slots, settings, slotId, providerId, focusSteamIds)
   );
   ipcMain.handle('ai:getSlotStats', (_e, slotId: string) => getSlotStats(slots, slotId));
+  ipcMain.handle('ai:getPlayerScores', (_e, slotId: string) => getPlayerScores(slots, slotId));
 
   ipcMain.handle('assets:extractRadars', () => extractRadarsFromLocalCs2());
   ipcMain.handle('assets:getRadarImage', (_e, map: string) => {

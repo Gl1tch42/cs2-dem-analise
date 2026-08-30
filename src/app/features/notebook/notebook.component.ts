@@ -106,6 +106,25 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.saveTimer = setTimeout(() => this.save(), SAVE_DEBOUNCE_MS);
   }
 
+  /** Insere um marcador em negrito (ex: "[de_dust2 · R7 · 12.3s]") como novo parágrafo no
+   * fim do notebook e deixa o cursor logo depois, pronto pra digitar a observação. Usado
+   * pelo Mapa 2D pra marcar o momento do replay sem sair da tela do replay. */
+  insertMarker(label: string) {
+    if (!this.editor) return;
+    this.editor
+      .chain()
+      .focus('end')
+      .insertContent({
+        type: 'paragraph',
+        content: [
+          { type: 'text', marks: [{ type: 'bold' }], text: label },
+          { type: 'text', text: ' ' },
+        ],
+      })
+      .run();
+    this.onEdit();
+  }
+
   async save() {
     if (!this.editor) return;
     if (this.saveTimer) clearTimeout(this.saveTimer);

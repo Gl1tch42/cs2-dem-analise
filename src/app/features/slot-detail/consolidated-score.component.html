@@ -1,0 +1,105 @@
+<div class="consolidated-score">
+  <div class="consolidated-score-header">
+    <p class="text-muted">{{ players.length }} jogador(es) com nota calculada.</p>
+    <button class="button is-small" (click)="exportCsv()" [disabled]="players.length === 0">
+      Exportar CSV
+    </button>
+  </div>
+
+  <p class="text-muted" *ngIf="players.length === 0">
+    Nenhum jogador com nota calculada ainda. Marque o time do slot em pelo menos uma demo (aba
+    <strong>Demos</strong>) e importe demos suficientes pra gerar dados de mira/utility.
+  </p>
+
+  <div class="score-player-card box" *ngFor="let p of players">
+    <header class="score-player-header">
+      <h3>{{ p.name }}</h3>
+      <span class="tag" [ngClass]="scoreClass(p.avgOverallScore)">Nota geral: {{ p.avgOverallScore }}</span>
+      <span class="tag is-dark">{{ p.demosCount }} demo(s)</span>
+      <span class="tag" [ngClass]="scoreClass(p.avgAimScore)">Mira: {{ p.avgAimScore }}</span>
+      <span class="tag" [ngClass]="scoreClass(p.avgUtilityScore)">Utility: {{ p.avgUtilityScore }}</span>
+    </header>
+
+    <p class="stat-subtitle">Mira</p>
+    <div class="table-container">
+      <table class="table is-narrow is-fullwidth is-hoverable mini-table">
+        <thead>
+          <tr>
+            <th>Accuracy</th>
+            <th>Head Acc.</th>
+            <th>HS Kill %</th>
+            <th>First Bullet</th>
+            <th>Spray Acc.</th>
+            <th>Counter-Strafe</th>
+            <th>Crosshair Placement</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ p.aim.accuracy }}%</td>
+            <td>{{ p.aim.headAccuracy }}%</td>
+            <td>{{ p.aim.hsKillPct }}%</td>
+            <td>{{ p.aim.firstBulletAccuracy }}%</td>
+            <td>{{ p.aim.sprayAccuracy }}%</td>
+            <td>{{ p.aim.counterStrafePct }}%</td>
+            <td>{{ p.aim.avgCrosshairPlacementDeg !== null ? (p.aim.avgCrosshairPlacementDeg + 'º') : '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="stat-subtitle">Utility</p>
+    <div class="table-container">
+      <table class="table is-narrow is-fullwidth is-hoverable mini-table">
+        <thead>
+          <tr>
+            <th>Flashes</th>
+            <th>Smokes</th>
+            <th>Molotovs</th>
+            <th>HEs</th>
+            <th>Flash Assists</th>
+            <th>Enemies Flashed</th>
+            <th>Friends Flashed</th>
+            <th>Avg Blind</th>
+            <th>Avg HE Dmg</th>
+            <th>Avg HE Team Dmg</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ p.utility.flashesThrown }}</td>
+            <td>{{ p.utility.smokesThrown }}</td>
+            <td>{{ p.utility.molotovsThrown }}</td>
+            <td>{{ p.utility.heThrown }}</td>
+            <td>{{ p.utility.flashAssists }}</td>
+            <td>{{ p.utility.enemiesFlashedPct }}%</td>
+            <td>{{ p.utility.friendsFlashed }}</td>
+            <td>{{ p.utility.avgBlindTimeSec }}s</td>
+            <td>{{ p.utility.avgHeDamage }}</td>
+            <td>{{ p.utility.avgHeTeamDamage }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="stat-subtitle">Histórico ({{ p.history.length }} demo(s))</p>
+    <div class="table-container">
+      <table class="table is-narrow is-fullwidth is-hoverable mini-table">
+        <thead>
+          <tr>
+            <th>Demo</th>
+            <th>Adicionada em</th>
+            <th>Nota</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let h of p.history">
+            <td class="mono">{{ h.demoLabel }}</td>
+            <td class="text-muted">{{ h.addedAt | date: 'dd/MM/yyyy' }}</td>
+            <td><span class="tag" [ngClass]="scoreClass(h.overallScore)">{{ h.overallScore }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

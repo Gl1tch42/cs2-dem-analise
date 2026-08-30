@@ -93,6 +93,12 @@ export class SidebarComponent implements OnInit {
     return slot.demoCount === 0 && slot.name === this.defaultOpponentName(slot.id);
   }
 
+  winRatePct(entry: MapStat): number | null {
+    const decided = entry.wins + entry.losses;
+    if (decided === 0) return null;
+    return Math.round((entry.wins / decided) * 100);
+  }
+
   async reload() {
     this.loading = true;
     const [slots, mapStats] = await Promise.all([

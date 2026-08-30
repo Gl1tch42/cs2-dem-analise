@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.consolidateSlot = void 0;
+exports.consolidateSlot = exports.resolveDemoOutcome = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const BUY_TYPES = ['eco', 'force', 'semi', 'full', 'unknown'];
@@ -131,6 +131,31 @@ function resolveMySideForRound(round, myNames) {
         return null;
     return votes.ct >= votes.t ? 'ct' : 't';
 }
+// Determina vitória/derrota do nosso time numa demo contando, por rodada, de
+// que lado nosso roster estava (o lado pode trocar no intervalo) — não dá
+// pra usar summary.finalScore direto porque "team"/"opponent" ali reflete
+// só quem começou CT/T na rodada 1, sem relação com o roster marcado.
+function resolveDemoOutcome(summary, myTeamSteamIds) {
+    if (!myTeamSteamIds || myTeamSteamIds.length === 0)
+        return null;
+    const myIdSet = new Set(myTeamSteamIds);
+    const myNames = new Set(summary.playerAggregates.filter((p) => myIdSet.has(p.steamId)).map((p) => p.name));
+    let myWins = 0;
+    let oppWins = 0;
+    for (const round of summary.rounds) {
+        const mySide = resolveMySideForRound(round, myNames);
+        if (!mySide)
+            continue;
+        if (round.winner === mySide)
+            myWins++;
+        else
+            oppWins++;
+    }
+    if (myWins === oppWins)
+        return null;
+    return myWins > oppWins ? 'win' : 'loss';
+}
+exports.resolveDemoOutcome = resolveDemoOutcome;
 function consolidateSlot(slotFolder, demos) {
     const siteHitDistribution = {};
     const demosPendingRoster = [];

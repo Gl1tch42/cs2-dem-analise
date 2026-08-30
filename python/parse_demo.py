@@ -72,22 +72,50 @@ def area_from_place_name(place: Optional[str]) -> str:
         return "mid"
     return "unknown"
 
-def safe_parse_event(parser: DemoParser, name: str, **kwargs):
-    try:
-        df = parser.parse_event(name, **kwargs)
-        # demoparser2 retorna uma lista (geralmente vazia) em vez de DataFrame
-        # quando o evento nunca ocorre na demo inteira — normaliza pra None.
-        if not hasattr(df, "columns"):
-            return None
-        return df
-    except Exception as exc:
-        eprint(f"[parse_demo] aviso: evento '{name}' indisponível nesta demo ({exc})")
-        return None
+def safe_parse_event(parser: DemoParser, name: str, optional_other: list = None, **kwargs):
+    # `optional_other` são campos de "other=" que a gente quer se existirem, mas
+    # cujo nome exato/disponibilidade não é garantida em toda versão de demo —
+    # ao contrário dos campos em kwargs["other"], que são considerados obrigatórios
+    # (se faltarem, o evento inteiro é descartado, igual ao comportamento antigo).
+    optional_other = list(optional_other) if optional_other else []
+    base_other = list(kwargs.pop("other", []))
+    attempt_other = base_other + optional_other
+    while True:
+        call_kwargs = dict(kwargs)
+        if attempt_other:
+            call_kwargs["other"] = attempt_other
+        try:
+            df = parser.parse_event(name, **call_kwargs)
+            # demoparser2 retorna uma lista (geralmente vazia) em vez de DataFrame
+            # quando o evento nunca ocorre na demo inteira — normaliza pra None.
+            if not hasattr(df, "columns"):
+                return None
+            return df
+        except Exception as exc:
+            eprint(f"[parse_demo] aviso: evento '{name}' com other={attempt_other} falhou ({exc})")
+            dropped = False
+            for optional in optional_other:
+                if optional in attempt_other:
+                    attempt_other = [o for o in attempt_other if o != optional]
+                    dropped = True
+                    break
+            if not dropped:
+                if attempt_other:
+                    # ainda sobrou algo de base_other que falhou — tenta sem nada
+                    # de "other" antes de desistir de vez.
+                    attempt_other = []
+                    continue
+                eprint(f"[parse_demo] aviso: evento '{name}' indisponível nesta demo")
+                return None
 
 OPTIONAL_TICK_PROPS = [
     "last_place_name",
     "weapon_name",
     "yaw",
+    "pitch",
+    "Z",
+    "velocity_X",
+    "velocity_Y",
     "armor_value",
     "has_helmet",
     "kills_total",
@@ -218,20 +246,52 @@ def main():
         )
 
     death_df = safe_parse_event(parser, "player_death", other=["weapon", "headshot"])
-    hurt_df = safe_parse_event(parser, "player_hurt", other=["dmg_health"])
+    hurt_df = safe_parse_event(
+        parser, "player_hurt", other=["dmg_health"], optional_other=["hitgroup", "weapon"]
+    )
     plant_df = safe_parse_event(parser, "bomb_planted")
     defuse_df = safe_parse_event(parser, "bomb_defused")
     explode_df = safe_parse_event(parser, "bomb_exploded")
-    fire_df = safe_parse_event(parser, "weapon_fire")
+    fire_df = safe_parse_event(parser, "weapon_fire", optional_other=["weapon"])
     smoke_start_df = safe_parse_event(parser, "smokegrenade_detonate")
     smoke_end_df = safe_parse_event(parser, "smokegrenade_expired")
     fire_start_df = safe_parse_event(parser, "inferno_startburn")
     fire_end_df = safe_parse_event(parser, "inferno_expire")
     flash_df = safe_parse_event(parser, "flashbang_detonate")
     he_df = safe_parse_event(parser, "hegrenade_detonate")
-    blind_df = safe_parse_event(parser, "player_blind", other=["blind_duration"])
+    blind_df = safe_parse_event(
+        parser, "player_blind", other=["blind_duration"], optional_other=["attacker_steamid"]
+    )
     decoy_start_df = safe_parse_event(parser, "decoy_started")
     decoy_end_df = safe_parse_event(parser, "decoy_detonate")
+
+    has_hitgroup = hurt_df is not None and "hitgroup" in hurt_df.columns
+    has_hurt_weapon = hurt_df is not None and "weapon" in hurt_df.columns
+    has_fire_weapon = fire_df is not None and "weapon" in fire_df.columns
+    has_blind_attacker = blind_df is not None and "attacker_steamid" in blind_df.columns
+
+    NON_GUN_WEAPONS = {
+        "hegrenade", "flashbang", "smokegrenade", "molotov", "incgrenade",
+        "decoy", "knife", "knife_t", "bayonet", "taser", "c4", "world",
+    }
+
+    def is_gun_weapon(name) -> bool:
+        if name is None or str(name) == "nan":
+            return False
+        low = str(name).lower()
+        if low in NON_GUN_WEAPONS:
+            return False
+        if "knife" in low or "bayonet" in low:
+            return False
+        return True
+
+    def is_head_hitgroup(value) -> bool:
+        if value is None or str(value) == "nan":
+            return False
+        try:
+            return int(float(value)) == 1
+        except (ValueError, TypeError):
+            return str(value).lower() == "head"
 
     sample_ticks_set = set()
     for w in windows:
@@ -250,11 +310,15 @@ def main():
         [
             "X",
             "Y",
+            "Z",
             "team_num",
             "current_equip_value",
             "last_place_name",
             "health",
             "yaw",
+            "pitch",
+            "velocity_X",
+            "velocity_Y",
             "weapon_name",
             "armor_value",
             "has_helmet",
@@ -269,6 +333,9 @@ def main():
 
     has_place_name = "last_place_name" in ticks_df.columns
     has_yaw = "yaw" in ticks_df.columns
+    has_pitch = "pitch" in ticks_df.columns
+    has_z = "Z" in ticks_df.columns
+    has_velocity = "velocity_X" in ticks_df.columns and "velocity_Y" in ticks_df.columns
     has_weapon_name = "weapon_name" in ticks_df.columns
     has_armor = "armor_value" in ticks_df.columns
     has_helmet_col = "has_helmet" in ticks_df.columns
@@ -298,6 +365,7 @@ def main():
     player_names: dict = {}
     player_area_counts: dict = {}
     player_kills: dict = {}
+    player_hs_kills: dict = {}
     player_deaths: dict = {}
     player_assists: dict = {}
     player_dmg: dict = {}
@@ -306,11 +374,71 @@ def main():
     player_clutches_won: dict = {}
     player_clutches_lost: dict = {}
 
+    # --- Aim ---
+    player_shots_fired: dict = {}
+    player_shots_hit: dict = {}
+    player_head_hits: dict = {}
+    player_first_bullet_shots: dict = {}
+    player_first_bullet_hits: dict = {}
+    player_spray_shots: dict = {}
+    player_spray_hits: dict = {}
+    player_counter_strafe_shots: dict = {}
+    player_counter_strafe_total: dict = {}
+    player_crosshair_deg_sum: dict = {}
+    player_crosshair_deg_count: dict = {}
+
+    # --- Utility ---
+    player_flashes_thrown: dict = {}
+    player_smokes_thrown: dict = {}
+    player_molotovs_thrown: dict = {}
+    player_he_thrown: dict = {}
+    player_flash_assists: dict = {}
+    player_enemies_flashed: dict = {}
+    player_friends_flashed: dict = {}
+    player_blinds_caused: dict = {}
+    player_blind_duration_sum: dict = {}
+    player_he_damage_enemy: dict = {}
+    player_he_damage_team: dict = {}
+
     def bump(d: dict, key, amount=1):
         d[key] = d.get(key, 0) + amount
 
     def avg(vals):
         return sum(vals) / len(vals) if vals else 0.0
+
+    FIRST_BULLET_GAP_TICKS = int(1.0 * TICK_RATE)
+    COUNTER_STRAFE_SPEED_THRESHOLD = 15.0
+    FLASH_ASSIST_WINDOW_SECONDS = 5.0
+    HIT_CORRELATION_WINDOW_TICKS = int(0.25 * TICK_RATE)
+    EYE_HEIGHT_OFFSET = 64.0
+
+    def angle_to_target_deg(shooter_row, target_row) -> Optional[float]:
+        if not (has_pitch and has_yaw and has_z):
+            return None
+        pitch = getattr(shooter_row, "pitch", None)
+        yaw = getattr(shooter_row, "yaw", None)
+        sx, sy, sz = getattr(shooter_row, "X", None), getattr(shooter_row, "Y", None), getattr(shooter_row, "Z", None)
+        tx, ty, tz = getattr(target_row, "X", None), getattr(target_row, "Y", None), getattr(target_row, "Z", None)
+        vals = [pitch, yaw, sx, sy, sz, tx, ty, tz]
+        if any(v is None or str(v) == "nan" for v in vals):
+            return None
+        import math
+        pitch_rad = math.radians(float(pitch))
+        yaw_rad = math.radians(float(yaw))
+        aim_x = math.cos(pitch_rad) * math.cos(yaw_rad)
+        aim_y = math.cos(pitch_rad) * math.sin(yaw_rad)
+        aim_z = -math.sin(pitch_rad)
+        eye_z = float(sz) + EYE_HEIGHT_OFFSET
+        target_eye_z = float(tz) + EYE_HEIGHT_OFFSET
+        dx = float(tx) - float(sx)
+        dy = float(ty) - float(sy)
+        dz = target_eye_z - eye_z
+        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if dist <= 0:
+            return None
+        dot = (aim_x * dx + aim_y * dy + aim_z * dz) / dist
+        dot = max(-1.0, min(1.0, dot))
+        return math.degrees(math.acos(dot))
 
     def percentile(sorted_vals: list, pct: float) -> float:
         if not sorted_vals:
@@ -483,6 +611,8 @@ def main():
                 assister_id = getattr(d, "assister_steamid", None)
                 if attacker_id is not None and str(attacker_id) != "nan":
                     bump(player_kills, int(attacker_id))
+                    if bool(getattr(d, "headshot", False)):
+                        bump(player_hs_kills, int(attacker_id))
                 if user_id is not None and str(user_id) != "nan":
                     bump(player_deaths, int(user_id))
                 if assister_id is not None and str(assister_id) != "nan":
@@ -494,6 +624,142 @@ def main():
                 dmg = getattr(h, "dmg_health", 0) or 0
                 if attacker_id is not None and str(attacker_id) != "nan":
                     bump(player_dmg, int(attacker_id), float(dmg))
+
+        # --- Aim: precisão, first bullet / spray, counter-strafe, crosshair placement ---
+        # Correlaciona cada `weapon_fire` (só armas de fogo) com o `player_hurt` não
+        # usado mais próximo (mesmo atacador, poucos ticks depois) pra saber se aquele
+        # tiro específico acertou — aproximação razoável já que hit-scan registra dano
+        # quase no mesmo tick do disparo, e cada `player_hurt` já vem agregado por
+        # disparo (mesmo pra shotgun com múltiplos pellets).
+        if round_shots is not None and len(round_shots) > 0:
+            shots_by_player: dict = {}
+            for s in round_shots.itertuples():
+                shooter_id = getattr(s, "user_steamid", None)
+                if shooter_id is None or str(shooter_id) == "nan":
+                    continue
+                shooter_id = int(shooter_id)
+                if shooter_id not in side_map:
+                    continue
+                shot_tick = int(s.tick)
+                weapon = getattr(s, "weapon", None) if has_fire_weapon else None
+                if weapon is None or str(weapon) == "nan":
+                    if has_weapon_name:
+                        srow = rows_at(shot_tick)
+                        srow = srow[srow["steamid"] == shooter_id]
+                        if len(srow) > 0:
+                            weapon = srow.iloc[0].get("weapon_name")
+                if not is_gun_weapon(weapon):
+                    continue
+                shots_by_player.setdefault(shooter_id, []).append(shot_tick)
+
+            hits_by_attacker: dict = {}
+            if round_hurts is not None:
+                for h in round_hurts.itertuples():
+                    attacker_id = getattr(h, "attacker_steamid", None)
+                    if attacker_id is None or str(attacker_id) == "nan":
+                        continue
+                    attacker_id = int(attacker_id)
+                    weapon = getattr(h, "weapon", None) if has_hurt_weapon else None
+                    if has_hurt_weapon and not is_gun_weapon(weapon):
+                        continue
+                    hits_by_attacker.setdefault(attacker_id, []).append(
+                        {
+                            "tick": int(h.tick),
+                            "hitgroup": getattr(h, "hitgroup", None) if has_hitgroup else None,
+                            "used": False,
+                        }
+                    )
+
+            for shooter_id, ticks_list in shots_by_player.items():
+                ticks_list.sort()
+                shooter_side = side_map.get(shooter_id)
+                available_hits = sorted(hits_by_attacker.get(shooter_id, []), key=lambda hh: hh["tick"])
+                prev_tick = None
+                bump(player_shots_fired, shooter_id, len(ticks_list))
+                for shot_tick in ticks_list:
+                    is_first_bullet = prev_tick is None or (shot_tick - prev_tick) > FIRST_BULLET_GAP_TICKS
+                    prev_tick = shot_tick
+
+                    matched_hit = None
+                    for hit in available_hits:
+                        if hit["used"]:
+                            continue
+                        if 0 <= hit["tick"] - shot_tick <= HIT_CORRELATION_WINDOW_TICKS:
+                            matched_hit = hit
+                            break
+                    hit_landed = matched_hit is not None
+                    if matched_hit is not None:
+                        matched_hit["used"] = True
+                        bump(player_shots_hit, shooter_id)
+                        if has_hitgroup and is_head_hitgroup(matched_hit["hitgroup"]):
+                            bump(player_head_hits, shooter_id)
+
+                    if is_first_bullet:
+                        bump(player_first_bullet_shots, shooter_id)
+                        if hit_landed:
+                            bump(player_first_bullet_hits, shooter_id)
+                    else:
+                        bump(player_spray_shots, shooter_id)
+                        if hit_landed:
+                            bump(player_spray_hits, shooter_id)
+
+                    if has_velocity:
+                        srow = rows_at(shot_tick)
+                        srow = srow[srow["steamid"] == shooter_id]
+                        if len(srow) > 0:
+                            vx = srow.iloc[0].get("velocity_X")
+                            vy = srow.iloc[0].get("velocity_Y")
+                            if vx is not None and vy is not None and str(vx) != "nan" and str(vy) != "nan":
+                                speed = (float(vx) ** 2 + float(vy) ** 2) ** 0.5
+                                bump(player_counter_strafe_total, shooter_id)
+                                if speed <= COUNTER_STRAFE_SPEED_THRESHOLD:
+                                    bump(player_counter_strafe_shots, shooter_id)
+
+                    if has_pitch and has_yaw and has_z and shooter_side is not None:
+                        tick_rows = rows_at(shot_tick)
+                        shooter_rows = tick_rows[tick_rows["steamid"] == shooter_id]
+                        if len(shooter_rows) > 0:
+                            shooter_row = shooter_rows.iloc[0]
+                            enemy_side = "t" if shooter_side == "ct" else "ct"
+                            best_deg = None
+                            for er in tick_rows.itertuples():
+                                enemy_id = int(er.steamid)
+                                if side_map.get(enemy_id) != enemy_side:
+                                    continue
+                                health_val = getattr(er, "health", None)
+                                if health_val is None or str(health_val) == "nan" or float(health_val) <= 0:
+                                    continue
+                                deg = angle_to_target_deg(shooter_row, er)
+                                if deg is not None and (best_deg is None or deg < best_deg):
+                                    best_deg = deg
+                            if best_deg is not None:
+                                player_crosshair_deg_sum[shooter_id] = (
+                                    player_crosshair_deg_sum.get(shooter_id, 0.0) + best_deg
+                                )
+                                bump(player_crosshair_deg_count, shooter_id)
+
+        # --- Utility: dano de HE separado entre inimigo/aliado ---
+        if round_hurts is not None and has_hurt_weapon:
+            for h in round_hurts.itertuples():
+                weapon = getattr(h, "weapon", None)
+                if weapon is None or str(weapon).lower() != "hegrenade":
+                    continue
+                attacker_id = getattr(h, "attacker_steamid", None)
+                user_id = getattr(h, "user_steamid", None)
+                if attacker_id is None or str(attacker_id) == "nan":
+                    continue
+                if user_id is None or str(user_id) == "nan":
+                    continue
+                attacker_id = int(attacker_id)
+                attacker_side = side_map.get(attacker_id)
+                victim_side = side_map.get(int(user_id))
+                if attacker_side is None or victim_side is None:
+                    continue
+                dmg = getattr(h, "dmg_health", 0) or 0
+                if victim_side == attacker_side:
+                    bump(player_he_damage_team, attacker_id, float(dmg))
+                else:
+                    bump(player_he_damage_enemy, attacker_id, float(dmg))
 
         if round_deaths is not None and len(round_deaths) > 0:
             alive = {"ct": set(), "t": set()}
@@ -559,6 +825,75 @@ def main():
                 "he": he_counts["t"],
             },
         }
+
+        def count_utility_by_player(df) -> dict:
+            counts: dict = {}
+            if df is not None and "tick" in df.columns:
+                round_df = df[(df["tick"] > freeze_tick) & (df["tick"] <= end_tick)]
+                for row in round_df.itertuples():
+                    thrower_id = getattr(row, "user_steamid", None)
+                    if thrower_id is None or str(thrower_id) == "nan":
+                        continue
+                    thrower_id = int(thrower_id)
+                    if thrower_id not in side_map:
+                        continue
+                    counts[thrower_id] = counts.get(thrower_id, 0) + 1
+            return counts
+
+        for thrower_id, n in count_utility_by_player(flash_df).items():
+            bump(player_flashes_thrown, thrower_id, n)
+        for thrower_id, n in count_utility_by_player(smoke_start_df).items():
+            bump(player_smokes_thrown, thrower_id, n)
+        for thrower_id, n in count_utility_by_player(fire_start_df).items():
+            bump(player_molotovs_thrown, thrower_id, n)
+        for thrower_id, n in count_utility_by_player(he_df).items():
+            bump(player_he_thrown, thrower_id, n)
+
+        # Flash assists / cegadas em aliado vs inimigo — só dá pra calcular se o
+        # evento player_blind desta demo expôs quem jogou a flash (attacker_steamid);
+        # quando não expõe, essas métricas ficam zeradas (ver has_blind_attacker).
+        if blind_df is not None and has_blind_attacker and "tick" in blind_df.columns:
+            round_blinds_all = blind_df[(blind_df["tick"] > freeze_tick) & (blind_df["tick"] <= end_tick)]
+            for b in round_blinds_all.itertuples():
+                victim_id = getattr(b, "user_steamid", None)
+                thrower_id = getattr(b, "attacker_steamid", None)
+                duration = getattr(b, "blind_duration", None)
+                if victim_id is None or thrower_id is None:
+                    continue
+                if str(victim_id) == "nan" or str(thrower_id) == "nan":
+                    continue
+                victim_id = int(victim_id)
+                thrower_id = int(thrower_id)
+                if thrower_id not in side_map:
+                    continue
+                has_duration = duration is not None and str(duration) != "nan"
+                if has_duration:
+                    bump(player_blind_duration_sum, thrower_id, float(duration))
+                    bump(player_blinds_caused, thrower_id)
+                if victim_id == thrower_id:
+                    continue
+                victim_side = side_map.get(victim_id)
+                thrower_side = side_map.get(thrower_id)
+                if victim_side is None or thrower_side is None:
+                    continue
+                if victim_side != thrower_side:
+                    bump(player_enemies_flashed, thrower_id)
+                    blind_tick = int(b.tick)
+                    window_seconds = min(float(duration), FLASH_ASSIST_WINDOW_SECONDS) if has_duration else FLASH_ASSIST_WINDOW_SECONDS
+                    window_ticks = int(window_seconds * TICK_RATE)
+                    if round_deaths is not None and "user_steamid" in round_deaths.columns:
+                        death_match = round_deaths[
+                            (round_deaths["user_steamid"] == victim_id)
+                            & (round_deaths["tick"] >= blind_tick)
+                            & (round_deaths["tick"] <= blind_tick + window_ticks)
+                        ]
+                        if len(death_match) > 0:
+                            killer_id = death_match.iloc[0].get("attacker_steamid")
+                            if killer_id is not None and str(killer_id) != "nan":
+                                if side_map.get(int(killer_id)) == thrower_side:
+                                    bump(player_flash_assists, thrower_id)
+                else:
+                    bump(player_friends_flashed, thrower_id)
 
         site_hit = "unknown"
         bomb_plant_out = None
@@ -856,6 +1191,9 @@ def main():
             }
         )
 
+    def pct(numer: float, denom: float) -> float:
+        return round(100.0 * numer / denom, 1) if denom else 0.0
+
     rounds_played = len(rounds_out)
     players_out = []
     all_ids = set(player_side_counts.keys()) | set(player_names.keys())
@@ -871,6 +1209,51 @@ def main():
         favorite_areas = sorted(
             [{"area": a, "count": c} for a, c in areas.items()], key=lambda e: e["count"], reverse=True
         )
+
+        shots_fired = player_shots_fired.get(steamid, 0)
+        shots_hit = player_shots_hit.get(steamid, 0)
+        head_hits = player_head_hits.get(steamid, 0)
+        first_bullet_shots = player_first_bullet_shots.get(steamid, 0)
+        spray_shots = player_spray_shots.get(steamid, 0)
+        counter_strafe_total = player_counter_strafe_total.get(steamid, 0)
+        crosshair_count = player_crosshair_deg_count.get(steamid, 0)
+        aim = {
+            "shotsFired": shots_fired,
+            "shotsHit": shots_hit,
+            "accuracy": pct(shots_hit, shots_fired),
+            "headHits": head_hits,
+            "headAccuracy": pct(head_hits, shots_hit),
+            "hsKills": player_hs_kills.get(steamid, 0),
+            "hsKillPct": pct(player_hs_kills.get(steamid, 0), kills),
+            "firstBulletShots": first_bullet_shots,
+            "firstBulletAccuracy": pct(player_first_bullet_hits.get(steamid, 0), first_bullet_shots),
+            "sprayShots": spray_shots,
+            "sprayAccuracy": pct(player_spray_hits.get(steamid, 0), spray_shots),
+            "counterStrafePct": pct(player_counter_strafe_shots.get(steamid, 0), counter_strafe_total),
+            "avgCrosshairPlacementDeg": (
+                round(player_crosshair_deg_sum.get(steamid, 0.0) / crosshair_count, 2) if crosshair_count else None
+            ),
+        }
+
+        flashes_thrown = player_flashes_thrown.get(steamid, 0)
+        he_thrown = player_he_thrown.get(steamid, 0)
+        blinds_caused = player_blinds_caused.get(steamid, 0)
+        utility = {
+            "flashesThrown": flashes_thrown,
+            "smokesThrown": player_smokes_thrown.get(steamid, 0),
+            "molotovsThrown": player_molotovs_thrown.get(steamid, 0),
+            "heThrown": he_thrown,
+            "flashAssists": player_flash_assists.get(steamid, 0),
+            "enemiesFlashed": player_enemies_flashed.get(steamid, 0),
+            "enemiesFlashedPct": pct(player_enemies_flashed.get(steamid, 0), flashes_thrown),
+            "friendsFlashed": player_friends_flashed.get(steamid, 0),
+            "avgBlindTimeSec": (
+                round(player_blind_duration_sum.get(steamid, 0.0) / blinds_caused, 1) if blinds_caused else 0.0
+            ),
+            "avgHeDamage": round(player_he_damage_enemy.get(steamid, 0.0) / he_thrown, 1) if he_thrown else 0.0,
+            "avgHeTeamDamage": round(player_he_damage_team.get(steamid, 0.0) / he_thrown, 1) if he_thrown else 0.0,
+        }
+
         players_out.append(
             {
                 "steamId": str(steamid),
@@ -885,6 +1268,8 @@ def main():
                 "clutchesWon": player_clutches_won.get(steamid, 0),
                 "clutchesLost": player_clutches_lost.get(steamid, 0),
                 "favoriteAreas": favorite_areas,
+                "aim": aim,
+                "utility": utility,
             }
         )
 

@@ -7,14 +7,30 @@ import { NotebookComponent } from '../notebook/notebook.component';
 import { Map2dComponent } from '../map2d/map2d.component';
 import { HeatmapComponent } from '../heatmap/heatmap.component';
 import { TeamStatsComponent } from './team-stats.component';
-import { SlotDetail, AnalysisResult, DemoRecord, DemoSummary, PlayerMovementProfile } from '../../core/models/slot.model';
+import { ConsolidatedScoreComponent } from './consolidated-score.component';
+import {
+  SlotDetail,
+  AnalysisResult,
+  DemoRecord,
+  DemoSummary,
+  PlayerMovementProfile,
+  PlayerScoreAggregate,
+} from '../../core/models/slot.model';
 
-type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai';
+type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai' | 'consolidado';
 
 @Component({
   selector: 'app-slot-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, NotebookComponent, Map2dComponent, HeatmapComponent, TeamStatsComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    NotebookComponent,
+    Map2dComponent,
+    HeatmapComponent,
+    TeamStatsComponent,
+    ConsolidatedScoreComponent,
+  ],
   templateUrl: './slot-detail.component.html',
   styleUrl: './slot-detail.component.scss',
 })
@@ -43,6 +59,10 @@ export class SlotDetailComponent implements OnInit {
   focusSelected = new Set<string>();
   lastFocusLabel = '';
 
+  playerScores: PlayerScoreAggregate[] = [];
+  playerScoresLoading = false;
+  playerScoresError = '';
+
   rosterOpenFor: string | null = null;
   rosterSummary?: DemoSummary;
   rosterLoading = false;
@@ -66,6 +86,7 @@ export class SlotDetailComponent implements OnInit {
     this.focusMode = 'team';
     this.focusRoster = [];
     this.focusSelected = new Set();
+    this.playerScores = [];
     this.slot = await this.electron.api.slots.get(id);
     this.loading = false;
   }
@@ -74,6 +95,22 @@ export class SlotDetailComponent implements OnInit {
     this.activeTab = tab;
     if (tab === 'ai' && this.slot && this.slot.demos.length > 0 && this.focusRoster.length === 0) {
       this.loadFocusRoster();
+    }
+    if (tab === 'consolidado' && this.slot && this.slot.demos.length > 0 && this.playerScores.length === 0) {
+      this.loadPlayerScores();
+    }
+  }
+
+  async loadPlayerScores() {
+    if (!this.slot) return;
+    this.playerScoresLoading = true;
+    this.playerScoresError = '';
+    try {
+      this.playerScores = await this.electron.api.ai.getPlayerScores(this.slot.id);
+    } catch (err) {
+      this.playerScoresError = (err as Error).message ?? 'Falha ao calcular notas consolidadas.';
+    } finally {
+      this.playerScoresLoading = false;
     }
   }
 

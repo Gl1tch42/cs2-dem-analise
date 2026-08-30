@@ -80,11 +80,11 @@
                 *ngFor="let l of loadoutBySide(side)"
                 [class.side-ct]="side === 'ct'"
                 [class.side-t]="side === 't'"
-                [class.is-dead]="deathOf(l.player)"
+                [class.is-dead]="liveDeath(l.player)"
               >
                 <span class="sb-stripe"></span>
                 <div class="sb-main">
-                  <span class="sb-hp mono">{{ l.health ?? '—' }}</span>
+                  <span class="sb-hp mono">{{ liveHealth(l.player) ?? l.health ?? '—' }}</span>
                   <span class="sb-armor-icon" [class.filled]="l.armor && l.armor > 0" [class.helmet]="l.hasHelmet" [title]="l.armor ? (l.armor + ' de colete' + (l.hasHelmet ? ' + capacete' : '')) : 'sem colete'">
                     <svg viewBox="0 0 24 24" width="13" height="13">
                       <path d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" />
@@ -99,7 +99,7 @@
                   >
                   <span class="sb-weapon text-muted">{{ formatWeapon(l.weapon) }}</span>
                   <span class="sb-money mono">${{ l.equipValue }}</span>
-                  <span class="sb-dead" *ngIf="deathOf(l.player) as death" [title]="death.by ? ('morto por ' + death.by) : ''">✕</span>
+                  <span class="sb-dead" *ngIf="liveDeath(l.player) as death" [title]="death.by ? ('morto por ' + death.by) : ''">✕</span>
                 </div>
                 <div class="sb-sub" *ngIf="l.kills !== undefined">
                   <span class="mono">K {{ l.kills }}</span>
@@ -110,29 +110,44 @@
               </div>
             </ng-container>
           </div>
+        </div>
 
-          <div class="player-timeline" *ngIf="selectedTimelinePlayer">
-            <div class="player-timeline-header">
-              <span class="player-timeline-title">Timeline · {{ selectedTimelinePlayer }}</span>
-              <button class="button is-small" (click)="closeTimeline()">✕</button>
-            </div>
-            <p class="text-muted no-events" *ngIf="timelineEvents.length === 0">
-              Nenhuma morte ou uso de granada registrado pra este jogador.
-            </p>
-            <div class="timeline-list">
+        <div class="player-timeline" *ngIf="selectedTimelinePlayer">
+          <div class="player-timeline-header">
+            <span class="player-timeline-title">Timeline · {{ selectedTimelinePlayer }} · round {{ currentRound?.roundNumber }}</span>
+            <button class="button is-small" (click)="closeTimeline()">✕</button>
+          </div>
+          <p class="text-muted no-events" *ngIf="timelineEvents.length === 0">
+            Nenhuma morte, abate ou uso de utility registrado pra este jogador neste round.
+          </p>
+          <ng-container *ngIf="timelineEvents.length > 0">
+            <div class="timeline-track">
+              <div class="timeline-track-line"></div>
               <button
-                class="timeline-item"
+                class="timeline-marker"
                 *ngFor="let ev of timelineEvents"
                 [class]="'timeline-' + ev.type"
+                [style.left.%]="timelineMarkerLeft(ev)"
+                [title]="formatTime(ev.t) + ' · ' + ev.detail"
                 (click)="jumpToTimelineEvent(ev)"
+                (mouseenter)="hoveredTimelineEvent = ev"
+                (mouseleave)="hoveredTimelineEvent = null"
+                (focus)="hoveredTimelineEvent = ev"
+                (blur)="hoveredTimelineEvent = null"
               >
-                <span class="timeline-round">R{{ ev.roundNumber }}</span>
-                <span class="timeline-icon"></span>
-                <span class="timeline-detail">{{ ev.detail }}</span>
-                <span class="timeline-time mono">{{ formatTime(ev.t) }}</span>
+                <span class="timeline-marker-dot"></span>
               </button>
             </div>
-          </div>
+            <div class="timeline-detail-line">
+              <ng-container *ngIf="hoveredTimelineEvent as ev; else timelineHint">
+                <span class="timeline-detail-time mono">{{ formatTime(ev.t) }}</span>
+                <span class="timeline-detail-text">{{ ev.detail }}</span>
+              </ng-container>
+              <ng-template #timelineHint>
+                <span class="text-muted">passe o mouse ou clique em um marcador pra ver o detalhe e pular pro momento</span>
+              </ng-template>
+            </div>
+          </ng-container>
         </div>
 
         <div class="playback-bar">
@@ -164,6 +179,30 @@
               {{ s }}x
             </button>
           </div>
+          <button
+            class="button is-small notes-toggle"
+            [class.is-active]="notesOpen"
+            (click)="toggleNotes()"
+            title="Anotar enquanto o replay roda — vai direto pro Notebook deste slot"
+          >
+            📝 Anotar
+          </button>
+        </div>
+
+        <div class="replay-notes" *ngIf="notesOpen">
+          <div class="replay-notes-toolbar">
+            <button class="button is-small is-primary" [disabled]="!currentRound" (click)="insertMoment()">
+              📍 Marcar momento · R{{ currentRound?.roundNumber }} · {{ formatTime(currentTime) }}
+            </button>
+            <span class="text-muted replay-notes-hint">
+              Este é o Notebook do slot, o mesmo da aba Notebook — o que você escrever aqui já é salvo lá.
+            </span>
+          </div>
+          <app-notebook
+            [slotId]="slotId"
+            [initialContent]="notebookContent"
+            (contentSaved)="onEmbeddedNotebookSaved($event)"
+          ></app-notebook>
         </div>
 
         <div class="legend">

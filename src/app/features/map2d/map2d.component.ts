@@ -1,9 +1,10 @@
-import { Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElectronService } from '../../core/services/electron.service';
 import { DemoRecord, DemoSummary, KeyPosition, RoundBlind, RoundDeath, RoundSummary } from '../../core/models/slot.model';
 import { RADAR_CALIBRATION, RADAR_REFERENCE_SIZE, RadarCalibration } from './radar-calibration';
+import { NotebookComponent } from '../notebook/notebook.component';
 
 interface PlayerFrame {
   name: string;
@@ -18,11 +19,10 @@ interface PlayerFrame {
 
 type RadarStatus = 'idle' | 'loaded' | 'missing' | 'unsupported' | 'extracting';
 
-type TimelineEventType = 'death' | 'flash' | 'smoke' | 'fire' | 'decoy' | 'he';
+type TimelineEventType = 'death' | 'kill' | 'flash' | 'smoke' | 'fire' | 'decoy' | 'he';
 
 interface TimelineEvent {
   type: TimelineEventType;
-  roundNumber: number;
   t: number;
   detail: string;
 }
@@ -40,7 +40,13 @@ const SMOKE_RADIUS = 144;
 const FIRE_RADIUS = 120;
 const FLASH_PULSE_DURATION = 0.5;
 const HE_PULSE_DURATION = 0.6;
-const HE_COLOR = '255,107,74';
+const HE_COLOR = '255,30,30';
+const HE_FUSE_SECONDS = 2.0;
+const FLASH_FUSE_SECONDS = 1.5;
+const SMOKE_FUSE_SECONDS = 2.0;
+const FIRE_FUSE_SECONDS = 1.5;
+const DECOY_FUSE_SECONDS = 2.0;
+const GRENADE_TRAIL_MATCH_WINDOW = 5.0;
 const BLIND_RING_RADIUS = 12;
 
 const C4_FUSE_SECONDS = 40;
@@ -78,15 +84,18 @@ function blendColorWithHealth(hexColor: string, health: number | undefined): str
 @Component({
   selector: 'app-map2d',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, NotebookComponent],
   templateUrl: './map2d.component.html',
   styleUrl: './map2d.component.scss',
 })
 export class Map2dComponent implements OnChanges, OnDestroy {
   @Input({ required: true }) slotId!: string;
   @Input() demos: DemoRecord[] = [];
+  @Input() notebookContent = '';
+  @Output() notebookContentChanged = new EventEmitter<string>();
 
   @ViewChild('canvas') canvasRef?: ElementRef<HTMLCanvasElement>;
+  @ViewChild(NotebookComponent) notebookCmp?: NotebookComponent;
 
   readonly speedOptions = [0.5, 1, 2, 4];
   readonly sides: ('ct' | 't')[] = ['ct', 't'];
@@ -106,9 +115,13 @@ export class Map2dComponent implements OnChanges, OnDestroy {
   extractError = '';
 
   selectedTimelinePlayer: string | null = null;
+  hoveredTimelineEvent: TimelineEvent | null = null;
+
+  notesOpen = false;
 
   private rafHandle?: number;
   private lastTimestamp = 0;
+  private frameByPlayer = new Map<string, PlayerFrame>();
   private bounds = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
   private calibration?: RadarCalibration;
   private radarImageEl?: HTMLImageElement;
@@ -253,6 +266,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
   private setupRound() {
     this.stopPlayback();
     this.currentTime = 0;
+    this.hoveredTimelineEvent = null;
     const positions = this.currentRound?.keyPositions ?? [];
     this.maxTime = positions.length > 0 ? Math.max(...positions.map((p) => p.t)) : 0;
     this.computeBounds(positions);
@@ -330,6 +344,25 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     return `${t.toFixed(1)}s`;
   }
 
+  toggleNotes() {
+    this.notesOpen = !this.notesOpen;
+  }
+
+  onEmbeddedNotebookSaved(content: string) {
+    this.notebookContentChanged.emit(content);
+  }
+
+  /** Insere "[mapa · demo · R7 · 12.3s]" em negrito no fim do notebook real do slot
+   * (mesmo componente/arquivo da aba Notebook) e deixa o cursor pronto pra digitar
+   * a observação, sem sair da tela do replay. */
+  insertMoment() {
+    const round = this.currentRound;
+    if (!round || !this.notebookCmp) return;
+    const demoLabel = this.summary?.map ?? this.selectedDemoId;
+    const label = `[${demoLabel} · R${round.roundNumber} · ${this.formatTime(this.currentTime)}]`;
+    this.notebookCmp.insertMarker(label);
+  }
+
   formatWeapon(weapon: string | null | undefined): string {
     if (!weapon) return '—';
     return weapon
@@ -346,55 +379,79 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     return this.currentRound?.deaths?.find((d) => d.player === playerName);
   }
 
+  /** Só considera o jogador morto se a morte já aconteceu até o instante atual do timelapse. */
+  liveDeath(playerName: string): RoundDeath | undefined {
+    const death = this.deathOf(playerName);
+    if (!death || death.t > this.currentTime) return undefined;
+    return death;
+  }
+
+  /** Vida interpolada no instante atual do timelapse (mesma fonte usada pro marcador no mapa). */
+  liveHealth(playerName: string): number | undefined {
+    const frame = this.frameByPlayer.get(playerName);
+    if (!frame) return undefined;
+    if (frame.dead) return 0;
+    return frame.health !== undefined ? Math.round(frame.health) : undefined;
+  }
+
   killsThisRound(playerName: string): number {
-    return this.currentRound?.deaths?.filter((d) => d.by === playerName).length ?? 0;
+    return this.currentRound?.deaths?.filter((d) => d.by === playerName && d.t <= this.currentTime).length ?? 0;
   }
 
   selectPlayerTimeline(playerName: string) {
     this.selectedTimelinePlayer = this.selectedTimelinePlayer === playerName ? null : playerName;
+    this.hoveredTimelineEvent = null;
   }
 
   closeTimeline() {
     this.selectedTimelinePlayer = null;
+    this.hoveredTimelineEvent = null;
   }
 
   get timelineEvents(): TimelineEvent[] {
     const player = this.selectedTimelinePlayer;
-    if (!player || !this.summary) return [];
+    const round = this.currentRound;
+    if (!player || !round) return [];
     const events: TimelineEvent[] = [];
-    for (const round of this.summary.rounds) {
-      const death = round.deaths?.find((d) => d.player === player);
-      if (death) {
-        const weapon = this.formatWeapon(death.weapon);
-        const detail = death.by
-          ? `morto por ${death.by} (${weapon}${death.headshot ? ', HS' : ''})`
-          : `morto (${weapon})`;
-        events.push({ type: 'death', roundNumber: round.roundNumber, t: death.t, detail });
-      }
-      for (const f of round.flashes ?? []) {
-        if (f.player === player) events.push({ type: 'flash', roundNumber: round.roundNumber, t: f.t, detail: 'jogou flash' });
-      }
-      for (const s of round.smokes ?? []) {
-        if (s.player === player) events.push({ type: 'smoke', roundNumber: round.roundNumber, t: s.startT, detail: 'jogou fumaça' });
-      }
-      for (const fi of round.fires ?? []) {
-        if (fi.player === player) events.push({ type: 'fire', roundNumber: round.roundNumber, t: fi.startT, detail: 'jogou molotov' });
-      }
-      for (const d of round.decoys ?? []) {
-        if (d.player === player) events.push({ type: 'decoy', roundNumber: round.roundNumber, t: d.startT, detail: 'jogou decoy' });
-      }
-      for (const h of round.he ?? []) {
-        if (h.player === player) events.push({ type: 'he', roundNumber: round.roundNumber, t: h.t, detail: 'jogou HE' });
-      }
+
+    const death = round.deaths?.find((d) => d.player === player);
+    if (death) {
+      const weapon = this.formatWeapon(death.weapon);
+      const detail = death.by
+        ? `morto por ${death.by} (${weapon}${death.headshot ? ', HS' : ''})`
+        : `morto (${weapon})`;
+      events.push({ type: 'death', t: death.t, detail });
     }
-    return events;
+    for (const k of round.deaths ?? []) {
+      if (k.by !== player) continue;
+      const weapon = this.formatWeapon(k.weapon);
+      events.push({ type: 'kill', t: k.t, detail: `matou ${k.player} (${weapon}${k.headshot ? ', HS' : ''})` });
+    }
+    for (const f of round.flashes ?? []) {
+      if (f.player === player) events.push({ type: 'flash', t: f.t, detail: 'jogou flash' });
+    }
+    for (const s of round.smokes ?? []) {
+      if (s.player === player) events.push({ type: 'smoke', t: s.startT, detail: 'jogou fumaça' });
+    }
+    for (const fi of round.fires ?? []) {
+      if (fi.player === player) events.push({ type: 'fire', t: fi.startT, detail: 'jogou molotov' });
+    }
+    for (const dc of round.decoys ?? []) {
+      if (dc.player === player) events.push({ type: 'decoy', t: dc.startT, detail: 'jogou decoy' });
+    }
+    for (const h of round.he ?? []) {
+      if (h.player === player) events.push({ type: 'he', t: h.t, detail: 'jogou HE' });
+    }
+
+    return events.sort((a, b) => a.t - b.t);
+  }
+
+  timelineMarkerLeft(ev: TimelineEvent): number {
+    if (this.maxTime <= 0) return 0;
+    return Math.max(0, Math.min(100, (ev.t / this.maxTime) * 100));
   }
 
   jumpToTimelineEvent(ev: TimelineEvent) {
-    if (!this.summary) return;
-    const idx = this.summary.rounds.findIndex((r) => r.roundNumber === ev.roundNumber);
-    if (idx < 0) return;
-    this.setRound(idx);
     this.onScrub(ev.t);
   }
 
@@ -711,13 +768,86 @@ export class Map2dComponent implements OnChanges, OnDestroy {
       const r = 6 + progress * 40;
       const alpha = 1 - progress;
       const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
-      grad.addColorStop(0, `rgba(${HE_COLOR},${0.85 * alpha})`);
-      grad.addColorStop(0.6, `rgba(${HE_COLOR},${0.35 * alpha})`);
+      grad.addColorStop(0, `rgba(${HE_COLOR},${0.95 * alpha})`);
+      grad.addColorStop(0.6, `rgba(${HE_COLOR},${0.5 * alpha})`);
       grad.addColorStop(1, `rgba(${HE_COLOR},0)`);
       ctx.beginPath();
       ctx.fillStyle = grad;
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  private findGrenadeOrigin(
+    round: RoundSummary,
+    player: string,
+    detonateT: number,
+    fuseSeconds: number
+  ): { x: number; y: number; t: number } | undefined {
+    const targetT = detonateT - fuseSeconds;
+    let best: KeyPosition | undefined;
+    let bestDiff = Infinity;
+    for (const kp of round.keyPositions ?? []) {
+      if (kp.player !== player || kp.t > detonateT) continue;
+      const diff = Math.abs(kp.t - targetT);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = kp;
+      }
+    }
+    if (!best || bestDiff > GRENADE_TRAIL_MATCH_WINDOW) return undefined;
+    return { x: best.x, y: best.y, t: best.t };
+  }
+
+  private drawGrenadeTrail(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    round: RoundSummary,
+    player: string | undefined,
+    targetX: number,
+    targetY: number,
+    detonateT: number,
+    fuseSeconds: number
+  ) {
+    if (!player) return;
+    const t = this.currentTime;
+    if (t > detonateT) return;
+    const origin = this.findGrenadeOrigin(round, player, detonateT, fuseSeconds);
+    if (!origin || t < origin.t) return;
+
+    const { px: fromX, py: fromY } = this.toCanvasXY(origin.x, origin.y, width, height);
+    const { px: toX, py: toY } = this.toCanvasXY(targetX, targetY, width, height);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawGrenadeTrails(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    const round = this.currentRound;
+    if (!round) return;
+
+    for (const h of round.he ?? []) {
+      this.drawGrenadeTrail(ctx, width, height, round, h.player, h.x, h.y, h.t, HE_FUSE_SECONDS);
+    }
+    for (const f of round.flashes ?? []) {
+      this.drawGrenadeTrail(ctx, width, height, round, f.player, f.x, f.y, f.t, FLASH_FUSE_SECONDS);
+    }
+    for (const s of round.smokes ?? []) {
+      this.drawGrenadeTrail(ctx, width, height, round, s.player, s.x, s.y, s.startT, SMOKE_FUSE_SECONDS);
+    }
+    for (const fr of round.fires ?? []) {
+      this.drawGrenadeTrail(ctx, width, height, round, fr.player, fr.x, fr.y, fr.startT, FIRE_FUSE_SECONDS);
+    }
+    for (const d of round.decoys ?? []) {
+      this.drawGrenadeTrail(ctx, width, height, round, d.player, d.x, d.y, d.startT, DECOY_FUSE_SECONDS);
     }
   }
 
@@ -786,7 +916,10 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     this.drawBackground(ctx, width, height);
     this.drawGrenadeEffects(ctx, width, height);
 
-    for (const frame of this.computeFrames()) {
+    const frames = this.computeFrames();
+    this.frameByPlayer = new Map(frames.map((f) => [f.name, f]));
+
+    for (const frame of frames) {
       const { px, py } = this.toCanvasXY(frame.x, frame.y, width, height);
 
       if (frame.dead) {
@@ -807,6 +940,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     }
 
     this.drawFlashPulses(ctx, width, height);
+    this.drawGrenadeTrails(ctx, width, height);
     this.drawHePulses(ctx, width, height);
     this.drawBomb(ctx, width, height);
   }

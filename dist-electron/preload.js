@@ -33,6 +33,7 @@ const api = {
         clearApiKey: (providerId) => electron_1.ipcRenderer.invoke('ai:clearApiKey', providerId),
         analyzeSlot: (slotId, providerId, focusSteamIds) => electron_1.ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId, focusSteamIds),
         getSlotStats: (slotId) => electron_1.ipcRenderer.invoke('ai:getSlotStats', slotId),
+        getPlayerScores: (slotId) => electron_1.ipcRenderer.invoke('ai:getPlayerScores', slotId),
     },
     app: {
         getVersion: () => electron_1.ipcRenderer.invoke('app:getVersion'),

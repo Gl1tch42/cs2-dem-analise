@@ -177,6 +177,36 @@ export interface RoundSummary {
   outcomeNote?: string;
 }
 
+export interface PlayerAimStats {
+  shotsFired: number;
+  shotsHit: number;
+  accuracy: number;
+  headHits: number;
+  headAccuracy: number;
+  hsKills: number;
+  hsKillPct: number;
+  firstBulletShots: number;
+  firstBulletAccuracy: number;
+  sprayShots: number;
+  sprayAccuracy: number;
+  counterStrafePct: number;
+  avgCrosshairPlacementDeg: number | null;
+}
+
+export interface PlayerUtilityStats {
+  flashesThrown: number;
+  smokesThrown: number;
+  molotovsThrown: number;
+  heThrown: number;
+  flashAssists: number;
+  enemiesFlashed: number;
+  enemiesFlashedPct: number;
+  friendsFlashed: number;
+  avgBlindTimeSec: number;
+  avgHeDamage: number;
+  avgHeTeamDamage: number;
+}
+
 export interface PlayerAggregate {
   steamId: string;
   name: string;
@@ -191,6 +221,8 @@ export interface PlayerAggregate {
   clutchesWon: number;
   clutchesLost: number;
   favoriteAreas: { area: string; count: number }[];
+  aim: PlayerAimStats;
+  utility: PlayerUtilityStats;
 }
 
 export interface DemoCalibration {
@@ -258,9 +290,32 @@ export interface AnalysisResult {
   analysis: string;
 }
 
+export interface PlayerScoreHistoryEntry {
+  demoId: string;
+  demoLabel: string;
+  addedAt: string;
+  aimScore: number;
+  utilityScore: number;
+  overallScore: number;
+}
+
+export interface PlayerScoreAggregate {
+  steamId: string;
+  name: string;
+  demosCount: number;
+  avgAimScore: number;
+  avgUtilityScore: number;
+  avgOverallScore: number;
+  aim: PlayerAimStats;
+  utility: PlayerUtilityStats;
+  history: PlayerScoreHistoryEntry[];
+}
+
 export interface MapStat {
   map: string;
   demoCount: number;
+  wins: number;
+  losses: number;
 }
 
 export const MAX_DEMOS_PER_SLOT = 100;

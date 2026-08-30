@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runSlotAnalysis = exports.getSlotStats = void 0;
+exports.runSlotAnalysis = exports.getPlayerScores = exports.getSlotStats = void 0;
 const localHeuristics_1 = require("./localHeuristics");
+const scoreEngine_1 = require("./scoreEngine");
 const providers_1 = require("./providers");
 const BUY_TYPE_LABEL = {
     eco: 'Eco',
@@ -220,6 +221,11 @@ function getSlotStats(slots, slotId) {
     return (0, localHeuristics_1.consolidateSlot)(slots.slotFolderPath(slotId), slot.demos);
 }
 exports.getSlotStats = getSlotStats;
+function getPlayerScores(slots, slotId) {
+    const slot = slots.getSlot(slotId);
+    return (0, scoreEngine_1.computePlayerScores)(slots.slotFolderPath(slotId), slot.demos);
+}
+exports.getPlayerScores = getPlayerScores;
 async function runSlotAnalysis(slots, settingsManager, slotId, requestedProviderId, focusSteamIds) {
     const slot = slots.getSlot(slotId);
     if (slot.demos.length === 0) {

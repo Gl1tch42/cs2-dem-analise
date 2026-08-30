@@ -37,6 +37,7 @@ const api = {
     analyzeSlot: (slotId: string, providerId?: string, focusSteamIds?: string[]) =>
       ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId, focusSteamIds),
     getSlotStats: (slotId: string) => ipcRenderer.invoke('ai:getSlotStats', slotId),
+    getPlayerScores: (slotId: string) => ipcRenderer.invoke('ai:getPlayerScores', slotId),
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
