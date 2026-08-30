@@ -2,9 +2,11 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  EventEmitter,
   Input,
   OnChanges,
   OnDestroy,
+  Output,
   SimpleChanges,
   ViewChild,
   ViewEncapsulation,
@@ -33,6 +35,7 @@ const SAVE_DEBOUNCE_MS = 300;
 export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input({ required: true }) slotId!: string;
   @Input() initialContent = '';
+  @Output() contentSaved = new EventEmitter<string>();
 
   @ViewChild('editorHost') editorHost!: ElementRef<HTMLDivElement>;
 
@@ -110,6 +113,7 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
     const markdown = (this.editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
     await this.electron.api.slots.saveNotebook(this.slotId, markdown);
     this.status = 'saved';
+    this.contentSaved.emit(markdown);
   }
 
   async toggleHistory() {
@@ -141,13 +145,16 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
       this.editor.commands.setContent(restored.content);
       this.status = 'saved';
       this.historyOpen = false;
+      this.contentSaved.emit(restored.content);
     } catch (err) {
       this.historyError = (err as Error).message ?? 'Falha ao restaurar versão.';
     }
   }
 
   ngOnDestroy(): void {
+    const hadPendingEdit = !!this.saveTimer;
     if (this.saveTimer) clearTimeout(this.saveTimer);
+    if (hadPendingEdit) this.save();
     this.editor?.destroy();
   }
 }

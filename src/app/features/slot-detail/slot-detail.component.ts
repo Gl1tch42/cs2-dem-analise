@@ -219,6 +219,11 @@ export class SlotDetailComponent implements OnInit {
     }
   }
 
+  onNotebookSaved(content: string) {
+    if (!this.slot) return;
+    this.slot.notebook = { content, updatedAt: new Date().toISOString() };
+  }
+
   async runAnalysis() {
     if (!this.slot) return;
     this.analyzing = true;

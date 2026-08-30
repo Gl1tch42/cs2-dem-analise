@@ -183,8 +183,12 @@ class SlotManager {
                 return;
             }
         }
-        const timestamp = new Date().toISOString();
-        fs.writeFileSync(this.notebookHistoryFilePath(id, timestamp), previousContent);
+        this.writeNotebookHistoryEntry(id, previousContent);
+    }
+    writeNotebookHistoryEntry(id, content) {
+        const historyDir = this.notebookHistoryDir(id);
+        fs.mkdirSync(historyDir, { recursive: true });
+        fs.writeFileSync(this.notebookHistoryFilePath(id, new Date().toISOString()), content);
         const updated = fs
             .readdirSync(historyDir)
             .filter((f) => f.endsWith('.md'))
@@ -194,6 +198,18 @@ class SlotManager {
             if (oldest)
                 fs.rmSync(path.join(historyDir, oldest), { force: true });
         }
+    }
+    // Evita empilhar checkpoints idênticos toda vez que o mesmo `.csda-slot`
+    // é reimportado (ex: analista importa de novo achando que não tinha feito
+    // ainda) — sem isso, cada reimport criaria uma cópia nova do mesmo texto.
+    notebookHistoryHasContent(id, content) {
+        const historyDir = this.notebookHistoryDir(id);
+        if (!fs.existsSync(historyDir))
+            return false;
+        return fs
+            .readdirSync(historyDir)
+            .filter((f) => f.endsWith('.md'))
+            .some((f) => fs.readFileSync(path.join(historyDir, f), 'utf-8') === content);
     }
     listNotebookHistory(id) {
         const historyDir = this.notebookHistoryDir(id);
@@ -218,8 +234,7 @@ class SlotManager {
         const historicalContent = this.getNotebookHistoryContent(id, timestamp);
         const current = fs.existsSync(this.notebookPath(id)) ? fs.readFileSync(this.notebookPath(id), 'utf-8') : '';
         if (current && current !== historicalContent) {
-            fs.mkdirSync(this.notebookHistoryDir(id), { recursive: true });
-            fs.writeFileSync(this.notebookHistoryFilePath(id, new Date().toISOString()), current);
+            this.writeNotebookHistoryEntry(id, current);
         }
         fs.writeFileSync(this.notebookPath(id), historicalContent);
         const meta = this.readMeta(id);
@@ -336,9 +351,9 @@ class SlotManager {
         let notebookSavedAsHistory = false;
         if (bundle.notebookContent && bundle.notebookContent.trim().length > 0) {
             const current = fs.existsSync(this.notebookPath(id)) ? fs.readFileSync(this.notebookPath(id), 'utf-8') : '';
-            if (current !== bundle.notebookContent) {
-                fs.mkdirSync(this.notebookHistoryDir(id), { recursive: true });
-                fs.writeFileSync(this.notebookHistoryFilePath(id, new Date().toISOString()), bundle.notebookContent);
+            const alreadyImportedBefore = this.notebookHistoryHasContent(id, bundle.notebookContent);
+            if (current !== bundle.notebookContent && !alreadyImportedBefore) {
+                this.writeNotebookHistoryEntry(id, bundle.notebookContent);
                 notebookSavedAsHistory = true;
             }
         }

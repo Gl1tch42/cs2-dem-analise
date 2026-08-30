@@ -164,28 +164,34 @@
   </section>
 
   <section *ngIf="activeTab === 'notebook'">
-    <app-notebook [slotId]="slot.id" [initialContent]="slot.notebook.content"></app-notebook>
+    <app-notebook
+      [slotId]="slot.id"
+      [initialContent]="slot.notebook.content"
+      (contentSaved)="onNotebookSaved($event)"
+    ></app-notebook>
   </section>
 
-  <section *ngIf="activeTab === 'ai'">
-    <p class="text-muted ai-scope-note" *ngIf="slot.demos.length > 0">
-      Esta análise sempre considera <strong>todas as {{ slot.demos.length }} demo(s)</strong> deste
-      slot, não só a mais recente.
-      <ng-container *ngIf="slot.kind === 'opponent'">
-        Como este é um slot de <strong>adversário</strong>, a IA monta um relatório de
-        <strong>scouting/prep de confronto</strong>: pontos fortes a respeitar e vulnerabilidades de
-        {{ slot.name }} pra explorar no próximo jogo contra eles.
-      </ng-container>
-      <ng-container *ngIf="slot.kind === 'own'">
-        Como este é o slot do <strong>seu time</strong>, a IA monta um relatório de
-        <strong>desenvolvimento</strong>: o que está funcionando, o que não está e um plano de treino
-        pra melhorar.
-      </ng-container>
-    </p>
+  <section *ngIf="activeTab === 'ai'" class="ai-tab">
+    <div class="message is-info ai-scope-note" *ngIf="slot.demos.length > 0">
+      <div class="message-body">
+        Esta análise sempre considera <strong>todas as {{ slot.demos.length }} demo(s)</strong> deste
+        slot, não só a mais recente.
+        <ng-container *ngIf="slot.kind === 'opponent'">
+          Como este é um slot de <strong>adversário</strong>, a IA monta um relatório de
+          <strong>scouting/prep de confronto</strong>: pontos fortes a respeitar e vulnerabilidades de
+          {{ slot.name }} pra explorar no próximo jogo contra eles.
+        </ng-container>
+        <ng-container *ngIf="slot.kind === 'own'">
+          Como este é o slot do <strong>seu time</strong>, a IA monta um relatório de
+          <strong>desenvolvimento</strong>: o que está funcionando, o que não está e um plano de treino
+          pra melhorar.
+        </ng-container>
+      </div>
+    </div>
 
-    <div class="focus-panel" *ngIf="slot.demos.length > 0">
-      <p class="text-muted focus-hint">Foco da análise:</p>
-      <div class="focus-mode-select">
+    <div class="box focus-panel" *ngIf="slot.demos.length > 0">
+      <p class="label focus-hint">Foco da análise</p>
+      <div class="field is-grouped focus-mode-select">
         <label class="radio">
           <input type="radio" name="focusMode" [checked]="focusMode === 'team'" (change)="setFocusMode('team')" />
           {{ slot.kind === 'opponent' ? 'Time-alvo inteiro' : 'Time inteiro' }}
@@ -208,7 +214,11 @@
           aba <a (click)="setTab('demos')">Demos</a>.
         </p>
         <div class="focus-players" *ngIf="!focusRosterLoading && focusRoster.length > 0">
-          <label class="checkbox focus-player" *ngFor="let p of focusRoster">
+          <label
+            class="checkbox focus-player"
+            *ngFor="let p of focusRoster"
+            [class.is-selected]="focusSelected.has(p.steamId)"
+          >
             <input
               type="checkbox"
               [checked]="focusSelected.has(p.steamId)"
@@ -224,7 +234,7 @@
     </div>
 
     <button
-      class="button is-small mb-3"
+      class="button is-primary mb-3"
       [class.is-loading]="analyzing"
       [disabled]="slot.demos.length === 0 || (focusMode === 'players' && focusSelected.size === 0)"
       (click)="runAnalysis()"
@@ -235,35 +245,53 @@
     <p class="text-muted" *ngIf="slot.demos.length === 0">Importe ao menos uma demo antes de analisar.</p>
 
     <ng-container *ngIf="analysisResult as result">
-      <p class="help is-warning roster-pending-warning" *ngIf="result.stats.demosPendingRoster.length > 0">
-        ⚠ {{ result.stats.demosPendingRoster.length }} demo(s) ficaram de fora das tendências porque o time do
-        slot ainda não foi marcado nelas: {{ result.stats.demosPendingRoster.join(', ') }}. Marque em
-        <a (click)="setTab('demos')">Demos</a> pra incluir.
-      </p>
-      <p class="help is-warning roster-pending-warning" *ngIf="result.stats.demosLowCalibrationSample.length > 0">
-        ⚠ {{ result.stats.demosLowCalibrationSample.length }} demo(s) tiveram poucos rounds pra calibrar ritmo/postura
-        com os dados da própria partida, então usaram um limiar padrão genérico: {{ result.stats.demosLowCalibrationSample.join(', ') }}.
-        Trate "ritmo" e "postura" dessas demos com mais cautela.
-      </p>
+      <div class="message is-warning roster-pending-warning" *ngIf="result.stats.demosPendingRoster.length > 0">
+        <div class="message-body">
+          {{ result.stats.demosPendingRoster.length }} demo(s) ficaram de fora das tendências porque o time do
+          slot ainda não foi marcado nelas: {{ result.stats.demosPendingRoster.join(', ') }}. Marque em
+          <a (click)="setTab('demos')">Demos</a> pra incluir.
+        </div>
+      </div>
+      <div class="message is-warning roster-pending-warning" *ngIf="result.stats.demosLowCalibrationSample.length > 0">
+        <div class="message-body">
+          {{ result.stats.demosLowCalibrationSample.length }} demo(s) tiveram poucos rounds pra calibrar ritmo/postura
+          com os dados da própria partida, então usaram um limiar padrão genérico: {{ result.stats.demosLowCalibrationSample.join(', ') }}.
+          Trate "ritmo" e "postura" dessas demos com mais cautela.
+        </div>
+      </div>
       <div class="columns">
         <div class="column is-7">
-          <h2 class="stat-title">Leitura da IA</h2>
-          <p class="text-muted" style="font-size:0.78rem; margin-bottom:0.5rem" *ngIf="lastFocusLabel">
-            Foco: {{ lastFocusLabel }}
-          </p>
-          <div class="panel-block-data p-4 ai-output">{{ result.analysis }}</div>
+          <div class="card ai-output-card">
+            <header class="card-header">
+              <p class="card-header-title">Leitura da IA</p>
+              <span class="card-header-icon" *ngIf="lastFocusLabel">
+                <span class="tag is-dark">Foco: {{ lastFocusLabel }}</span>
+              </span>
+            </header>
+            <div class="card-content">
+              <div class="ai-output">{{ result.analysis }}</div>
+            </div>
+          </div>
         </div>
         <div class="column is-5">
-          <h2 class="stat-title">Consolidado local ({{ result.stats.demosAnalyzed }} demos, {{ result.stats.roundsAnalyzed }} rounds)</h2>
+          <div class="card">
+            <header class="card-header">
+              <p class="card-header-title">Consolidado local</p>
+              <span class="card-header-icon">
+                <span class="tag is-dark">{{ result.stats.demosAnalyzed }} demos · {{ result.stats.roundsAnalyzed }} rounds</span>
+              </span>
+            </header>
+            <div class="card-content">
+              <div class="team-stats-block">
+                <h3 class="team-stats-heading is-mine">Seu Time</h3>
+                <app-team-stats [team]="result.stats.myTeam"></app-team-stats>
+              </div>
 
-          <div class="team-stats-block">
-            <h3 class="team-stats-heading is-mine">Seu Time</h3>
-            <app-team-stats [team]="result.stats.myTeam"></app-team-stats>
-          </div>
-
-          <div class="team-stats-block">
-            <h3 class="team-stats-heading is-opponent">Adversário</h3>
-            <app-team-stats [team]="result.stats.opponent"></app-team-stats>
+              <div class="team-stats-block">
+                <h3 class="team-stats-heading is-opponent">Adversário</h3>
+                <app-team-stats [team]="result.stats.opponent"></app-team-stats>
+              </div>
+            </div>
           </div>
         </div>
       </div>

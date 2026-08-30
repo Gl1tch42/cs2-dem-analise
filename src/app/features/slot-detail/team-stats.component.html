@@ -1,31 +1,35 @@
 <p class="stat-subtitle">Por tipo de compra</p>
-<table class="table is-narrow is-fullwidth mini-table">
+<table class="table is-narrow is-fullwidth is-hoverable mini-table">
   <tbody>
     <tr *ngFor="let e of entries(team.tendencyByBuyType)">
       <td>{{ e[0] }}</td>
       <td class="text-muted">{{ e[1].count }}x</td>
-      <td [class.winrate-good]="e[1].winRate >= 0.5" [class.winrate-bad]="e[1].winRate < 0.5">
-        {{ winRatePct(e[1].winRate) }}
+      <td>
+        <span class="tag" [class.is-success]="e[1].winRate >= 0.5" [class.is-danger]="e[1].winRate < 0.5">
+          {{ winRatePct(e[1].winRate) }}
+        </span>
       </td>
     </tr>
   </tbody>
 </table>
 
 <p class="stat-subtitle">Jogadas mais recorrentes</p>
-<table class="table is-narrow is-fullwidth mini-table">
+<table class="table is-narrow is-fullwidth is-hoverable mini-table">
   <tbody>
     <tr *ngFor="let p of team.topRecurringPatterns">
       <td class="mono">{{ p.pattern }}</td>
       <td class="text-muted">{{ p.count }}x</td>
-      <td [class.winrate-good]="p.winRate >= 0.5" [class.winrate-bad]="p.winRate < 0.5">
-        {{ winRatePct(p.winRate) }}
+      <td>
+        <span class="tag" [class.is-success]="p.winRate >= 0.5" [class.is-danger]="p.winRate < 0.5">
+          {{ winRatePct(p.winRate) }}
+        </span>
       </td>
     </tr>
   </tbody>
 </table>
 
 <p class="stat-subtitle">Jogadores</p>
-<table class="table is-narrow is-fullwidth mini-table">
+<table class="table is-narrow is-fullwidth is-hoverable mini-table">
   <thead>
     <tr><th>Jogador</th><th>ADR</th><th>Entry%</th><th>Clutch%</th></tr>
   </thead>

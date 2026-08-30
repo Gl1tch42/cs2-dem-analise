@@ -28,11 +28,6 @@
 .dot-own { background: var(--own-color); }
 .dot-opponent { background: var(--opponent-color); }
 
-.stat-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
 .stat-subtitle {
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -78,38 +73,78 @@
 }
 
 .ai-scope-note {
-  font-size: 0.78rem;
-  margin-bottom: 0.75rem;
+  font-size: 0.82rem;
+
+  .message-body {
+    padding: 0.75rem 1rem;
+  }
 }
 
 .focus-panel {
-  padding: 0.75rem 0.9rem;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 .focus-hint {
-  font-size: 0.78rem;
-  margin-bottom: 0.5rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
 }
 .focus-mode-select {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
+  gap: 1.5rem;
   margin-bottom: 0.6rem;
-  font-size: 0.83rem;
+  font-size: 0.85rem;
 }
 .focus-players {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 0.35rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 .focus-player {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.83rem;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--surface-elevated);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--text-muted);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &.is-selected {
+    border-color: var(--own-color);
+    background: rgba(212, 167, 44, 0.14);
+    box-shadow: 0 0 0 1px rgba(212, 167, 44, 0.35), 0 0 10px rgba(212, 167, 44, 0.45);
+  }
+
+  input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    width: 13px;
+    height: 13px;
+    flex: none;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+
+    &:checked {
+      border-color: var(--own-color);
+      background-color: var(--own-color);
+      box-shadow: 0 0 6px rgba(212, 167, 44, 0.7);
+    }
+  }
 }
 
 .team-stats-block {
@@ -170,12 +205,31 @@
   gap: 0.75rem;
 }
 .roster-pending-warning {
-  font-size: 0.78rem;
-  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+
+  .message-body {
+    padding: 0.65rem 1rem;
+  }
 
   a {
     text-decoration: underline;
     cursor: pointer;
+  }
+}
+
+.ai-tab {
+  .card {
+    background: var(--panel-bg);
+  }
+  .card-header {
+    box-shadow: none;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .card-header-title {
+    font-size: 0.9rem;
+  }
+  .card-content {
+    padding: 1rem 1.25rem;
   }
 }
 
