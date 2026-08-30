@@ -206,5 +206,10 @@ export interface SlotDetail extends SlotMeta {
   notebook: NotebookEntry;
 }
 
+export interface MapStat {
+  map: string;
+  demoCount: number;
+}
+
 export const MAX_DEMOS_PER_SLOT = 100;
 export const MAX_OPPONENT_SLOTS = 20;

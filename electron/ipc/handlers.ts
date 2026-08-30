@@ -10,6 +10,7 @@ import { extractRadarsFromLocalCs2, getCachedRadarPath } from '../ai/radarExtrac
 export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, settings: SettingsManager) {
   ipcMain.handle('slots:list', () => slots.listSlots());
   ipcMain.handle('slots:get', (_e, id: string) => slots.getSlot(id));
+  ipcMain.handle('slots:mapStats', () => slots.getMapStats());
   ipcMain.handle('slots:rename', (_e, id: string, name: string) => slots.renameSlot(id, name));
   ipcMain.handle('slots:setColorTag', (_e, id: string, colorTag: string) => slots.setColorTag(id, colorTag));
   ipcMain.handle('slots:saveNotebook', (_e, id: string, content: string) => slots.saveNotebook(id, content));

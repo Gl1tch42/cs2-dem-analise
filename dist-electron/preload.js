@@ -5,6 +5,7 @@ const api = {
     slots: {
         list: () => electron_1.ipcRenderer.invoke('slots:list'),
         get: (id) => electron_1.ipcRenderer.invoke('slots:get', id),
+        mapStats: () => electron_1.ipcRenderer.invoke('slots:mapStats'),
         rename: (id, name) => electron_1.ipcRenderer.invoke('slots:rename', id, name),
         setColorTag: (id, colorTag) => electron_1.ipcRenderer.invoke('slots:setColorTag', id, colorTag),
         saveNotebook: (id, content) => electron_1.ipcRenderer.invoke('slots:saveNotebook', id, content),

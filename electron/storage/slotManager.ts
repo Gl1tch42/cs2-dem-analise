@@ -9,6 +9,7 @@ import {
   DemoRecord,
   DemoSummary,
   NotebookEntry,
+  MapStat,
   MAX_DEMOS_PER_SLOT,
   MAX_OPPONENT_SLOTS,
 } from './types';
@@ -97,6 +98,19 @@ export class SlotManager {
       meta.demoCount = this.readDemoRecords(id).length;
       return meta;
     });
+  }
+
+  getMapStats(): MapStat[] {
+    const ids = ['own', ...Array.from({ length: MAX_OPPONENT_SLOTS }, (_, i) => `opp-${String(i + 1).padStart(2, '0')}`)];
+    const counts = new Map<string, number>();
+    for (const id of ids) {
+      for (const record of this.readDemoRecords(id)) {
+        counts.set(record.map, (counts.get(record.map) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([map, demoCount]) => ({ map, demoCount }))
+      .sort((a, b) => b.demoCount - a.demoCount || a.map.localeCompare(b.map));
   }
 
   getSlot(id: string): SlotDetail {

@@ -1,13 +1,228 @@
+.crypto-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(212, 167, 44, 0.08);
+  border: 1px solid rgba(212, 167, 44, 0.3);
+  border-radius: 6px;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1.5rem;
+}
+
+.crypto-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.crypto-text {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+
+  strong {
+    color: var(--own-color);
+    margin-right: 0.25rem;
+  }
+}
+
+.crypto-info {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  cursor: help;
+  font-size: 0.95rem;
+}
+
 .page-title {
   font-size: 1.2rem;
   font-weight: 600;
   margin-bottom: 0.3rem;
 }
-.provider-card {
-  margin-bottom: 1rem;
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
 }
+
+.provider-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 1.1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &.is-selected {
+    border-color: var(--own-color);
+    box-shadow: 0 0 0 1px rgba(212, 167, 44, 0.25);
+  }
+
+  &.is-mock {
+    background: rgba(212, 167, 44, 0.07);
+    border-color: rgba(212, 167, 44, 0.35);
+
+    &.is-selected {
+      background: rgba(212, 167, 44, 0.12);
+    }
+  }
+}
+
 .provider-header {
   display: flex;
-  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.provider-select {
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  display: flex;
   align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: var(--own-color);
+    color: var(--text);
+  }
+
+  &.is-active {
+    border-color: var(--own-color);
+    background: rgba(212, 167, 44, 0.18);
+    color: var(--own-color);
+  }
+}
+
+.provider-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.provider-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+
+  strong {
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+}
+
+.provider-sub {
+  font-size: 0.7rem;
+  color: var(--own-color);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tag-pill {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  white-space: nowrap;
+
+  &.is-active {
+    background: rgba(76, 175, 130, 0.15);
+    color: var(--works-color);
+  }
+}
+
+.provider-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.field-row {
+  margin-bottom: 0.65rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.field-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text);
+
+  &:focus {
+    outline: none;
+    border-color: var(--own-color);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+.key-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+  margin-top: 0.85rem;
+
+  .field-input {
+    flex: 1;
+  }
+}
+
+.btn-primary {
+  flex-shrink: 0;
+  background: var(--opponent-color);
+  color: #0d1117;
+  border: none;
+  border-radius: 4px;
+  padding: 0 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+
+  &.is-loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+.btn-icon-danger {
+  flex-shrink: 0;
+  width: 2.1rem;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  color: var(--fails-color);
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  &:hover {
+    border-color: var(--fails-color);
+    background: rgba(226, 87, 76, 0.1);
+  }
 }

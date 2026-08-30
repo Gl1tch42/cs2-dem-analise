@@ -1,75 +1,115 @@
+<div class="crypto-banner">
+  <span class="crypto-icon" aria-hidden="true">🔒</span>
+  <div class="crypto-text">
+    <strong>Criptografia Local:</strong>
+    Suas chaves de API ficam guardadas apenas na sua máquina — nunca saem dela, exceto na
+    chamada direta ao provedor escolhido.
+  </div>
+  <span
+    class="crypto-info"
+    title="Nenhuma chave passa por servidores da CS Demo Analyst. Tudo acontece localmente."
+    aria-hidden="true"
+    >ⓘ</span
+  >
+</div>
+
 <h1 class="page-title">Configurações de IA</h1>
-<p class="text-muted mb-4">
-  Escolha o provedor padrão e cole sua chave de API. As chaves ficam criptografadas
-  localmente (nunca saem da sua máquina, exceto na chamada direta ao provedor escolhido).
-</p>
+<p class="text-muted mb-4">Escolha o provedor padrão que vai gerar as análises das suas demos.</p>
 
 <ng-container *ngIf="!loading && settings">
-  <div class="panel-block-data p-4 provider-card" *ngFor="let provider of settings.providers">
-    <div class="provider-header">
-      <label class="radio">
-        <input
-          type="radio"
-          name="defaultProvider"
-          [checked]="settings.defaultProviderId === provider.id"
-          (change)="setDefault(provider.id)"
-        />
-        <strong>{{ provider.label }}</strong>
-      </label>
-      <span class="tag is-rounded" [class.is-success]="provider.hasKey" [class.is-dark]="!provider.hasKey">
-        {{ provider.hasKey ? 'chave salva' : 'sem chave' }}
-      </span>
-    </div>
-
-    <p class="text-muted mt-3" *ngIf="provider.id === 'mock'" style="font-size:0.8rem">
-      Não chama nenhuma API — devolve exatamente o prompt que seria enviado a um provedor real,
-      pra você conferir se os dados da demo estão bem formatados antes de gastar crédito de verdade.
-    </p>
-
-    <div class="field is-grouped mt-3" *ngIf="provider.id !== 'custom' && provider.id !== 'mock'">
-      <div class="control">
-        <label class="label is-small text-muted">Modelo</label>
-        <input class="input is-small" [ngModel]="provider.model" (ngModelChange)="saveModel(provider.id, $event)" />
-      </div>
-    </div>
-
-    <div class="field is-grouped mt-3" *ngIf="provider.id === 'custom'">
-      <div class="control is-expanded">
-        <label class="label is-small text-muted">Endpoint</label>
-        <input
-          class="input is-small"
-          placeholder="https://sua-api.com/v1/analyze"
-          [ngModel]="provider.endpoint"
-          (ngModelChange)="saveEndpoint(provider.id, $event)"
-        />
-      </div>
-      <div class="control">
-        <label class="label is-small text-muted">Modelo</label>
-        <input class="input is-small" [ngModel]="provider.model" (ngModelChange)="saveModel(provider.id, $event)" />
-      </div>
-    </div>
-
-    <div class="field has-addons mt-3" *ngIf="provider.id !== 'mock'">
-      <div class="control is-expanded">
-        <input
-          class="input is-small"
-          type="password"
-          placeholder="Colar API key"
-          [(ngModel)]="keyDrafts[provider.id]"
-        />
-      </div>
-      <div class="control">
+  <div class="provider-grid">
+    <div
+      class="provider-card"
+      *ngFor="let provider of settings.providers"
+      [class.is-mock]="provider.id === 'mock'"
+      [class.is-selected]="isDefault(provider.id)"
+    >
+      <div class="provider-header">
         <button
-          class="button is-small"
-          [class.is-loading]="savingKeyFor === provider.id"
-          (click)="saveKey(provider.id)"
+          type="button"
+          class="provider-select"
+          [class.is-active]="isDefault(provider.id)"
+          [attr.aria-pressed]="isDefault(provider.id)"
+          title="Usar como provedor padrão"
+          (click)="setDefault(provider.id)"
         >
-          Salvar chave
+          <span class="provider-icon">{{ iconFor(provider.id) }}</span>
         </button>
+
+        <div class="provider-title">
+          <strong>{{ provider.label }}</strong>
+          <span class="provider-sub" *ngIf="isDefault(provider.id)">provedor padrão</span>
+        </div>
+
+        <span
+          class="tag-pill"
+          [class.is-active]="provider.id === 'mock' || provider.hasKey"
+        >
+          {{ tagLabel(provider.id, provider.hasKey) }}
+        </span>
       </div>
-      <div class="control" *ngIf="provider.hasKey">
-        <button class="button is-small is-ghost has-text-danger" (click)="clearKey(provider.id)">Remover</button>
-      </div>
+
+      <p class="provider-desc" *ngIf="provider.id === 'mock'">
+        Não chama nenhuma API — devolve exatamente o prompt que seria enviado a um provedor
+        real, pra você conferir se os dados da demo estão bem formatados antes de gastar
+        crédito de verdade.
+      </p>
+
+      <ng-container *ngIf="provider.id !== 'mock'">
+        <div class="field-row" *ngIf="provider.id !== 'custom'">
+          <label class="field-label">Modelo</label>
+          <input
+            class="field-input"
+            [ngModel]="provider.model"
+            (ngModelChange)="saveModel(provider.id, $event)"
+          />
+        </div>
+
+        <div class="field-row" *ngIf="provider.id === 'custom'">
+          <label class="field-label">Endpoint</label>
+          <input
+            class="field-input"
+            placeholder="https://sua-api.com/v1/analyze"
+            [ngModel]="provider.endpoint"
+            (ngModelChange)="saveEndpoint(provider.id, $event)"
+          />
+        </div>
+
+        <div class="field-row" *ngIf="provider.id === 'custom'">
+          <label class="field-label">Modelo</label>
+          <input
+            class="field-input"
+            [ngModel]="provider.model"
+            (ngModelChange)="saveModel(provider.id, $event)"
+          />
+        </div>
+
+        <div class="key-row">
+          <input
+            class="field-input"
+            type="password"
+            placeholder="Colar API key"
+            [(ngModel)]="keyDrafts[provider.id]"
+          />
+          <button
+            type="button"
+            class="btn-primary"
+            [class.is-loading]="savingKeyFor === provider.id"
+            (click)="saveKey(provider.id)"
+          >
+            Salvar chave
+          </button>
+          <button
+            type="button"
+            class="btn-icon-danger"
+            *ngIf="provider.hasKey"
+            title="Remover chave"
+            (click)="clearKey(provider.id)"
+          >
+            🗑
+          </button>
+        </div>
+      </ng-container>
     </div>
   </div>
 </ng-container>

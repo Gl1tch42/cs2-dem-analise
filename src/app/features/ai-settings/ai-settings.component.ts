@@ -4,6 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { ElectronService } from '../../core/services/electron.service';
 import { AiSettings, AiProviderId } from '../../core/models/slot.model';
 
+const PROVIDER_ICONS: Record<AiProviderId, string> = {
+  anthropic: '✳',
+  openai: '◈',
+  custom: '⚡',
+  mock: '🖥',
+};
+
 @Component({
   selector: 'app-ai-settings',
   standalone: true,
@@ -52,5 +59,18 @@ export class AiSettingsComponent implements OnInit {
 
   async clearKey(providerId: AiProviderId) {
     this.settings = await this.electron.api.ai.clearApiKey(providerId);
+  }
+
+  isDefault(providerId: AiProviderId): boolean {
+    return this.settings?.defaultProviderId === providerId;
+  }
+
+  iconFor(providerId: AiProviderId): string {
+    return PROVIDER_ICONS[providerId] ?? '◇';
+  }
+
+  tagLabel(providerId: AiProviderId, hasKey: boolean): string {
+    if (providerId === 'mock') return 'sempre disponível';
+    return hasKey ? 'chave salva' : 'sem chave';
   }
 }

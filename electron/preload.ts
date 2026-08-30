@@ -4,6 +4,7 @@ const api = {
   slots: {
     list: () => ipcRenderer.invoke('slots:list'),
     get: (id: string) => ipcRenderer.invoke('slots:get', id),
+    mapStats: () => ipcRenderer.invoke('slots:mapStats'),
     rename: (id: string, name: string) => ipcRenderer.invoke('slots:rename', id, name),
     setColorTag: (id: string, colorTag: string) => ipcRenderer.invoke('slots:setColorTag', id, colorTag),
     saveNotebook: (id: string, content: string) => ipcRenderer.invoke('slots:saveNotebook', id, content),

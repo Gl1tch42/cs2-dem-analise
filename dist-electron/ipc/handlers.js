@@ -32,6 +32,7 @@ const radarExtractor_1 = require("../ai/radarExtractor");
 function registerIpcHandlers(win, slots, settings) {
     electron_1.ipcMain.handle('slots:list', () => slots.listSlots());
     electron_1.ipcMain.handle('slots:get', (_e, id) => slots.getSlot(id));
+    electron_1.ipcMain.handle('slots:mapStats', () => slots.getMapStats());
     electron_1.ipcMain.handle('slots:rename', (_e, id, name) => slots.renameSlot(id, name));
     electron_1.ipcMain.handle('slots:setColorTag', (_e, id, colorTag) => slots.setColorTag(id, colorTag));
     electron_1.ipcMain.handle('slots:saveNotebook', (_e, id, content) => slots.saveNotebook(id, content));

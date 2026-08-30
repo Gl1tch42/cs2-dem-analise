@@ -7,6 +7,7 @@ import {
   AiSettings,
   AiProviderId,
   AnalysisResult,
+  MapStat,
 } from '../models/slot.model';
 
 declare global {
@@ -15,6 +16,7 @@ declare global {
       slots: {
         list: () => Promise<SlotMeta[]>;
         get: (id: string) => Promise<SlotDetail>;
+        mapStats: () => Promise<MapStat[]>;
         rename: (id: string, name: string) => Promise<SlotMeta>;
         setColorTag: (id: string, colorTag: string) => Promise<SlotMeta>;
         saveNotebook: (id: string, content: string) => Promise<{ content: string; updatedAt: string }>;
