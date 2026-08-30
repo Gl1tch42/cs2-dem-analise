@@ -46,6 +46,12 @@
         >
           próxima ›
         </button>
+        <span class="bomb-hud" *ngIf="currentRound?.bombPlant" [class]="'bomb-' + bombState">
+          <span class="bomb-hud-dot"></span>
+          <span class="bomb-hud-label">
+            {{ bombState === 'idle' ? 'C4 não plantada' : bombState === 'planted' ? ('C4 plantada · ' + bombCountdownLabel) : bombState === 'defused' ? 'C4 defusada' : 'C4 explodiu' }}
+          </span>
+        </span>
       </div>
 
       <p class="text-muted" *ngIf="summary.rounds.length === 0">Esta demo não tem rounds parseados.</p>
@@ -76,7 +82,13 @@
                       <path d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" />
                     </svg>
                   </span>
-                  <span class="sb-name">{{ l.player }}</span>
+                  <span
+                    class="sb-name is-clickable"
+                    [class.is-selected]="selectedTimelinePlayer === l.player"
+                    title="Ver timeline deste jogador"
+                    (click)="selectPlayerTimeline(l.player)"
+                    >{{ l.player }}</span
+                  >
                   <span class="sb-weapon text-muted">{{ formatWeapon(l.weapon) }}</span>
                   <span class="sb-money mono">${{ l.equipValue }}</span>
                   <span class="sb-dead" *ngIf="deathOf(l.player) as death" [title]="death.by ? ('morto por ' + death.by) : ''">✕</span>
@@ -89,6 +101,29 @@
                 </div>
               </div>
             </ng-container>
+          </div>
+
+          <div class="player-timeline" *ngIf="selectedTimelinePlayer">
+            <div class="player-timeline-header">
+              <span class="player-timeline-title">Timeline · {{ selectedTimelinePlayer }}</span>
+              <button class="button is-small" (click)="closeTimeline()">✕</button>
+            </div>
+            <p class="text-muted no-events" *ngIf="timelineEvents.length === 0">
+              Nenhuma morte ou uso de granada registrado pra este jogador.
+            </p>
+            <div class="timeline-list">
+              <button
+                class="timeline-item"
+                *ngFor="let ev of timelineEvents"
+                [class]="'timeline-' + ev.type"
+                (click)="jumpToTimelineEvent(ev)"
+              >
+                <span class="timeline-round">R{{ ev.roundNumber }}</span>
+                <span class="timeline-icon"></span>
+                <span class="timeline-detail">{{ ev.detail }}</span>
+                <span class="timeline-time mono">{{ formatTime(ev.t) }}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -133,6 +168,8 @@
           <span class="legend-item"><span class="swatch swatch-flash"></span> flash</span>
           <span class="legend-item"><span class="ring-mark"></span> cego</span>
           <span class="legend-item"><span class="swatch swatch-decoy"></span> decoy</span>
+          <span class="legend-item"><span class="swatch swatch-he"></span> HE</span>
+          <span class="legend-item"><span class="swatch swatch-bomb"></span> C4</span>
         </div>
       </ng-container>
     </ng-container>

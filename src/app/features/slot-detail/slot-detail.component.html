@@ -25,6 +25,7 @@
     <ul>
       <li [class.is-active]="activeTab === 'overview'"><a (click)="setTab('overview')">Visão Geral</a></li>
       <li [class.is-active]="activeTab === 'map'"><a (click)="setTab('map')">Mapa 2D</a></li>
+      <li [class.is-active]="activeTab === 'heatmap'"><a (click)="setTab('heatmap')">Mapa de Calor</a></li>
       <li [class.is-active]="activeTab === 'demos'"><a (click)="setTab('demos')">Demos</a></li>
       <li [class.is-active]="activeTab === 'notebook'"><a (click)="setTab('notebook')">Notebook</a></li>
       <li [class.is-active]="activeTab === 'ai'"><a (click)="setTab('ai')">Análise de IA</a></li>
@@ -57,6 +58,10 @@
 
   <section *ngIf="activeTab === 'map'">
     <app-map2d [slotId]="slot.id" [demos]="slot.demos"></app-map2d>
+  </section>
+
+  <section *ngIf="activeTab === 'heatmap'">
+    <app-heatmap [slotId]="slot.id" [demos]="slot.demos"></app-heatmap>
   </section>
 
   <section *ngIf="activeTab === 'demos'">

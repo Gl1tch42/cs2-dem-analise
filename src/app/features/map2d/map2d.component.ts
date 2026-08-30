@@ -11,11 +11,23 @@ interface PlayerFrame {
   x: number;
   y: number;
   yaw?: number;
+  health?: number;
   dead: boolean;
   shooting: boolean;
 }
 
 type RadarStatus = 'idle' | 'loaded' | 'missing' | 'unsupported' | 'extracting';
+
+type TimelineEventType = 'death' | 'flash' | 'smoke' | 'fire' | 'decoy' | 'he';
+
+interface TimelineEvent {
+  type: TimelineEventType;
+  roundNumber: number;
+  t: number;
+  detail: string;
+}
+
+type BombState = 'idle' | 'planted' | 'defused' | 'exploded';
 
 const CT_COLOR = '#5dade2';
 const T_COLOR = '#f5b041';
@@ -27,11 +39,40 @@ const SHOT_FLASH_WINDOW = 0.25;
 const SMOKE_RADIUS = 144;
 const FIRE_RADIUS = 120;
 const FLASH_PULSE_DURATION = 0.5;
+const HE_PULSE_DURATION = 0.6;
+const HE_COLOR = '255,107,74';
 const BLIND_RING_RADIUS = 12;
+
+const C4_FUSE_SECONDS = 40;
+const C4_EXPLODE_PULSE_DURATION = 1.2;
+const BOMB_IDLE_COLOR = '#f4d03f';
+const BOMB_PLANTED_COLOR = '#e74c3c';
+const BOMB_DEFUSED_COLOR = '#2ecc71';
+
+const HEALTH_GRAY = { r: 90, g: 92, b: 96 };
+const HEALTH_BLEND_MAX = 0.75;
 
 function lerpAngle(a: number, b: number, ratio: number): number {
   const diff = (((b - a + 180) % 360) + 360) % 360 - 180;
   return a + diff * ratio;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  return { r, g, b };
+}
+
+function blendColorWithHealth(hexColor: string, health: number | undefined): string {
+  const h = health === undefined ? 100 : Math.max(0, Math.min(100, health));
+  const ratio = (1 - h / 100) * HEALTH_BLEND_MAX;
+  const base = hexToRgb(hexColor);
+  const r = Math.round(base.r + (HEALTH_GRAY.r - base.r) * ratio);
+  const g = Math.round(base.g + (HEALTH_GRAY.g - base.g) * ratio);
+  const b = Math.round(base.b + (HEALTH_GRAY.b - base.b) * ratio);
+  return `rgb(${r},${g},${b})`;
 }
 
 @Component({
@@ -63,6 +104,8 @@ export class Map2dComponent implements OnChanges, OnDestroy {
 
   radarStatus: RadarStatus = 'idle';
   extractError = '';
+
+  selectedTimelinePlayer: string | null = null;
 
   private rafHandle?: number;
   private lastTimestamp = 0;
@@ -101,6 +144,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     this.loading = true;
     this.loadError = '';
     this.summary = undefined;
+    this.selectedTimelinePlayer = null;
     try {
       this.summary = await this.electron.api.demos.getSummary(this.slotId, this.selectedDemoId);
       this.roundIndex = 0;
@@ -298,6 +342,73 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     return this.currentRound?.deaths?.filter((d) => d.by === playerName).length ?? 0;
   }
 
+  selectPlayerTimeline(playerName: string) {
+    this.selectedTimelinePlayer = this.selectedTimelinePlayer === playerName ? null : playerName;
+  }
+
+  closeTimeline() {
+    this.selectedTimelinePlayer = null;
+  }
+
+  get timelineEvents(): TimelineEvent[] {
+    const player = this.selectedTimelinePlayer;
+    if (!player || !this.summary) return [];
+    const events: TimelineEvent[] = [];
+    for (const round of this.summary.rounds) {
+      const death = round.deaths?.find((d) => d.player === player);
+      if (death) {
+        const weapon = this.formatWeapon(death.weapon);
+        const detail = death.by
+          ? `morto por ${death.by} (${weapon}${death.headshot ? ', HS' : ''})`
+          : `morto (${weapon})`;
+        events.push({ type: 'death', roundNumber: round.roundNumber, t: death.t, detail });
+      }
+      for (const f of round.flashes ?? []) {
+        if (f.player === player) events.push({ type: 'flash', roundNumber: round.roundNumber, t: f.t, detail: 'jogou flash' });
+      }
+      for (const s of round.smokes ?? []) {
+        if (s.player === player) events.push({ type: 'smoke', roundNumber: round.roundNumber, t: s.startT, detail: 'jogou fumaça' });
+      }
+      for (const fi of round.fires ?? []) {
+        if (fi.player === player) events.push({ type: 'fire', roundNumber: round.roundNumber, t: fi.startT, detail: 'jogou molotov' });
+      }
+      for (const d of round.decoys ?? []) {
+        if (d.player === player) events.push({ type: 'decoy', roundNumber: round.roundNumber, t: d.startT, detail: 'jogou decoy' });
+      }
+      for (const h of round.he ?? []) {
+        if (h.player === player) events.push({ type: 'he', roundNumber: round.roundNumber, t: h.t, detail: 'jogou HE' });
+      }
+    }
+    return events;
+  }
+
+  jumpToTimelineEvent(ev: TimelineEvent) {
+    if (!this.summary) return;
+    const idx = this.summary.rounds.findIndex((r) => r.roundNumber === ev.roundNumber);
+    if (idx < 0) return;
+    this.setRound(idx);
+    this.onScrub(ev.t);
+  }
+
+  get bombState(): BombState {
+    const round = this.currentRound;
+    if (!round?.bombPlant) return 'idle';
+    const t = this.currentTime;
+    if (t < round.bombPlant.t) return 'idle';
+    if (round.bombDefuse && t >= round.bombDefuse.t) return 'defused';
+    if (round.bombExplode && t >= round.bombExplode.t) return 'exploded';
+    return 'planted';
+  }
+
+  get bombCountdownLabel(): string {
+    const round = this.currentRound;
+    if (!round?.bombPlant || this.bombState !== 'planted') return '';
+    const remaining = Math.max(0, C4_FUSE_SECONDS - (this.currentTime - round.bombPlant.t));
+    const mins = Math.floor(remaining / 60);
+    const secs = Math.floor(remaining % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
   private computeFrames(): PlayerFrame[] {
     const round = this.currentRound;
     if (!round) return [];
@@ -354,6 +465,13 @@ export class Map2dComponent implements OnChanges, OnDestroy {
         yaw = before.yaw ?? after.yaw;
       }
 
+      let health: number | undefined;
+      if (before.health !== undefined && after.health !== undefined) {
+        health = before.health + (after.health - before.health) * ratio;
+      } else {
+        health = before.health ?? after.health;
+      }
+
       const shots = shotsByPlayer.get(name) ?? [];
       const shooting = shots.some((st) => Math.abs(st - t) < SHOT_FLASH_WINDOW);
 
@@ -363,6 +481,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
         x: before.x + (after.x - before.x) * ratio,
         y: before.y + (after.y - before.y) * ratio,
         yaw,
+        health,
         dead: false,
         shooting,
       });
@@ -430,14 +549,15 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     py: number,
     color: string,
     yawDeg: number | undefined,
-    shooting: boolean
+    shooting: boolean,
+    health?: number
   ) {
     ctx.save();
     ctx.translate(px, py);
 
     ctx.beginPath();
     ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = color;
+    ctx.fillStyle = blendColorWithHealth(color, health);
     ctx.fill();
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = 'rgba(0,0,0,0.55)';
@@ -571,6 +691,78 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     }
   }
 
+  private drawHePulses(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    const round = this.currentRound;
+    if (!round) return;
+    const t = this.currentTime;
+    for (const h of round.he ?? []) {
+      const elapsed = t - h.t;
+      if (elapsed < 0 || elapsed > HE_PULSE_DURATION) continue;
+      const { px, py } = this.toCanvasXY(h.x, h.y, width, height);
+      const progress = elapsed / HE_PULSE_DURATION;
+      const r = 6 + progress * 40;
+      const alpha = 1 - progress;
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
+      grad.addColorStop(0, `rgba(${HE_COLOR},${0.85 * alpha})`);
+      grad.addColorStop(0.6, `rgba(${HE_COLOR},${0.35 * alpha})`);
+      grad.addColorStop(1, `rgba(${HE_COLOR},0)`);
+      ctx.beginPath();
+      ctx.fillStyle = grad;
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawBomb(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    const round = this.currentRound;
+    if (!round?.bombPlant) return;
+    const state = this.bombState;
+    if (state === 'idle') return;
+
+    const { px, py } = this.toCanvasXY(round.bombPlant.x, round.bombPlant.y, width, height);
+    const color = state === 'defused' ? BOMB_DEFUSED_COLOR : BOMB_PLANTED_COLOR;
+
+    if (state === 'exploded' && round.bombExplode) {
+      const elapsed = this.currentTime - round.bombExplode.t;
+      if (elapsed >= 0 && elapsed <= C4_EXPLODE_PULSE_DURATION) {
+        const progress = elapsed / C4_EXPLODE_PULSE_DURATION;
+        const r = 8 + progress * 60;
+        const alpha = 1 - progress;
+        const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
+        grad.addColorStop(0, `rgba(255,140,40,${0.85 * alpha})`);
+        grad.addColorStop(1, 'rgba(255,60,20,0)');
+        ctx.beginPath();
+        ctx.fillStyle = grad;
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(px, py, 7, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.stroke();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('C4', px, py + 0.5);
+    ctx.restore();
+
+    if (state === 'planted') {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(this.bombCountdownLabel, px, py - 14);
+      ctx.restore();
+    }
+  }
+
   private safeDraw() {
     this.draw();
     setTimeout(() => this.draw());
@@ -595,7 +787,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
       }
 
       const color = frame.side === 'ct' ? CT_COLOR : T_COLOR;
-      this.drawPlayerMarker(ctx, px, py, color, frame.yaw, frame.shooting);
+      this.drawPlayerMarker(ctx, px, py, color, frame.yaw, frame.shooting, frame.health);
       if (this.isBlinded(frame.name)) {
         this.drawBlindRing(ctx, px, py);
       }
@@ -607,5 +799,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     }
 
     this.drawFlashPulses(ctx, width, height);
+    this.drawHePulses(ctx, width, height);
+    this.drawBomb(ctx, width, height);
   }
 }

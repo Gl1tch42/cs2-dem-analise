@@ -50,6 +50,7 @@ export interface KeyPosition {
   y: number;
   t: number;
   yaw?: number;
+  health?: number;
 }
 
 export interface RoundDeath {
@@ -88,6 +89,7 @@ export interface RoundSmoke {
   y: number;
   startT: number;
   endT: number;
+  player?: string;
 }
 
 export interface RoundFire {
@@ -95,6 +97,7 @@ export interface RoundFire {
   y: number;
   startT: number;
   endT: number;
+  player?: string;
 }
 
 export interface RoundDecoy {
@@ -102,12 +105,21 @@ export interface RoundDecoy {
   y: number;
   startT: number;
   endT: number;
+  player?: string;
 }
 
 export interface RoundFlash {
   x: number;
   y: number;
   t: number;
+  player?: string;
+}
+
+export interface RoundHe {
+  x: number;
+  y: number;
+  t: number;
+  player?: string;
 }
 
 export interface RoundBlind {
@@ -115,6 +127,19 @@ export interface RoundBlind {
   side: 'ct' | 't';
   t: number;
   duration: number;
+}
+
+export interface RoundBombPlant {
+  x: number;
+  y: number;
+  t: number;
+  site: 'A' | 'B' | 'mid' | 'unknown';
+  player?: string;
+}
+
+export interface RoundBombEvent {
+  t: number;
+  player?: string;
 }
 
 export interface RoundSummary {
@@ -133,7 +158,11 @@ export interface RoundSummary {
   fires?: RoundFire[];
   decoys?: RoundDecoy[];
   flashes?: RoundFlash[];
+  he?: RoundHe[];
   blinds?: RoundBlind[];
+  bombPlant?: RoundBombPlant;
+  bombDefuse?: RoundBombEvent;
+  bombExplode?: RoundBombEvent;
   outcomeNote?: string;
 }
 

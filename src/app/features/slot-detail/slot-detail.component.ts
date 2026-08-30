@@ -5,15 +5,16 @@ import { ActivatedRoute } from '@angular/router';
 import { ElectronService } from '../../core/services/electron.service';
 import { NotebookComponent } from '../notebook/notebook.component';
 import { Map2dComponent } from '../map2d/map2d.component';
+import { HeatmapComponent } from '../heatmap/heatmap.component';
 import { TeamStatsComponent } from './team-stats.component';
 import { SlotDetail, AnalysisResult, DemoRecord, DemoSummary } from '../../core/models/slot.model';
 
-type TabId = 'overview' | 'map' | 'demos' | 'notebook' | 'ai';
+type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai';
 
 @Component({
   selector: 'app-slot-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, NotebookComponent, Map2dComponent, TeamStatsComponent],
+  imports: [CommonModule, FormsModule, NotebookComponent, Map2dComponent, HeatmapComponent, TeamStatsComponent],
   templateUrl: './slot-detail.component.html',
   styleUrl: './slot-detail.component.scss',
 })

@@ -44,6 +44,7 @@ POSITION_SAMPLE_SECONDS = 3.0
 SMOKE_DEFAULT_DURATION_SECONDS = 18.0
 FIRE_DEFAULT_DURATION_SECONDS = 7.0
 DECOY_DEFAULT_DURATION_SECONDS = 18.0
+C4_FUSE_SECONDS = 40.0
 
 def eprint(*args):
     print(*args, file=sys.stderr)
@@ -116,7 +117,9 @@ def event_xy(row):
         y = getattr(row, "Y", None)
     return x, y
 
-def pair_grenade_lifespan(start_df, end_df, freeze_tick: int, end_tick: int, default_duration_ticks: int):
+def pair_grenade_lifespan(
+    start_df, end_df, freeze_tick: int, end_tick: int, default_duration_ticks: int, player_names: dict = None
+):
     results = []
     if start_df is None or "tick" not in start_df.columns:
         return results
@@ -142,14 +145,17 @@ def pair_grenade_lifespan(start_df, end_df, freeze_tick: int, end_tick: int, def
             if later:
                 candidate_end = min(later)
         candidate_end = min(candidate_end, end_tick)
-        results.append(
-            {
-                "x": round(float(x), 1),
-                "y": round(float(y), 1),
-                "startT": round((start_tick - freeze_tick) / TICK_RATE, 1),
-                "endT": round((candidate_end - freeze_tick) / TICK_RATE, 1),
-            }
-        )
+        entry = {
+            "x": round(float(x), 1),
+            "y": round(float(y), 1),
+            "startT": round((start_tick - freeze_tick) / TICK_RATE, 1),
+            "endT": round((candidate_end - freeze_tick) / TICK_RATE, 1),
+        }
+        if player_names is not None:
+            thrower_id = getattr(row, "user_steamid", None)
+            if thrower_id is not None and str(thrower_id) != "nan":
+                entry["player"] = player_names.get(int(thrower_id), str(int(thrower_id)))
+        results.append(entry)
     return results
 
 def build_round_windows(parser: DemoParser):
@@ -210,12 +216,15 @@ def main():
     death_df = safe_parse_event(parser, "player_death", other=["weapon", "headshot"])
     hurt_df = safe_parse_event(parser, "player_hurt", other=["dmg_health"])
     plant_df = safe_parse_event(parser, "bomb_planted")
+    defuse_df = safe_parse_event(parser, "bomb_defused")
+    explode_df = safe_parse_event(parser, "bomb_exploded")
     fire_df = safe_parse_event(parser, "weapon_fire")
     smoke_start_df = safe_parse_event(parser, "smokegrenade_detonate")
     smoke_end_df = safe_parse_event(parser, "smokegrenade_expired")
     fire_start_df = safe_parse_event(parser, "inferno_startburn")
     fire_end_df = safe_parse_event(parser, "inferno_expire")
     flash_df = safe_parse_event(parser, "flashbang_detonate")
+    he_df = safe_parse_event(parser, "hegrenade_detonate")
     blind_df = safe_parse_event(parser, "player_blind", other=["blind_duration"])
     decoy_start_df = safe_parse_event(parser, "decoy_started")
     decoy_end_df = safe_parse_event(parser, "decoy_detonate")
@@ -233,7 +242,7 @@ def main():
             sample_ticks_set.add(int(t))
             t += POSITION_SAMPLE_SECONDS * TICK_RATE
         sample_ticks_set.add(w["endTick"])
-    for df in (death_df, hurt_df, plant_df, fire_df):
+    for df in (death_df, hurt_df, plant_df, defuse_df, explode_df, fire_df, he_df):
         if df is not None and "tick" in df.columns:
             sample_ticks_set.update(int(t) for t in df["tick"].tolist())
 
@@ -490,21 +499,57 @@ def main():
                     utility_by_side[side]["he"] += 1
 
         site_hit = "unknown"
+        bomb_plant_out = None
+        plant_tick = None
+        planter_id = None
         if plant_df is not None and "tick" in plant_df.columns:
             round_plants = plant_df[(plant_df["tick"] > freeze_tick) & (plant_df["tick"] <= end_tick)]
-            if len(round_plants) > 0 and has_place_name:
+            if len(round_plants) > 0:
                 plant_tick = int(round_plants.iloc[0]["tick"])
                 planter_id = round_plants.iloc[0].get("user_steamid")
                 plant_rows = rows_at(plant_tick)
+                prow = None
                 if planter_id is not None and str(planter_id) != "nan" and len(plant_rows) > 0:
-                    prow = plant_rows[plant_rows["steamid"] == int(planter_id)]
-                    if len(prow) > 0:
-                        site_hit = area_from_place_name(prow.iloc[0].get("last_place_name"))
+                    match = plant_rows[plant_rows["steamid"] == int(planter_id)]
+                    if len(match) > 0:
+                        prow = match.iloc[0]
+                if prow is not None:
+                    if has_place_name:
+                        site_hit = area_from_place_name(prow.get("last_place_name"))
+                    px = prow.get("X")
+                    py = prow.get("Y")
+                    if px is not None and str(px) != "nan":
+                        bomb_plant_out = {
+                            "x": round(float(px), 1),
+                            "y": round(float(py), 1),
+                            "t": round((plant_tick - freeze_tick) / TICK_RATE, 1),
+                        }
+                        if planter_id is not None and str(planter_id) != "nan":
+                            bomb_plant_out["player"] = player_names.get(int(planter_id), str(int(planter_id)))
         if site_hit == "unknown" and has_place_name and round_deaths is not None and len(round_deaths) > 0:
             first_tick = int(round_deaths.iloc[0]["tick"])
             rows = rows_at(first_tick)
             if len(rows) > 0:
                 site_hit = area_from_place_name(rows.iloc[0].get("last_place_name"))
+        if bomb_plant_out is not None:
+            bomb_plant_out["site"] = site_hit
+
+        bomb_defuse_out = None
+        if defuse_df is not None and "tick" in defuse_df.columns and plant_tick is not None:
+            round_defuses = defuse_df[(defuse_df["tick"] > plant_tick) & (defuse_df["tick"] <= end_tick)]
+            if len(round_defuses) > 0:
+                defuse_tick = int(round_defuses.iloc[0]["tick"])
+                bomb_defuse_out = {"t": round((defuse_tick - freeze_tick) / TICK_RATE, 1)}
+                defuser_id = round_defuses.iloc[0].get("user_steamid")
+                if defuser_id is not None and str(defuser_id) != "nan":
+                    bomb_defuse_out["player"] = player_names.get(int(defuser_id), str(int(defuser_id)))
+
+        bomb_explode_out = None
+        if explode_df is not None and "tick" in explode_df.columns and plant_tick is not None:
+            round_explodes = explode_df[(explode_df["tick"] > plant_tick) & (explode_df["tick"] <= end_tick)]
+            if len(round_explodes) > 0:
+                explode_tick = int(round_explodes.iloc[0]["tick"])
+                bomb_explode_out = {"t": round((explode_tick - freeze_tick) / TICK_RATE, 1)}
 
         key_positions = []
         t = freeze_tick
@@ -537,6 +582,9 @@ def main():
                     yaw_val = getattr(r, "yaw", None)
                     if yaw_val is not None and str(yaw_val) != "nan":
                         position_entry["yaw"] = round(float(yaw_val), 1)
+                health_val = getattr(r, "health", None)
+                if health_val is not None and str(health_val) != "nan":
+                    position_entry["health"] = int(float(health_val))
                 key_positions.append(position_entry)
                 if has_place_name:
                     place = getattr(r, "last_place_name", None)
@@ -642,29 +690,51 @@ def main():
             loadout_out.append(loadout_entry)
 
         smokes_out = pair_grenade_lifespan(
-            smoke_start_df, smoke_end_df, freeze_tick, end_tick, int(SMOKE_DEFAULT_DURATION_SECONDS * TICK_RATE)
+            smoke_start_df,
+            smoke_end_df,
+            freeze_tick,
+            end_tick,
+            int(SMOKE_DEFAULT_DURATION_SECONDS * TICK_RATE),
+            player_names,
         )
         fires_out = pair_grenade_lifespan(
-            fire_start_df, fire_end_df, freeze_tick, end_tick, int(FIRE_DEFAULT_DURATION_SECONDS * TICK_RATE)
+            fire_start_df,
+            fire_end_df,
+            freeze_tick,
+            end_tick,
+            int(FIRE_DEFAULT_DURATION_SECONDS * TICK_RATE),
+            player_names,
         )
         decoys_out = pair_grenade_lifespan(
-            decoy_start_df, decoy_end_df, freeze_tick, end_tick, int(DECOY_DEFAULT_DURATION_SECONDS * TICK_RATE)
+            decoy_start_df,
+            decoy_end_df,
+            freeze_tick,
+            end_tick,
+            int(DECOY_DEFAULT_DURATION_SECONDS * TICK_RATE),
+            player_names,
         )
 
-        flashes_out = []
-        if flash_df is not None and "tick" in flash_df.columns:
-            round_flashes = flash_df[(flash_df["tick"] > freeze_tick) & (flash_df["tick"] <= end_tick)]
-            for f in round_flashes.itertuples():
-                x, y = event_xy(f)
-                if x is None or str(x) == "nan":
-                    continue
-                flashes_out.append(
-                    {
+        def build_point_events(df):
+            out = []
+            if df is not None and "tick" in df.columns:
+                round_rows = df[(df["tick"] > freeze_tick) & (df["tick"] <= end_tick)]
+                for row in round_rows.itertuples():
+                    x, y = event_xy(row)
+                    if x is None or str(x) == "nan":
+                        continue
+                    entry = {
                         "x": round(float(x), 1),
                         "y": round(float(y), 1),
-                        "t": round((int(f.tick) - freeze_tick) / TICK_RATE, 1),
+                        "t": round((int(row.tick) - freeze_tick) / TICK_RATE, 1),
                     }
-                )
+                    thrower_id = getattr(row, "user_steamid", None)
+                    if thrower_id is not None and str(thrower_id) != "nan":
+                        entry["player"] = player_names.get(int(thrower_id), str(int(thrower_id)))
+                    out.append(entry)
+            return out
+
+        flashes_out = build_point_events(flash_df)
+        he_out = build_point_events(he_df)
 
         blinds_out = []
         if blind_df is not None and "tick" in blind_df.columns:
@@ -716,7 +786,11 @@ def main():
                 "fires": fires_out,
                 "decoys": decoys_out,
                 "flashes": flashes_out,
+                "he": he_out,
                 "blinds": blinds_out,
+                "bombPlant": bomb_plant_out,
+                "bombDefuse": bomb_defuse_out,
+                "bombExplode": bomb_explode_out,
             }
         )
 
