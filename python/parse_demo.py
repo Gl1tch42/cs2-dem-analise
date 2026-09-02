@@ -13,6 +13,18 @@ for _stream in (sys.stdout, sys.stderr):
 from demoparser2 import DemoParser
 
 from analytics.economy import classify_buy_type, classify_round_economy
+from analytics.positioning import compute_isolation, find_trade_kill
+from analytics.weapons import (
+    COUNTER_STRAFE_RELATIVE_THRESHOLD,
+    GRENADE_PRICES,
+    SNIPER_STATIONARY_THRESHOLD,
+    is_gun_weapon,
+    is_head_hitgroup,
+    is_rifle_or_smg_weapon,
+    is_shotgun_weapon,
+    is_sniper_weapon,
+    max_speed_for_weapon,
+)
 
 TICK_RATE = 64.0
 
@@ -552,83 +564,6 @@ def main():
             "[parse_demo] aviso: item_purchase não expõe weapon nem item nesta demo — "
             "utility comprada e não jogada (unused utility value) ficará sem dado (null)."
         )
-
-    GRENADE_PRICES = {
-        "flashbang": 200,
-        "smokegrenade": 300,
-        "hegrenade": 300,
-        "molotov": 400,
-        "incgrenade": 600,
-        "decoy": 50,
-    }
-
-    NON_GUN_WEAPONS = {
-        "hegrenade", "flashbang", "smokegrenade", "molotov", "incgrenade",
-        "decoy", "knife", "knife_t", "bayonet", "taser", "c4", "world",
-    }
-
-    def is_gun_weapon(name) -> bool:
-        if name is None or str(name) == "nan":
-            return False
-        low = str(name).lower()
-        if low in NON_GUN_WEAPONS:
-            return False
-        if "knife" in low or "bayonet" in low:
-            return False
-        return True
-
-    def is_head_hitgroup(value) -> bool:
-        if value is None or str(value) == "nan":
-            return False
-        try:
-            return int(float(value)) == 1
-        except (ValueError, TypeError):
-            return str(value).lower() == "head"
-
-    # Categorias de arma usadas pelas exceções pedidas (isolar sniper/shotgun de
-    # head accuracy/HS%, restringir spray a rifle/SMG, tolerância de counter-strafe
-    # quase zero pra sniper). Valores de velocidade são a velocidade máxima
-    # aproximada (unidades/s) de cada arma no CS2 — aproximação de referência,
-    # não authoritative; ajustar aqui se precisar calibrar.
-    SNIPER_WEAPONS = {"awp", "ssg08", "g3sg1", "scar20"}
-    SHOTGUN_WEAPONS = {"nova", "xm1014", "sawedoff", "mag7"}
-    PISTOL_WEAPONS = {
-        "glock", "usp_silencer", "hkp2000", "p250", "fiveseven", "tec9",
-        "deagle", "revolver", "elite", "cz75a",
-    }
-    WEAPON_MAX_SPEED = {
-        "knife": 250.0, "knife_t": 250.0, "bayonet": 250.0,
-        "glock": 240.0, "usp_silencer": 240.0, "hkp2000": 240.0, "elite": 240.0,
-        "tec9": 240.0, "fiveseven": 240.0, "cz75a": 240.0, "p250": 240.0,
-        "deagle": 230.0, "revolver": 220.0,
-        "mac10": 240.0, "mp9": 240.0, "bizon": 240.0, "mp7": 220.0, "ump45": 230.0, "p90": 230.0,
-        "famas": 240.0, "galilar": 215.0, "ak47": 215.0, "m4a1": 225.0, "m4a1_silencer": 225.0,
-        "aug": 220.0, "sg556": 210.0,
-        "nova": 220.0, "xm1014": 215.0, "sawedoff": 210.0, "mag7": 225.0,
-        "awp": 200.0, "ssg08": 230.0, "g3sg1": 215.0, "scar20": 215.0,
-        "negev": 150.0, "m249": 160.0,
-        "taser": 220.0,
-    }
-    DEFAULT_MAX_SPEED = 230.0
-    COUNTER_STRAFE_RELATIVE_THRESHOLD = 0.34
-    SNIPER_STATIONARY_THRESHOLD = 5.0
-
-    def is_sniper_weapon(name) -> bool:
-        return name is not None and str(name).lower() in SNIPER_WEAPONS
-
-    def is_shotgun_weapon(name) -> bool:
-        return name is not None and str(name).lower() in SHOTGUN_WEAPONS
-
-    def is_rifle_or_smg_weapon(name) -> bool:
-        if not is_gun_weapon(name):
-            return False
-        low = str(name).lower()
-        return low not in SNIPER_WEAPONS and low not in SHOTGUN_WEAPONS and low not in PISTOL_WEAPONS
-
-    def max_speed_for_weapon(name) -> float:
-        if name is None or str(name) == "nan":
-            return DEFAULT_MAX_SPEED
-        return WEAPON_MAX_SPEED.get(str(name).lower(), DEFAULT_MAX_SPEED)
 
     sample_ticks_set = set()
     for w in windows:
@@ -1693,55 +1628,22 @@ def main():
                 if len(death_rows) == 0:
                     death_rows = nearest_rows_at_or_before(death_tick)
 
-                # Isolamento: nenhum aliado vivo por perto no momento da morte.
-                nearest_ally_dist = None
-                for r in death_rows.itertuples():
-                    ally_id = int(r.steamid)
-                    if ally_id == victim_id or side_map.get(ally_id) != victim_side:
-                        continue
-                    hp = getattr(r, "health", None)
-                    if hp is None or str(hp) == "nan" or float(hp) <= 0:
-                        continue
-                    ax, ay = getattr(r, "X", None), getattr(r, "Y", None)
-                    if ax is None or str(ax) == "nan":
-                        continue
-                    dist = ((float(ax) - victim_pos[0]) ** 2 + (float(ay) - victim_pos[1]) ** 2) ** 0.5
-                    if nearest_ally_dist is None or dist < nearest_ally_dist:
-                        nearest_ally_dist = dist
-                if nearest_ally_dist is None or nearest_ally_dist > ISOLATION_DISTANCE_THRESHOLD:
+                # Isolamento / Trade (A06 "Parser modular" — extraído pra
+                # python/analytics/positioning.py).
+                if compute_isolation(victim_id, victim_side, victim_pos, death_rows, side_map, ISOLATION_DISTANCE_THRESHOLD):
                     bump(player_isolated_deaths, victim_id)
 
-                # Trade: aliado da vítima mata o atacante dentro da janela/raio.
-                if attacker_id is not None and str(attacker_id) != "nan":
-                    attacker_id_i = int(attacker_id)
-                    window_end = death_tick + int(TRADE_WINDOW_SECONDS * TICK_RATE)
-                    for d2 in deaths_list[i + 1 :]:
-                        d2_tick = int(d2.tick)
-                        if d2_tick > window_end:
-                            break
-                        d2_victim = getattr(d2, "user_steamid", None)
-                        d2_attacker = getattr(d2, "attacker_steamid", None)
-                        if d2_victim is None or str(d2_victim) == "nan" or int(d2_victim) != attacker_id_i:
-                            continue
-                        if d2_attacker is None or str(d2_attacker) == "nan":
-                            continue
-                        d2_attacker_i = int(d2_attacker)
-                        if side_map.get(d2_attacker_i) != victim_side:
-                            continue
-                        avenger_pos = pos_xyz_at(d2_attacker_i, d2_tick)
-                        if avenger_pos is None:
-                            continue
-                        dist = ((avenger_pos[0] - victim_pos[0]) ** 2 + (avenger_pos[1] - victim_pos[1]) ** 2) ** 0.5
-                        if dist > TRADE_DISTANCE_THRESHOLD:
-                            continue
-                        bump(player_trade_kills, d2_attacker_i)
-                        bump(player_traded_deaths, victim_id)
-                        delay_ms = (d2_tick - death_tick) / TICK_RATE * 1000.0
-                        player_trade_delay_sum_ms[d2_attacker_i] = (
-                            player_trade_delay_sum_ms.get(d2_attacker_i, 0.0) + delay_ms
-                        )
-                        bump(player_trade_delay_count, d2_attacker_i)
-                        break
+                trade = find_trade_kill(
+                    attacker_id, victim_side, death_tick, deaths_list, i, victim_pos, side_map,
+                    pos_xyz_at, TICK_RATE, TRADE_WINDOW_SECONDS, TRADE_DISTANCE_THRESHOLD,
+                )
+                if trade is not None:
+                    bump(player_trade_kills, trade["avengerId"])
+                    bump(player_traded_deaths, victim_id)
+                    player_trade_delay_sum_ms[trade["avengerId"]] = (
+                        player_trade_delay_sum_ms.get(trade["avengerId"], 0.0) + trade["delayMs"]
+                    )
+                    bump(player_trade_delay_count, trade["avengerId"])
 
                 # Overexposure: >=2 inimigos com distância+ângulo plausíveis de ver a
                 # vítima ao mesmo tempo. Mitigado por retake com bomba plantada, a
