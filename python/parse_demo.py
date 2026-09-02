@@ -624,16 +624,20 @@ def main():
     has_helmet_col = "has_helmet" in ticks_df.columns
     has_kda = all(c in ticks_df.columns for c in ("kills_total", "deaths_total", "assists_total"))
     ticks_by_tick = {tick: grp for tick, grp in ticks_df.groupby("tick")}
+    # Ordenado uma única vez para permitir busca binária em nearest_rows_at_or_before
+    # (chamada centenas de vezes por demo) em vez de refazer uma varredura O(T) a cada
+    # chamada.
+    sorted_tick_keys = sorted(ticks_by_tick.keys())
 
     def rows_at(tick: int):
         grp = ticks_by_tick.get(tick)
         return grp if grp is not None else ticks_df.iloc[0:0]
 
     def nearest_rows_at_or_before(tick: int):
-        available = [t for t in ticks_by_tick.keys() if t <= tick]
-        if not available:
+        idx = bisect.bisect_right(sorted_tick_keys, tick) - 1
+        if idx < 0:
             return ticks_df.iloc[0:0]
-        return ticks_by_tick[max(available)]
+        return ticks_by_tick[sorted_tick_keys[idx]]
 
     # --- T_spot: quando cada jogador ficou visível pra algum inimigo ---
     # `spotted` no demoparser2 é por-entidade ("visível pra ALGUM inimigo"), não
@@ -1724,7 +1728,13 @@ def main():
         sample_ticks = sorted(sample_ticks_local)
         for st in sample_ticks:
             rows = rows_at(st)
-            for r in rows.itertuples():
+            # Materializa o grupo do tick uma única vez: rows.itertuples() paga um
+            # custo fixo de setup do pandas (indexação coluna-a-coluna) a cada
+            # chamada, e esse bloco antes chamava 3x por tick (a 3ª dentro do loop
+            # externo, ou seja, P vezes) — reusar a lista Python evita refazer esse
+            # setup ~12x por tick sem mudar nenhum valor ou ordem de iteração.
+            rows_list = list(rows.itertuples())
+            for r in rows_list:
                 steamid = int(r.steamid)
                 side = side_map.get(steamid)
                 x = getattr(r, "X", None)
@@ -1759,7 +1769,7 @@ def main():
 
             # Distância ao aliado vivo mais próximo — reaproveita os mesmos ticks
             # amostrados acima (não abre uma amostragem nova só pra isso).
-            for r in rows.itertuples():
+            for r in rows_list:
                 steamid = int(r.steamid)
                 side = side_map.get(steamid)
                 x = getattr(r, "X", None)
@@ -1769,7 +1779,7 @@ def main():
                 if hp is None or str(hp) == "nan" or float(hp) <= 0:
                     continue
                 nearest = None
-                for r2 in rows.itertuples():
+                for r2 in rows_list:
                     mate_id = int(r2.steamid)
                     if mate_id == steamid or side_map.get(mate_id) != side:
                         continue
