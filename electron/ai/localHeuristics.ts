@@ -18,7 +18,27 @@ export interface TeamTendencyStats {
   tendencyByTempo: Record<RoundTempo, { count: number; winRate: number }>;
   tendencyByStance: Record<RoundStance, { count: number; winRate: number }>;
   topRecurringPatterns: { pattern: string; count: number; winRate: number }[];
+  // Mesma informação de topRecurringPatterns, mas estruturada (map + side +
+  // buyType/tempo/stance/site em vez de uma string formatada) e SEM slice de
+  // top-10 — usado pelo matchupEngine.ts pra cruzar dois slots por padrão
+  // exato, não só pelos mais frequentes. Ver PatternKey/PatternStat abaixo.
+  detailedPatterns: PatternStat[];
   playerMovementProfile: PlayerMovementProfile[];
+}
+
+export interface PatternKey {
+  map: string;
+  side: 'ct' | 't'; // lado de quem EXECUTOU o padrão (buyType/tempo/stance são sempre do executor)
+  buyType: BuyType;
+  tempo: RoundTempo;
+  stance: RoundStance;
+  site?: 'A' | 'B' | 'mid' | 'unknown';
+}
+
+export interface PatternStat {
+  key: PatternKey;
+  count: number;
+  winRate: number; // win rate de quem executou o padrão
 }
 
 export interface ConsolidatedSlotStats {
@@ -49,6 +69,7 @@ interface TeamAccumulator {
   tendencyByTempo: Record<RoundTempo, { count: number; winRate: number }>;
   tendencyByStance: Record<RoundStance, { count: number; winRate: number }>;
   patternCounts: Map<string, { count: number; wins: number }>;
+  detailedPatternCounts: Map<string, { key: PatternKey; count: number; wins: number }>;
   playerMap: Map<
     string,
     { name: string; areas: Map<string, number>; adrSum: number; adrN: number; entryA: number; entryS: number; cW: number; cL: number; kills: number; deaths: number }
@@ -64,11 +85,19 @@ function createAccumulator(): TeamAccumulator {
     tendencyByTempo: emptyTendencyMap(TEMPOS),
     tendencyByStance: emptyTendencyMap(STANCES),
     patternCounts: new Map(),
+    detailedPatternCounts: new Map(),
     playerMap: new Map(),
   };
 }
 
-function addRound(acc: TeamAccumulator, sideData: RoundSideSummary, won: boolean, site: string | undefined) {
+function addRound(
+  acc: TeamAccumulator,
+  sideData: RoundSideSummary,
+  won: boolean,
+  site: 'A' | 'B' | 'mid' | 'unknown' | undefined,
+  map: string,
+  side: 'ct' | 't'
+) {
   acc.tendencyByBuyType[sideData.buyType].count++;
   acc.tendencyByTempo[sideData.tempo].count++;
   acc.tendencyByStance[sideData.stance].count++;
@@ -82,6 +111,13 @@ function addRound(acc: TeamAccumulator, sideData: RoundSideSummary, won: boolean
   entry.count++;
   if (won) entry.wins++;
   acc.patternCounts.set(patternKey, entry);
+
+  const detailedKey: PatternKey = { map, side, buyType: sideData.buyType, tempo: sideData.tempo, stance: sideData.stance, site };
+  const detailedMapKey = `${map}|${side}|${sideData.buyType}|${sideData.tempo}|${sideData.stance}|${site ?? 'unknown'}`;
+  const detailedEntry = acc.detailedPatternCounts.get(detailedMapKey) ?? { key: detailedKey, count: 0, wins: 0 };
+  detailedEntry.count++;
+  if (won) detailedEntry.wins++;
+  acc.detailedPatternCounts.set(detailedMapKey, detailedEntry);
 }
 
 function addPlayer(acc: TeamAccumulator, player: PlayerAggregate) {
@@ -129,6 +165,12 @@ function finishAccumulator(acc: TeamAccumulator): TeamTendencyStats {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
+  const detailedPatterns: PatternStat[] = Array.from(acc.detailedPatternCounts.values()).map((v) => ({
+    key: v.key,
+    count: v.count,
+    winRate: v.count ? v.wins / v.count : 0,
+  }));
+
   const playerMovementProfile = Array.from(acc.playerMap.entries()).map(([steamId, p]) => ({
     steamId,
     name: p.name,
@@ -143,7 +185,14 @@ function finishAccumulator(acc: TeamAccumulator): TeamTendencyStats {
     deaths: p.deaths,
   }));
 
-  return { tendencyByBuyType: acc.tendencyByBuyType, tendencyByTempo: acc.tendencyByTempo, tendencyByStance: acc.tendencyByStance, topRecurringPatterns, playerMovementProfile };
+  return {
+    tendencyByBuyType: acc.tendencyByBuyType,
+    tendencyByTempo: acc.tendencyByTempo,
+    tendencyByStance: acc.tendencyByStance,
+    topRecurringPatterns,
+    detailedPatterns,
+    playerMovementProfile,
+  };
 }
 
 function resolveMySideForRound(round: RoundSummary, myNames: Set<string>): 'ct' | 't' | null {
@@ -219,8 +268,8 @@ export function consolidateSlot(slotFolder: string, demos: DemoRecord[]): Consol
         siteHitDistribution[round.siteHit] = (siteHitDistribution[round.siteHit] ?? 0) + 1;
       }
 
-      addRound(myAcc, round[mySide], round.winner === mySide, round.siteHit);
-      addRound(oppAcc, round[oppSide], round.winner === oppSide, round.siteHit);
+      addRound(myAcc, round[mySide], round.winner === mySide, round.siteHit, summary.map, mySide);
+      addRound(oppAcc, round[oppSide], round.winner === oppSide, round.siteHit, summary.map, oppSide);
     }
 
     for (const player of summary.playerAggregates) {

@@ -30,6 +30,7 @@
       <li [class.is-active]="activeTab === 'notebook'"><a (click)="setTab('notebook')">Notebook</a></li>
       <li [class.is-active]="activeTab === 'ai'"><a (click)="setTab('ai')">{{ 'Análise de IA' | translate }}</a></li>
       <li [class.is-active]="activeTab === 'consolidado'"><a (click)="setTab('consolidado')">{{ 'Consolidado' | translate }}</a></li>
+      <li *ngIf="slot.kind === 'own'" [class.is-active]="activeTab === 'matchup'"><a (click)="setTab('matchup')">Matchup</a></li>
     </ul>
   </div>
 
@@ -306,5 +307,51 @@
       *ngIf="!playerScoresLoading && slot.demos.length > 0"
       [players]="playerScores"
     ></app-consolidated-score>
+  </section>
+
+  <section *ngIf="activeTab === 'matchup' && slot.kind === 'own'">
+    <p class="text-muted" *ngIf="!opponentSlotsLoading && opponentSlots.length === 0">
+      {{ 'Nenhum slot de adversário criado ainda. Crie um na barra lateral pra montar um confronto.' | translate }}
+    </p>
+    <p class="text-muted" *ngIf="opponentSlotsLoading">{{ 'Carregando slots de adversário…' | translate }}</p>
+
+    <div class="field is-grouped" *ngIf="opponentSlots.length > 0">
+      <div class="control">
+        <label class="label">{{ 'Adversário' | translate }}</label>
+        <div class="select">
+          <select [ngModel]="selectedOpponentSlotId" (ngModelChange)="onOpponentSlotChange($event)">
+            <option value="" disabled>{{ 'Escolha um slot adversário' | translate }}</option>
+            <option *ngFor="let s of opponentSlots" [value]="s.id">{{ s.name }}</option>
+          </select>
+        </div>
+      </div>
+      <div class="control" *ngIf="selectedOpponentSlotId">
+        <label class="label">{{ 'Mapa' | translate }}</label>
+        <div class="select">
+          <select [(ngModel)]="selectedMap">
+            <option value="" disabled>{{ 'Escolha um mapa' | translate }}</option>
+            <option *ngFor="let m of availableMaps" [value]="m">{{ m }}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-muted" *ngIf="mapsLoading">{{ 'Carregando mapas em comum…' | translate }}</p>
+    <div class="notification is-info is-light" *ngIf="selectedOpponentSlotId && !mapsLoading && availableMaps.length === 0">
+      {{ 'Ainda não há mapas em comum entre os dois slots (precisa de demos com o mesmo mapa nos dois, e com o time marcado).' | translate }}
+    </div>
+
+    <button
+      class="button is-primary mb-3"
+      *ngIf="availableMaps.length > 0"
+      [class.is-loading]="matchupLoading"
+      [disabled]="!selectedMap"
+      (click)="generateMatchupReport()"
+    >
+      {{ 'Gerar matchup' | translate }}
+    </button>
+    <p class="help is-danger" *ngIf="matchupError">{{ matchupError }}</p>
+
+    <app-matchup *ngIf="matchupReport" [report]="matchupReport"></app-matchup>
   </section>
 </ng-container>

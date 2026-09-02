@@ -12,6 +12,7 @@ import {
   NotebookHistoryEntry,
   SlotImportResult,
   PlayerScoreAggregate,
+  MatchupReport,
 } from '../models/slot.model';
 
 declare global {
@@ -49,6 +50,8 @@ declare global {
         analyzeSlot: (slotId: string, providerId?: AiProviderId, focusSteamIds?: string[]) => Promise<AnalysisResult>;
         getSlotStats: (slotId: string) => Promise<ConsolidatedSlotStats>;
         getPlayerScores: (slotId: string) => Promise<PlayerScoreAggregate[]>;
+        matchupMaps: (ownSlotId: string, opponentSlotId: string) => Promise<string[]>;
+        generateMatchup: (ownSlotId: string, opponentSlotId: string, map: string) => Promise<MatchupReport>;
       };
       app: {
         getVersion: () => Promise<string>;

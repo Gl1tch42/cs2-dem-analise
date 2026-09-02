@@ -5,6 +5,11 @@ consolidating tactical patterns across matches, scoring individual player
 performance, and keeping a per-team analyst notebook — everything saved
 locally, no database, no server.
 
+Built for analysts and coaches — freelance or on amateur/semi-pro teams —
+who track more than one opponent at a time and need scrim/scouting data to
+stay private, with AI reports running on their own API key instead of a
+SaaS subscription.
+
 ## Features
 
 - **Slot management** — 1 "own team" slot + 20 opponent slots, each holding
@@ -271,42 +276,27 @@ dozens of demos per team.
 
 ## What's left (suggested order)
 
-1. ~~**Real parser** (`python/parse_demo.py`)~~ — done, validated against
-   real demos, and now covered by a pytest suite (`python/tests/`).
-2. ~~**Choosing the slot's side per demo**~~ — done (roster marking, see
-   Features above).
-3. ~~**2D animated map**~~ — done: full replay with playback, timeline,
-   grenade effects, bomb HUD, and real CS2 radar extraction.
-4. ~~**Map area labeling**~~ — done for free via CS2's own
-   `last_place_name`; finer callouts (e.g. distinguishing "A-site" from
-   "A-Ramp") are a later nice-to-have if it turns out to matter.
-5. ~~**Python packaging**~~ — done for Windows: instead of compiling
-   `parse_demo.py` with PyInstaller (which has a history of silently
-   mishandling `demoparser2`, a Rust/PyO3 native extension — missing hidden
-   imports or dropping the compiled `.pyd`), the build bundles a minimal
-   embeddable Python runtime with the parser's deps pre-installed. Run
-   `npm run setup:python-runtime` (or let `npm run build:prod` do it) to
-   build `python-runtime/` via `scripts/setup-python-runtime.ps1`; it's
-   copied into `extraResources` alongside `python/parse_demo.py`, and
-   `demoParserBridge.ts` calls `python-runtime/python.exe` directly when
-   `app.isPackaged`. macOS/Linux packaging isn't wired up yet (no `mac`/
-   `linux` target in `package.json`'s `build` config) — the same approach
-   would use `python-build-standalone` instead of the Windows-only
-   embeddable zip.
-6. ~~**Tempo/stance calibration**~~ — done: per-demo dynamic percentile
-   thresholds replaced the fixed constants (see [How tactical patterns are
-   computed](#how-tactical-patterns-are-computed-no-ai)). Confidence in the
-   classification itself (not just the scale) would still benefit from
-   comparing against human-labeled rounds once enough demos exist.
-7. ~~**Notebook versioning**~~ — done (checkpoints + restore, see Features).
-8. ~~**Sync between analysts / multiple machines**~~ — solved as far as it
-   can be without turning this into a server-backed app: `.csda-slot`
-   export/import (see Features). Not real-time sync — if that's ever truly
-   needed, it's a bigger architectural call (central server vs. shared
-   folder with merge) that changes the "everything local, no infra" premise
-   of the app.
-9. ~~**Player scoring (Aim/Utility/Positioning/Rating)**~~ — done, see [How
-   scores are calculated](#how-scores-are-calculated). Still heuristic, not
-   a statistically validated model — recalibrate the weight/range constants
-   once there's enough real match data.
-10. ~~**PT/EN translation**~~ — done, toggle in the sidebar footer.
+1. **macOS/Linux packaging** — Python packaging is done for Windows (see
+   Architecture: an embeddable Python runtime bundled via
+   `npm run setup:python-runtime`, instead of a PyInstaller binary, which
+   has a history of silently mishandling `demoparser2`, a Rust/PyO3 native
+   extension). No `mac`/`linux` target is wired up yet in `package.json`'s
+   `build` config — the same approach would need
+   `python-build-standalone` instead of the Windows-only embeddable zip.
+2. **Finer map callouts** — area labeling currently comes for free from
+   CS2's own `last_place_name` per tick, with no manual per-map polygon
+   mapping. Splitting broader areas (e.g. distinguishing "A-site" from
+   "A-Ramp") is a later nice-to-have if it turns out to matter.
+3. **Validate tempo/stance classification against human-labeled rounds** —
+   per-demo dynamic percentile thresholds replaced the old fixed constants
+   (see [How tactical patterns are
+   computed](#how-tactical-patterns-are-computed-no-ai)), but the
+   classification itself hasn't been checked against human-labeled rounds,
+   only the scale it's measured on.
+4. **Recalibrate player scoring against real match data** — Aim / Utility /
+   Positioning / Rating / Overall (see [How scores are
+   calculated](#how-scores-are-calculated)) is still a heuristic model, not
+   a statistically validated one. `scripts/calibrate-scores.js` can compute
+   real percentile ranges from a folder of parsed demos, but the sub-metric
+   weights still come from an externally supplied importance matrix, not a
+   regression fit against labeled outcomes.

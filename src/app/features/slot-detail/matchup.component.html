@@ -1,0 +1,85 @@
+<article class="message is-warning">
+  <div class="message-body">
+    {{ 'Isso é inferência estatística cruzando o histórico geral dos dois times, não um confronto direto entre eles.' | translate }}
+  </div>
+</article>
+
+<div
+  class="message is-info"
+  *ngIf="report.demosPendingRoster.own.length > 0 || report.demosPendingRoster.opponent.length > 0"
+>
+  <div class="message-body">
+    <p *ngIf="report.demosPendingRoster.own.length > 0">
+      {{ report.demosPendingRoster.own.length }}
+      {{ 'demo(s) do seu time ficaram de fora (time não marcado):' | translate }}
+      {{ report.demosPendingRoster.own.join(', ') }}
+    </p>
+    <p *ngIf="report.demosPendingRoster.opponent.length > 0">
+      {{ report.demosPendingRoster.opponent.length }}
+      {{ 'demo(s) do adversário ficaram de fora (time não marcado):' | translate }}
+      {{ report.demosPendingRoster.opponent.join(', ') }}
+    </p>
+  </div>
+</div>
+
+<div class="box">
+  <h4 class="title is-5">{{ 'Vulnerabilidades exploráveis' | translate }}</h4>
+  <p class="text-muted" *ngIf="report.exploitableWeaknesses.length === 0">
+    {{ 'Ainda não há dados suficientes cruzando os dois slots nesse mapa.' | translate }}
+  </p>
+  <table class="table is-fullwidth is-striped is-hoverable" *ngIf="report.exploitableWeaknesses.length > 0">
+    <thead>
+      <tr>
+        <th>{{ 'Padrão do adversário' | translate }}</th>
+        <th>{{ 'Frequência (adversário)' | translate }}</th>
+        <th>{{ 'Sua taxa de resposta' | translate }}</th>
+        <th>{{ 'Amostra (seu / adv)' | translate }}</th>
+        <th>{{ 'Confiança' | translate }}</th>
+        <th>{{ 'Severidade' | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let i of report.exploitableWeaknesses">
+        <td class="mono">{{ patternLabel(i) }}</td>
+        <td class="text-muted">{{ i.executorOccurrences }}x ({{ pct(i.executorWinRate) }})</td>
+        <td>
+          <span class="tag" [class.is-success]="i.responseWinRate >= 0.5" [class.is-danger]="i.responseWinRate < 0.5">
+            {{ pct(i.responseWinRate) }}
+          </span>
+        </td>
+        <td class="text-muted">{{ i.responseSampleSize }} / {{ i.executorOccurrences }}</td>
+        <td><span class="tag" [ngClass]="confidenceClass(i.confidence)">{{ confidenceLabel(i.confidence) | translate }}</span></td>
+        <td><span class="tag" [ngClass]="severityClass(i.severity)">{{ severityLabel(i.severity) | translate }}</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="box">
+  <h4 class="title is-5">{{ 'Vantagens próprias' | translate }}</h4>
+  <p class="text-muted" *ngIf="report.ownAdvantages.length === 0">
+    {{ 'Ainda não há dados suficientes cruzando os dois slots nesse mapa.' | translate }}
+  </p>
+  <table class="table is-fullwidth is-striped is-hoverable" *ngIf="report.ownAdvantages.length > 0">
+    <thead>
+      <tr>
+        <th>{{ 'Seu padrão' | translate }}</th>
+        <th>{{ 'Frequência (seu time)' | translate }}</th>
+        <th>{{ 'Taxa de resposta do adversário' | translate }}</th>
+        <th>{{ 'Amostra (seu / adv)' | translate }}</th>
+        <th>{{ 'Confiança' | translate }}</th>
+        <th>{{ 'Força' | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let i of report.ownAdvantages">
+        <td class="mono">{{ patternLabel(i) }}</td>
+        <td class="text-muted">{{ i.executorOccurrences }}x ({{ pct(i.executorWinRate) }})</td>
+        <td><span class="tag is-success">{{ pct(i.responseWinRate) }}</span></td>
+        <td class="text-muted">{{ i.executorOccurrences }} / {{ i.responseSampleSize }}</td>
+        <td><span class="tag" [ngClass]="confidenceClass(i.confidence)">{{ confidenceLabel(i.confidence) | translate }}</span></td>
+        <td><span class="tag" [ngClass]="severityClass(i.severity)">{{ strengthLabel(i.severity) | translate }}</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>

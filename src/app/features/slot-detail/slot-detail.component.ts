@@ -8,18 +8,21 @@ import { Map2dComponent } from '../map2d/map2d.component';
 import { HeatmapComponent } from '../heatmap/heatmap.component';
 import { TeamStatsComponent } from './team-stats.component';
 import { ConsolidatedScoreComponent } from './consolidated-score.component';
+import { MatchupComponent } from './matchup.component';
 import {
   SlotDetail,
+  SlotMeta,
   AnalysisResult,
   DemoRecord,
   DemoSummary,
   PlayerMovementProfile,
   PlayerScoreAggregate,
+  MatchupReport,
 } from '../../core/models/slot.model';
 import { TranslationService } from '../../core/services/translation.service';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
-type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai' | 'consolidado';
+type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai' | 'consolidado' | 'matchup';
 
 @Component({
   selector: 'app-slot-detail',
@@ -32,6 +35,7 @@ type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai' | 'con
     HeatmapComponent,
     TeamStatsComponent,
     ConsolidatedScoreComponent,
+    MatchupComponent,
     TranslatePipe,
   ],
   templateUrl: './slot-detail.component.html',
@@ -73,6 +77,16 @@ export class SlotDetailComponent implements OnInit {
   rosterError = '';
   rosterDraft = new Set<string>();
 
+  opponentSlots: SlotMeta[] = [];
+  opponentSlotsLoading = false;
+  selectedOpponentSlotId = '';
+  availableMaps: string[] = [];
+  mapsLoading = false;
+  selectedMap = '';
+  matchupReport?: MatchupReport;
+  matchupLoading = false;
+  matchupError = '';
+
   constructor(
     private route: ActivatedRoute,
     private electron: ElectronService,
@@ -98,6 +112,12 @@ export class SlotDetailComponent implements OnInit {
     this.focusRoster = [];
     this.focusSelected = new Set();
     this.playerScores = [];
+    this.opponentSlots = [];
+    this.selectedOpponentSlotId = '';
+    this.availableMaps = [];
+    this.selectedMap = '';
+    this.matchupReport = undefined;
+    this.matchupError = '';
     this.slot = await this.electron.api.slots.get(id);
     this.loading = false;
   }
@@ -109,6 +129,53 @@ export class SlotDetailComponent implements OnInit {
     }
     if (tab === 'consolidado' && this.slot && this.slot.demos.length > 0 && this.playerScores.length === 0) {
       this.loadPlayerScores();
+    }
+    if (tab === 'matchup' && this.slot && this.opponentSlots.length === 0) {
+      this.loadOpponentSlots();
+    }
+  }
+
+  async loadOpponentSlots() {
+    this.opponentSlotsLoading = true;
+    try {
+      const all = await this.electron.api.slots.list();
+      this.opponentSlots = all.filter((s) => s.kind === 'opponent');
+    } finally {
+      this.opponentSlotsLoading = false;
+    }
+  }
+
+  async onOpponentSlotChange(opponentSlotId: string) {
+    this.selectedOpponentSlotId = opponentSlotId;
+    this.availableMaps = [];
+    this.selectedMap = '';
+    this.matchupReport = undefined;
+    this.matchupError = '';
+    if (!this.slot || !opponentSlotId) return;
+    this.mapsLoading = true;
+    try {
+      this.availableMaps = await this.electron.api.ai.matchupMaps(this.slot.id, opponentSlotId);
+    } catch (err) {
+      this.matchupError = (err as Error).message ?? this.t('Falha ao carregar mapas em comum.');
+    } finally {
+      this.mapsLoading = false;
+    }
+  }
+
+  async generateMatchupReport() {
+    if (!this.slot || !this.selectedOpponentSlotId || !this.selectedMap) return;
+    this.matchupLoading = true;
+    this.matchupError = '';
+    try {
+      this.matchupReport = await this.electron.api.ai.generateMatchup(
+        this.slot.id,
+        this.selectedOpponentSlotId,
+        this.selectedMap
+      );
+    } catch (err) {
+      this.matchupError = (err as Error).message ?? this.t('Falha ao gerar o relatório de confronto.');
+    } finally {
+      this.matchupLoading = false;
     }
   }
 

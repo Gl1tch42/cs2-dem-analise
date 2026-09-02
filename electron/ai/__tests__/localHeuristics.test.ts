@@ -242,6 +242,43 @@ describe('consolidateSlot', () => {
     expect(result.opponent.tendencyByBuyType.eco.winRate).toBe(0);
   });
 
+  it('records detailedPatterns keyed by map + side, separately for my team and the opponent, without a top-N slice', () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    const summary: DemoSummary = {
+      demoId: 'd1',
+      map: 'de_inferno',
+      finalScore: { team: 1, opponent: 0 },
+      rounds: [
+        buildRound({
+          winner: 'ct',
+          siteHit: 'A',
+          ct: emptySide({ buyType: 'full', tempo: 'rush', stance: 'aggressive' }),
+          t: emptySide({ buyType: 'eco', tempo: 'slow', stance: 'passive' }),
+          keyPositions: [{ player: 'Ally', side: 'ct', x: 0, y: 0, t: 0 }],
+        }),
+      ],
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally'), buildAggregate('76500000000000099', 'Enemy')],
+    };
+    mockedFs.readFileSync.mockReturnValue(JSON.stringify(summary));
+
+    const result = consolidateSlot(slotFolder, [buildDemoRecord('demo-1')]);
+
+    expect(result.myTeam.detailedPatterns).toEqual([
+      {
+        key: { map: 'de_inferno', side: 'ct', buyType: 'full', tempo: 'rush', stance: 'aggressive', site: 'A' },
+        count: 1,
+        winRate: 1,
+      },
+    ]);
+    expect(result.opponent.detailedPatterns).toEqual([
+      {
+        key: { map: 'de_inferno', side: 't', buyType: 'eco', tempo: 'slow', stance: 'passive', site: 'A' },
+        count: 1,
+        winRate: 0,
+      },
+    ]);
+  });
+
   it('attributes each player to my team or the opponent movement profile based on the marked roster', () => {
     mockedFs.existsSync.mockReturnValue(true);
     const summary: DemoSummary = {

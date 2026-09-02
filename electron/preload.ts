@@ -38,6 +38,10 @@ const api = {
       ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId, focusSteamIds),
     getSlotStats: (slotId: string) => ipcRenderer.invoke('ai:getSlotStats', slotId),
     getPlayerScores: (slotId: string) => ipcRenderer.invoke('ai:getPlayerScores', slotId),
+    matchupMaps: (ownSlotId: string, opponentSlotId: string) =>
+      ipcRenderer.invoke('ai:matchupMaps', ownSlotId, opponentSlotId),
+    generateMatchup: (ownSlotId: string, opponentSlotId: string, map: string) =>
+      ipcRenderer.invoke('ai:generateMatchup', ownSlotId, opponentSlotId, map),
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),

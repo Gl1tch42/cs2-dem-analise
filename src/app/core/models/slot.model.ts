@@ -321,7 +321,23 @@ export interface TeamTendencyStats {
   tendencyByTempo: Record<RoundTempo, { count: number; winRate: number }>;
   tendencyByStance: Record<RoundStance, { count: number; winRate: number }>;
   topRecurringPatterns: { pattern: string; count: number; winRate: number }[];
+  detailedPatterns: PatternStat[];
   playerMovementProfile: PlayerMovementProfile[];
+}
+
+export interface PatternKey {
+  map: string;
+  side: 'ct' | 't';
+  buyType: BuyType;
+  tempo: RoundTempo;
+  stance: RoundStance;
+  site?: 'A' | 'B' | 'mid' | 'unknown';
+}
+
+export interface PatternStat {
+  key: PatternKey;
+  count: number;
+  winRate: number;
 }
 
 export interface ConsolidatedSlotStats {
@@ -332,6 +348,31 @@ export interface ConsolidatedSlotStats {
   siteHitDistribution: Record<string, number>;
   myTeam: TeamTendencyStats;
   opponent: TeamTendencyStats;
+}
+
+// Ver electron/ai/matchupEngine.ts — cruzamento local (sem custo de IA) entre o
+// slot próprio e um slot adversário, gerado por mapa.
+export type MatchupConfidence = 'low' | 'medium' | 'high';
+
+export interface MatchupInsight {
+  key: PatternKey;
+  executorOccurrences: number;
+  executorWinRate: number;
+  responseWinRate: number;
+  responseSampleSize: number;
+  confidence: MatchupConfidence;
+  severity: MatchupConfidence;
+}
+
+export interface MatchupReport {
+  ownSlotId: string;
+  opponentSlotId: string;
+  map: string;
+  generatedAt: string;
+  exploitableWeaknesses: MatchupInsight[];
+  ownAdvantages: MatchupInsight[];
+  demosPendingRoster: { own: string[]; opponent: string[] };
+  disclaimer: 'inferred-not-head-to-head';
 }
 
 export interface AnalysisResult {

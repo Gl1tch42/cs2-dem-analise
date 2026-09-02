@@ -6,6 +6,7 @@ import { SettingsManager } from '../storage/settingsManager';
 import { AiProviderId, SlotExportBundle } from '../storage/types';
 import { parseDemoFile } from '../ai/demoParserBridge';
 import { getPlayerScores, getSlotStats, runSlotAnalysis } from '../ai/analysisRunner';
+import { commonMaps, generateMatchup } from '../ai/matchupEngine';
 import { extractRadarsFromLocalCs2, getCachedRadarPath } from '../ai/radarExtractor';
 
 export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, settings: SettingsManager) {
@@ -102,6 +103,15 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
   );
   ipcMain.handle('ai:getSlotStats', (_e, slotId: string) => getSlotStats(slots, slotId));
   ipcMain.handle('ai:getPlayerScores', (_e, slotId: string) => getPlayerScores(slots, slotId));
+
+  ipcMain.handle('ai:matchupMaps', (_e, ownSlotId: string, opponentSlotId: string) => {
+    const own = slots.getSlot(ownSlotId);
+    const opp = slots.getSlot(opponentSlotId);
+    return commonMaps(own.demos, opp.demos);
+  });
+  ipcMain.handle('ai:generateMatchup', (_e, ownSlotId: string, opponentSlotId: string, map: string) =>
+    generateMatchup(slots, ownSlotId, opponentSlotId, map)
+  );
 
   ipcMain.handle('assets:extractRadars', () => extractRadarsFromLocalCs2());
   ipcMain.handle('assets:getRadarImage', (_e, map: string) => {
