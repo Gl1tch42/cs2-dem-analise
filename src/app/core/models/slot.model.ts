@@ -355,10 +355,18 @@ export interface PlayerScoreHistoryEntry {
   impact: PlayerImpactStats;
 }
 
+// Confiança do score consolidado, baseada só no n de demos usadas pra
+// calcular a média do jogador — não é uma medida estatística real
+// (desvio-padrão, intervalo de confiança), só um sinal visual pra não
+// tratar 2 demos e 40 demos com o mesmo peso. Ver computeScoreConfidence
+// em electron/ai/scoreEngine.ts.
+export type ScoreConfidence = 'low' | 'medium' | 'high';
+
 export interface PlayerScoreAggregate {
   steamId: string;
   name: string;
   demosCount: number;
+  confidence: ScoreConfidence;
   avgAimScore: number;
   avgUtilityScore: number;
   avgPositioningScore: number;

@@ -8,6 +8,9 @@
 /out-tsc
 /bazel-out
 
+# Embeddable Python runtime (built by scripts/setup-python-runtime.ps1)
+/python-runtime
+
 # Node
 /node_modules
 npm-debug.log

@@ -193,6 +193,18 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+// Limiares de confiança do score consolidado — puramente heurísticos (sem
+// desvio-padrão nem intervalo de confiança por trás), só pra sinalizar na UI
+// que 1-2 demos é amostra fraca e 8+ já dá pra confiar mais na média. Ajustar
+// conforme feedback real de uso.
+const SCORE_CONFIDENCE_THRESHOLDS = { medium: 3, high: 8 };
+
+export function computeScoreConfidence(demosCount: number): 'low' | 'medium' | 'high' {
+  if (demosCount >= SCORE_CONFIDENCE_THRESHOLDS.high) return 'high';
+  if (demosCount >= SCORE_CONFIDENCE_THRESHOLDS.medium) return 'medium';
+  return 'low';
+}
+
 // KPR fica numa escala pequena (~0.5-1.0) — 1 casa decimal (round1) esmagaria
 // a diferença entre jogadores; usado só nesse campo.
 function round2(value: number): number {
@@ -635,6 +647,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       steamId,
       name: acc.name,
       demosCount: acc.demosCount,
+      confidence: computeScoreConfidence(acc.demosCount),
       avgAimScore: acc.demosCount ? round1(acc.aimScoreSum / acc.demosCount) : 0,
       avgUtilityScore: acc.demosCount ? round1(acc.utilityScoreSum / acc.demosCount) : 0,
       avgPositioningScore: acc.demosCount ? round1(acc.positioningScoreSum / acc.demosCount) : 0,

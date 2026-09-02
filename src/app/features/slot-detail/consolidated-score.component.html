@@ -34,6 +34,13 @@
         <div class="player-hero-identity">
           <h3 class="title is-4 has-text-white">{{ p.name }}</h3>
           <span class="tag is-dark is-rounded">{{ p.demosCount }} {{ 'demo(s)' | translate }}</span>
+          <span
+            class="tag is-rounded"
+            [ngClass]="confidenceClass(p)"
+            [title]="'Baseado no número de demos usadas pra calcular essa média — não é uma medida estatística formal.' | translate"
+          >
+            {{ confidenceLabel(p) | translate }}
+          </span>
         </div>
         <div class="hero-metric" [ngClass]="scoreClass(p.avgOverallScore)">
           <span class="hero-metric-label">{{ 'Nota Geral' | translate }}</span>

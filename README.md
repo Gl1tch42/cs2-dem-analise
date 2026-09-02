@@ -204,9 +204,9 @@ anything under `electron/`, stop (Ctrl+C) and run `npm start` again.
 pip install -r python/requirements.txt
 ```
 
-`demoParserBridge.ts` calls the system `python`/`python3` in development
-(it switches to a PyInstaller-packaged binary only once `app.isPackaged` —
-see "What's left" below, not done yet).
+`demoParserBridge.ts` calls the system `python`/`python3` in development;
+once `app.isPackaged` it switches to the bundled embeddable runtime instead
+(`npm run setup:python-runtime` — see "Python packaging" below).
 
 ### Tests
 
@@ -240,9 +240,19 @@ dozens of demos per team.
 4. ~~**Map area labeling**~~ — done for free via CS2's own
    `last_place_name`; finer callouts (e.g. distinguishing "A-site" from
    "A-Ramp") are a later nice-to-have if it turns out to matter.
-5. **Python packaging** — use PyInstaller to produce a standalone binary and
-   wire up `extraResources` in `electron-builder` (already referenced in
-   `demoParserBridge.ts`), so end users don't need Python installed.
+5. ~~**Python packaging**~~ — done for Windows: instead of compiling
+   `parse_demo.py` with PyInstaller (which has a history of silently
+   mishandling `demoparser2`, a Rust/PyO3 native extension — missing hidden
+   imports or dropping the compiled `.pyd`), the build bundles a minimal
+   embeddable Python runtime with the parser's deps pre-installed. Run
+   `npm run setup:python-runtime` (or let `npm run build:prod` do it) to
+   build `python-runtime/` via `scripts/setup-python-runtime.ps1`; it's
+   copied into `extraResources` alongside `python/parse_demo.py`, and
+   `demoParserBridge.ts` calls `python-runtime/python.exe` directly when
+   `app.isPackaged`. macOS/Linux packaging isn't wired up yet (no `mac`/
+   `linux` target in `package.json`'s `build` config) — the same approach
+   would use `python-build-standalone` instead of the Windows-only
+   embeddable zip.
 6. ~~**Tempo/stance calibration**~~ — done: per-demo dynamic percentile
    thresholds replaced the fixed constants (see [How tactical patterns are
    computed](#how-tactical-patterns-are-computed-no-ai)). Confidence in the

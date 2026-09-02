@@ -7,6 +7,7 @@ import {
   PlayerUtilityStats,
   PlayerPositioningStats,
   PlayerImpactStats,
+  ScoreConfidence,
 } from '../../core/models/slot.model';
 import { TranslationService } from '../../core/services/translation.service';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
@@ -146,6 +147,25 @@ export class ConsolidatedScoreComponent {
 
   // steamId -> demoId da demo isolada em exibição. Sem entrada (ou null) = mostra o consolidado.
   private selectedDemoId: Record<string, string | null> = {};
+
+  // Rótulo/classe do badge de confiança — mesma ideia de tempoStanceThresholdSource
+  // (electron/ai/localHeuristics.ts): sinalizar quando a amostra (n de demos) é
+  // pequena demais pra confiar cegamente na média, sem esconder o número.
+  private readonly confidenceLabels: Record<ScoreConfidence, string> = {
+    low: 'Baixa confiança',
+    medium: 'Confiança média',
+    high: 'Alta confiança',
+  };
+
+  confidenceLabel(p: PlayerScoreAggregate): string {
+    return this.confidenceLabels[p.confidence];
+  }
+
+  confidenceClass(p: PlayerScoreAggregate): string {
+    if (p.confidence === 'high') return 'is-success';
+    if (p.confidence === 'medium') return 'is-warning';
+    return 'is-danger';
+  }
 
   scoreClass(score: number): string {
     if (score >= 65) return 'is-success';

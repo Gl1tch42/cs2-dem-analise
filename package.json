@@ -12,7 +12,8 @@
     "build:electron": "tsc -p tsconfig.electron.json && node -e \"require('fs').cpSync('electron/assets','dist-electron/assets',{recursive:true})\"",
     "build:angular": "ng build",
     "build": "npm run build:angular && npm run build:electron",
-    "build:prod": "npm run build && electron-builder",
+    "setup:python-runtime": "powershell -ExecutionPolicy Bypass -File scripts/setup-python-runtime.ps1",
+    "build:prod": "npm run setup:python-runtime && npm run build && electron-builder",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:electron": "jest"
@@ -29,6 +30,16 @@
       "dist-electron/**/*",
       "dist/cs-demo-analyst/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "python-runtime",
+        "to": "python-runtime"
+      },
+      {
+        "from": "python/parse_demo.py",
+        "to": "python/parse_demo.py"
+      }
     ],
     "win": {
       "target": [

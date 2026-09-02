@@ -261,6 +261,11 @@ export const EN_TRANSLATIONS: Record<string, string> = {
   '← Ver consolidado': '← View consolidated',
   'Nota da demo': 'Demo score',
   'Nota Geral': 'Overall Score',
+  'Baixa confiança': 'Low confidence',
+  'Confiança média': 'Medium confidence',
+  'Alta confiança': 'High confidence',
+  'Baseado no número de demos usadas pra calcular essa média — não é uma medida estatística formal.':
+    'Based on the number of demos used to compute this average — not a formal statistical measure.',
   'Mira': 'Aim',
   'Posicionamento': 'Positioning',
   'Smokes no pé': 'Smokes at feet',
