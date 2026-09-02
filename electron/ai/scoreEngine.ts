@@ -193,6 +193,12 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+// Identifica a régua de calibração usada pra gerar o score — bump manual toda
+// vez que os blocos de targetMin/targetMax abaixo mudarem (ex: depois de
+// rodar scripts/calibrate-scores.js), pra a UI conseguir avisar "a régua
+// mudou" em vez de só mostrar um número diferente sem explicação.
+export const SCORING_MODEL_VERSION = 'v1-heuristic';
+
 // Limiares de confiança do score consolidado — puramente heurísticos (sem
 // desvio-padrão nem intervalo de confiança por trás), só pra sinalizar na UI
 // que 1-2 demos é amostra fraca e 8+ já dá pra confiar mais na média. Ajustar
@@ -648,6 +654,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       name: acc.name,
       demosCount: acc.demosCount,
       confidence: computeScoreConfidence(acc.demosCount),
+      scoringModelVersion: SCORING_MODEL_VERSION,
       avgAimScore: acc.demosCount ? round1(acc.aimScoreSum / acc.demosCount) : 0,
       avgUtilityScore: acc.demosCount ? round1(acc.utilityScoreSum / acc.demosCount) : 0,
       avgPositioningScore: acc.demosCount ? round1(acc.positioningScoreSum / acc.demosCount) : 0,

@@ -293,6 +293,10 @@ export interface PlayerScoreAggregate {
   name: string;
   demosCount: number;
   confidence: ScoreConfidence;
+  // Ver SCORING_MODEL_VERSION em electron/ai/scoreEngine.ts — muda quando as
+  // faixas targetMin/targetMax são recalibradas, pra UI poder sinalizar que
+  // a régua mudou em vez de só mostrar um score diferente sem contexto.
+  scoringModelVersion: string;
   avgAimScore: number;
   avgUtilityScore: number;
   avgPositioningScore: number;

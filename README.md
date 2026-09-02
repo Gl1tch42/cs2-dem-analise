@@ -110,6 +110,40 @@ labeled dataset. Treat the numbers as directionally useful and tune the
 constants in `scoreEngine.ts` once you have enough real games to calibrate
 against.
 
+**Confidence badge.** Because the model isn't statistically validated, the
+consolidated view also shows a **Low/Medium/High confidence** badge next to
+each player's aggregate score, based purely on how many demos went into that
+average (`computeScoreConfidence` in `scoreEngine.ts`: <3 demos = low, 3-7 =
+medium, 8+ = high). It's not a real confidence interval — no standard
+deviation involved — just a visual cue so a 2-demo sample and a 40-demo
+sample don't read with the same weight. Same spirit as the
+`tempoStanceThresholdSource` flag below.
+
+**Recalibrating the ranges.** `scripts/calibrate-scores.js` computes real
+percentiles (default p15/p85) for every sub-metric from a folder of already-
+parsed demos (point it at any directory containing `summary.json` files —
+including the app's own `slots/` folder under userData — it walks
+recursively and uses all 10 players per demo, not just a marked roster, since
+calibration wants spread across skill levels, not "your team" filtering):
+
+```bash
+node scripts/calibrate-scores.js <path-to-demos-folder>
+```
+
+It prints a report (current vs. suggested `targetMin`/`targetMax` per
+sub-metric, sample count, and a low-sample warning below `--min-samples`,
+default 15) — it does **not** edit `scoreEngine.ts` itself, since each weight
+block there carries hand-written provenance comments a script shouldn't
+silently overwrite. Apply the suggested ranges manually (keep the `weight`
+values as-is — this only recalibrates ranges, not importance), then bump
+`SCORING_MODEL_VERSION` in `scoreEngine.ts` to whatever the script suggests
+(e.g. `v2-percentile-N84-2026-09-02`) so the version tag shown next to each
+player's score in the Consolidated tab changes too — that's what makes a
+recalibration visible instead of the number just silently drifting between
+sessions. This still isn't a labeled/regression-fit model, but real
+percentiles from a real (even if small) distribution are a meaningfully
+better foundation than a single reference stat line.
+
 ## How tactical patterns are computed (no AI)
 
 `electron/ai/localHeuristics.ts` consolidates every demo in a slot, split
@@ -215,6 +249,12 @@ npm test              # Angular (Karma/Jasmine)
 npm run test:electron # main-process logic (Jest, electron/__tests__/**/*.test.ts)
 pip install -r python/requirements-dev.txt && pytest python/tests  # parser (pytest)
 ```
+
+`tsconfig.electron.json` (used by `npm run build:electron`, part of
+`build:prod`) excludes `electron/**/__tests__/**` — it only has `"types":
+["node"]`, so letting it pick up `*.test.ts` files fails on the Jest globals
+(`describe`/`it`/`expect`). Test files are type-checked separately by
+`ts-jest` via `tsconfig.electron.spec.json` when you run `test:electron`.
 
 ## AI providers
 

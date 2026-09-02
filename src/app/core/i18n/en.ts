@@ -266,6 +266,8 @@ export const EN_TRANSLATIONS: Record<string, string> = {
   'Alta confiança': 'High confidence',
   'Baseado no número de demos usadas pra calcular essa média — não é uma medida estatística formal.':
     'Based on the number of demos used to compute this average — not a formal statistical measure.',
+  'Versão do modelo de calibração usado pra gerar esse score — muda quando as faixas-alvo são recalibradas.':
+    'Calibration model version used to generate this score — changes when the target ranges are recalibrated.',
   'Mira': 'Aim',
   'Posicionamento': 'Positioning',
   'Smokes no pé': 'Smokes at feet',

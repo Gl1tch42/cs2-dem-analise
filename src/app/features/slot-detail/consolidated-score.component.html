@@ -41,6 +41,12 @@
           >
             {{ confidenceLabel(p) | translate }}
           </span>
+          <span
+            class="tag is-rounded has-text-grey-light model-version-tag"
+            [title]="'Versão do modelo de calibração usado pra gerar esse score — muda quando as faixas-alvo são recalibradas.' | translate"
+          >
+            {{ p.scoringModelVersion }}
+          </span>
         </div>
         <div class="hero-metric" [ngClass]="scoreClass(p.avgOverallScore)">
           <span class="hero-metric-label">{{ 'Nota Geral' | translate }}</span>

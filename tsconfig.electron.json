@@ -13,5 +13,6 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
-  "include": ["electron/**/*.ts"]
+  "include": ["electron/**/*.ts"],
+  "exclude": ["electron/**/__tests__/**"]
 }
