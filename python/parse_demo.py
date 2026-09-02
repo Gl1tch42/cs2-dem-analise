@@ -22,6 +22,12 @@ TICK_RATE = 64.0
 # versions the separate 0-100 scoring layer.
 FEATURE_MODEL_VERSION = "v1-heuristic"
 
+# Usado só pra estimar "timeRemainingSec" por morte (A05) — assume o padrão
+# competitivo/matchmaking (1:55). Não dá pra detectar mp_roundtime customizado
+# a partir da demo, então isso é aproximado por design; documentado em
+# RoundDeath.timeRemainingSec.
+ROUND_TIME_LIMIT_SECONDS = 115.0
+
 TEAM_NUM_TO_SIDE = {2: "t", 3: "ct"}
 
 def coerce_side(value) -> Optional[str]:
@@ -96,6 +102,23 @@ def build_dense_spot_window_ticks(fire_df, demo_start_tick: int, demo_end_tick: 
 
 def eprint(*args):
     print(*args, file=sys.stderr)
+
+def compute_death_round_state(alive_ct: int, alive_t: int, plant_tick: Optional[int], death_tick: int, death_t: float) -> dict:
+    """Estado do round no momento de uma morte (A05): contagem de vivos por
+    lado, vantagem numérica (CT-signed: positivo = CT em vantagem) e se a
+    bomba já estava plantada, além do tempo restante aproximado.
+
+    alive_ct/alive_t devem ser passados JÁ decrementados pra refletir esta
+    morte (ver chamada em main()) — o estado descrito é o resultado da
+    morte, não o instante imediatamente anterior a ela.
+    """
+    return {
+        "aliveCT": alive_ct,
+        "aliveT": alive_t,
+        "manAdvantage": alive_ct - alive_t,
+        "bombPlanted": plant_tick is not None and death_tick > plant_tick,
+        "timeRemainingSec": round(max(0.0, ROUND_TIME_LIMIT_SECONDS - death_t), 1),
+    }
 
 def load_visibility_checker(geometry_dir: Optional[str], map_name: str):
     """Carrega um VisibilityChecker (LOS real, ver python/geometry/) pro mapa
@@ -938,6 +961,12 @@ def main():
         equip_by_side = pre["equip_by_side"]
         displacement_by_side = pre["displacement_by_side"]
         areas_reached_by_side = pre["areas_reached_by_side"]
+
+        # Contagem de vivos por lado (A05) — decrementada conforme deaths_out é
+        # construído abaixo, na mesma ordem cronológica (round_deaths já vem
+        # ordenado por tick). side_map é o roster no início da rodada.
+        alive_ct = sum(1 for s in side_map.values() if s == "ct")
+        alive_t = sum(1 for s in side_map.values() if s == "t")
 
         for roster_side, ids in roster_by_side_r1.items():
             occupying_side = None
@@ -1814,6 +1843,9 @@ def main():
                     if place:
                         counts = player_area_counts.setdefault(steamid, {})
                         counts[str(place)] = counts.get(str(place), 0) + 1
+                        # A05: já calculado acima só pra `player_area_counts` — reaproveita
+                        # em vez de descartar, agora que RoundDeath/KeyPosition têm campo pra isso.
+                        position_entry["zone"] = area
 
             # Distância ao aliado vivo mais próximo — reaproveita os mesmos ticks
             # amostrados acima (não abre uma amostragem nova só pra isso).
@@ -1857,6 +1889,15 @@ def main():
                 if side is None:
                     continue
                 death_tick = int(d.tick)
+                # A05: decrementa o lado de quem morreu já aqui — reflete o estado real
+                # do jogo (ele morreu) independente de conseguirmos ou não recuperar a
+                # posição x/y abaixo; se decrementasse só depois do lookup de posição,
+                # uma falha de lookup deixaria as próximas mortes da rodada com
+                # aliveCT/aliveT inflados.
+                if side == "ct":
+                    alive_ct = max(0, alive_ct - 1)
+                else:
+                    alive_t = max(0, alive_t - 1)
                 drow = rows_at(death_tick)
                 drow = drow[drow["steamid"] == user_id]
                 if len(drow) == 0:
@@ -1864,13 +1905,20 @@ def main():
                     drow = drow[drow["steamid"] == user_id]
                 if len(drow) == 0 or str(drow.iloc[0].get("X")) == "nan":
                     continue
+                death_t = round((death_tick - freeze_tick) / TICK_RATE, 1)
                 death_entry = {
                     "player": player_names.get(user_id, str(user_id)),
                     "side": side,
                     "x": round(float(drow.iloc[0]["X"]), 1),
                     "y": round(float(drow.iloc[0]["Y"]), 1),
-                    "t": round((death_tick - freeze_tick) / TICK_RATE, 1),
+                    "t": death_t,
+                    **compute_death_round_state(alive_ct, alive_t, plant_tick, death_tick, death_t),
                 }
+                if has_place_name:
+                    place = drow.iloc[0].get("last_place_name")
+                    if place:
+                        zone = area_from_place_name(place)
+                        death_entry["zone"] = zone if zone != "unknown" else str(place)
                 attacker_name = getattr(d, "attacker_name", None)
                 if attacker_name and str(attacker_name) != "nan":
                     death_entry["by"] = attacker_name

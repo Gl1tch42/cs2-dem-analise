@@ -31,6 +31,7 @@ const demoParserBridge_1 = require("../ai/demoParserBridge");
 const analysisRunner_1 = require("../ai/analysisRunner");
 const matchupEngine_1 = require("../ai/matchupEngine");
 const radarExtractor_1 = require("../ai/radarExtractor");
+const mapGeometryExtractor_1 = require("../ai/mapGeometryExtractor");
 function registerIpcHandlers(win, slots, settings) {
     electron_1.ipcMain.handle('slots:list', () => slots.listSlots());
     electron_1.ipcMain.handle('slots:get', (_e, id) => slots.getSlot(id));
@@ -115,6 +116,7 @@ function registerIpcHandlers(win, slots, settings) {
     });
     electron_1.ipcMain.handle('ai:generateMatchup', (_e, ownSlotId, opponentSlotId, map) => (0, matchupEngine_1.generateMatchup)(slots, ownSlotId, opponentSlotId, map));
     electron_1.ipcMain.handle('assets:extractRadars', () => (0, radarExtractor_1.extractRadarsFromLocalCs2)());
+    electron_1.ipcMain.handle('assets:extractMapGeometry', () => (0, mapGeometryExtractor_1.extractMapPhysicsFromLocalCs2)());
     electron_1.ipcMain.handle('assets:getRadarImage', (_e, map) => {
         const filePath = (0, radarExtractor_1.getCachedRadarPath)(map);
         if (!filePath)

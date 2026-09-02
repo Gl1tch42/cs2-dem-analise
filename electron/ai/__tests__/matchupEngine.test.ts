@@ -1,5 +1,5 @@
 import { buildMatchup, commonMaps, computeMatchupConfidence } from '../matchupEngine';
-import { ConsolidatedSlotStats, TeamTendencyStats, PatternStat, PatternKey } from '../localHeuristics';
+import { ConsolidatedSlotStats, TeamTendencyStats, PatternStat, PatternKey, ManAdvantageBucket } from '../localHeuristics';
 import { DemoRecord, BuyType, RoundTempo, RoundStance } from '../../storage/types';
 
 // ---- fixtures ---------------------------------------------------------
@@ -7,6 +7,7 @@ import { DemoRecord, BuyType, RoundTempo, RoundStance } from '../../storage/type
 const BUY_TYPES: BuyType[] = ['eco', 'force', 'semi', 'full', 'unknown'];
 const TEMPOS: RoundTempo[] = ['rush', 'slow', 'default', 'split', 'unknown'];
 const STANCES: RoundStance[] = ['aggressive', 'passive', 'passive-aggressive', 'unknown'];
+const MAN_ADVANTAGE_BUCKETS: ManAdvantageBucket[] = ['advantage', 'even', 'disadvantage', 'unknown'];
 
 function emptyCountMap<K extends string>(keys: K[]): Record<K, { count: number; winRate: number }> {
   const out = {} as Record<K, { count: number; winRate: number }>;
@@ -19,6 +20,7 @@ function buildTeam(detailedPatterns: PatternStat[] = []): TeamTendencyStats {
     tendencyByBuyType: emptyCountMap(BUY_TYPES),
     tendencyByTempo: emptyCountMap(TEMPOS),
     tendencyByStance: emptyCountMap(STANCES),
+    tendencyByManAdvantage: emptyCountMap(MAN_ADVANTAGE_BUCKETS),
     topRecurringPatterns: [],
     detailedPatterns,
     playerMovementProfile: [],

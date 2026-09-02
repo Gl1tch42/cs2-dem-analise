@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCachedRadarPath = exports.extractRadarsFromLocalCs2 = void 0;
+exports.getCachedRadarPath = exports.extractRadarsFromLocalCs2 = exports.ensureExtractorCli = exports.runCommand = exports.findCs2InstallDir = exports.appDataRoot = void 0;
 const electron_1 = require("electron");
 const child_process_1 = require("child_process");
 const fs = __importStar(require("fs"));
@@ -35,6 +35,7 @@ const VRF_CLI_ZIP_URL = `https://github.com/ValveResourceFormat/ValveResourceFor
 function appDataRoot() {
     return path.join(electron_1.app.getPath('userData'), 'cs-demo-analyst');
 }
+exports.appDataRoot = appDataRoot;
 function radarsDir() {
     const dir = path.join(appDataRoot(), 'radars');
     fs.mkdirSync(dir, { recursive: true });
@@ -67,6 +68,7 @@ function findCs2InstallDir() {
     }
     return null;
 }
+exports.findCs2InstallDir = findCs2InstallDir;
 function downloadFile(url, destPath) {
     return new Promise((resolve, reject) => {
         const file = fs.createWriteStream(destPath);
@@ -109,6 +111,7 @@ function runCommand(cmd, args) {
         });
     });
 }
+exports.runCommand = runCommand;
 async function ensureExtractorCli() {
     const dir = toolsDir();
     const exe = path.join(dir, 'Source2Viewer-CLI.exe');
@@ -130,6 +133,7 @@ async function ensureExtractorCli() {
     }
     return exe;
 }
+exports.ensureExtractorCli = ensureExtractorCli;
 async function extractRadarsFromLocalCs2() {
     const cs2Dir = findCs2InstallDir();
     if (!cs2Dir) {

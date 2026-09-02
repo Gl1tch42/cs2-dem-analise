@@ -13,6 +13,21 @@
   </tbody>
 </table>
 
+<p class="stat-subtitle">{{ 'Vantagem numérica na abertura da rodada' | translate }}</p>
+<table class="table is-narrow is-fullwidth is-hoverable mini-table">
+  <tbody>
+    <tr *ngFor="let e of entries(team.tendencyByManAdvantage)">
+      <td>{{ e[0] }}</td>
+      <td class="text-muted">{{ e[1].count }}x</td>
+      <td>
+        <span class="tag" [class.is-success]="e[1].winRate >= 0.5" [class.is-danger]="e[1].winRate < 0.5">
+          {{ winRatePct(e[1].winRate) }}
+        </span>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
 <p class="stat-subtitle">{{ 'Jogadas mais recorrentes' | translate }}</p>
 <table class="table is-narrow is-fullwidth is-hoverable mini-table">
   <tbody>

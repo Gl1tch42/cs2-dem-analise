@@ -13,10 +13,30 @@ export interface PlayerMovementProfile {
   deaths: number;
 }
 
+// Vantagem numérica resultante do duelo de abertura da rodada (A05) — lida de
+// round.deaths[0].manAdvantage, já CT-signed, invertido aqui pra ficar do
+// ponto de vista de `side`. 'unknown' cobre demos parseadas antes desse
+// campo existir (deaths[0] sem manAdvantage).
+export type ManAdvantageBucket = 'advantage' | 'even' | 'disadvantage' | 'unknown';
+
+export function openingManAdvantageBucket(round: RoundSummary, side: 'ct' | 't'): ManAdvantageBucket {
+  const raw = round.deaths?.[0]?.manAdvantage;
+  if (raw === undefined) return 'unknown';
+  const fromSide = side === 'ct' ? raw : -raw;
+  if (fromSide === 0) return 'even';
+  return fromSide > 0 ? 'advantage' : 'disadvantage';
+}
+
+const MAN_ADVANTAGE_BUCKETS: ManAdvantageBucket[] = ['advantage', 'even', 'disadvantage', 'unknown'];
+
 export interface TeamTendencyStats {
   tendencyByBuyType: Record<BuyType, { count: number; winRate: number }>;
   tendencyByTempo: Record<RoundTempo, { count: number; winRate: number }>;
   tendencyByStance: Record<RoundStance, { count: number; winRate: number }>;
+  // Taxa de vitória agrupada pela vantagem numérica logo após o duelo de
+  // abertura da rodada (ex: "quando comete a abertura em vantagem, vence X%
+  // das rodadas") — ver openingManAdvantageBucket.
+  tendencyByManAdvantage: Record<ManAdvantageBucket, { count: number; winRate: number }>;
   topRecurringPatterns: { pattern: string; count: number; winRate: number }[];
   // Mesma informação de topRecurringPatterns, mas estruturada (map + side +
   // buyType/tempo/stance/site em vez de uma string formatada) e SEM slice de
@@ -65,9 +85,11 @@ interface TeamAccumulator {
   buyWins: Record<BuyType, number>;
   tempoWins: Record<RoundTempo, number>;
   stanceWins: Record<RoundStance, number>;
+  manAdvantageWins: Record<ManAdvantageBucket, number>;
   tendencyByBuyType: Record<BuyType, { count: number; winRate: number }>;
   tendencyByTempo: Record<RoundTempo, { count: number; winRate: number }>;
   tendencyByStance: Record<RoundStance, { count: number; winRate: number }>;
+  tendencyByManAdvantage: Record<ManAdvantageBucket, { count: number; winRate: number }>;
   patternCounts: Map<string, { count: number; wins: number }>;
   detailedPatternCounts: Map<string, { key: PatternKey; count: number; wins: number }>;
   playerMap: Map<
@@ -81,9 +103,11 @@ function createAccumulator(): TeamAccumulator {
     buyWins: { eco: 0, force: 0, semi: 0, full: 0, unknown: 0 },
     tempoWins: { rush: 0, slow: 0, default: 0, split: 0, unknown: 0 },
     stanceWins: { aggressive: 0, passive: 0, 'passive-aggressive': 0, unknown: 0 },
+    manAdvantageWins: { advantage: 0, even: 0, disadvantage: 0, unknown: 0 },
     tendencyByBuyType: emptyTendencyMap(BUY_TYPES),
     tendencyByTempo: emptyTendencyMap(TEMPOS),
     tendencyByStance: emptyTendencyMap(STANCES),
+    tendencyByManAdvantage: emptyTendencyMap(MAN_ADVANTAGE_BUCKETS),
     patternCounts: new Map(),
     detailedPatternCounts: new Map(),
     playerMap: new Map(),
@@ -96,15 +120,18 @@ function addRound(
   won: boolean,
   site: 'A' | 'B' | 'mid' | 'unknown' | undefined,
   map: string,
-  side: 'ct' | 't'
+  side: 'ct' | 't',
+  manAdvantageBucket: ManAdvantageBucket
 ) {
   acc.tendencyByBuyType[sideData.buyType].count++;
   acc.tendencyByTempo[sideData.tempo].count++;
   acc.tendencyByStance[sideData.stance].count++;
+  acc.tendencyByManAdvantage[manAdvantageBucket].count++;
   if (won) {
     acc.buyWins[sideData.buyType]++;
     acc.tempoWins[sideData.tempo]++;
     acc.stanceWins[sideData.stance]++;
+    acc.manAdvantageWins[manAdvantageBucket]++;
   }
   const patternKey = `${sideData.buyType}/${sideData.tempo}/${sideData.stance}/${site ?? 'unknown'}`;
   const entry = acc.patternCounts.get(patternKey) ?? { count: 0, wins: 0 };
@@ -159,6 +186,11 @@ function finishAccumulator(acc: TeamAccumulator): TeamTendencyStats {
   for (const s of STANCES) {
     acc.tendencyByStance[s].winRate = acc.tendencyByStance[s].count ? acc.stanceWins[s] / acc.tendencyByStance[s].count : 0;
   }
+  for (const m of MAN_ADVANTAGE_BUCKETS) {
+    acc.tendencyByManAdvantage[m].winRate = acc.tendencyByManAdvantage[m].count
+      ? acc.manAdvantageWins[m] / acc.tendencyByManAdvantage[m].count
+      : 0;
+  }
 
   const topRecurringPatterns = Array.from(acc.patternCounts.entries())
     .map(([pattern, v]) => ({ pattern, count: v.count, winRate: v.count ? v.wins / v.count : 0 }))
@@ -189,6 +221,7 @@ function finishAccumulator(acc: TeamAccumulator): TeamTendencyStats {
     tendencyByBuyType: acc.tendencyByBuyType,
     tendencyByTempo: acc.tendencyByTempo,
     tendencyByStance: acc.tendencyByStance,
+    tendencyByManAdvantage: acc.tendencyByManAdvantage,
     topRecurringPatterns,
     detailedPatterns,
     playerMovementProfile,
@@ -268,8 +301,24 @@ export function consolidateSlot(slotFolder: string, demos: DemoRecord[]): Consol
         siteHitDistribution[round.siteHit] = (siteHitDistribution[round.siteHit] ?? 0) + 1;
       }
 
-      addRound(myAcc, round[mySide], round.winner === mySide, round.siteHit, summary.map, mySide);
-      addRound(oppAcc, round[oppSide], round.winner === oppSide, round.siteHit, summary.map, oppSide);
+      addRound(
+        myAcc,
+        round[mySide],
+        round.winner === mySide,
+        round.siteHit,
+        summary.map,
+        mySide,
+        openingManAdvantageBucket(round, mySide)
+      );
+      addRound(
+        oppAcc,
+        round[oppSide],
+        round.winner === oppSide,
+        round.siteHit,
+        summary.map,
+        oppSide,
+        openingManAdvantageBucket(round, oppSide)
+      );
     }
 
     for (const player of summary.playerAggregates) {

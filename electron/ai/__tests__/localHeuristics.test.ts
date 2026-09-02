@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { resolveDemoOutcome, consolidateSlot } from '../localHeuristics';
+import { resolveDemoOutcome, consolidateSlot, openingManAdvantageBucket } from '../localHeuristics';
 import { DemoSummary, DemoRecord, RoundSummary, PlayerAggregate, RoundSideSummary } from '../../storage/types';
 
 function emptySide(overrides: Partial<RoundSideSummary> = {}): RoundSideSummary {
@@ -159,6 +159,46 @@ describe('resolveDemoOutcome', () => {
   });
 });
 
+// ---- openingManAdvantageBucket ---------------------------------------------
+
+describe('openingManAdvantageBucket', () => {
+  it('returns unknown when the round has no deaths at all', () => {
+    const round = buildRound({ deaths: [] });
+    expect(openingManAdvantageBucket(round, 'ct')).toBe('unknown');
+  });
+
+  it('returns unknown when deaths[0] predates manAdvantage (backward compat with old demos)', () => {
+    const round = buildRound({
+      deaths: [{ player: 'Enemy1', side: 't', x: 0, y: 0, t: 5 }],
+    });
+    expect(openingManAdvantageBucket(round, 'ct')).toBe('unknown');
+  });
+
+  it('returns even when manAdvantage is zero', () => {
+    const round = buildRound({
+      deaths: [{ player: 'Enemy1', side: 't', x: 0, y: 0, t: 5, manAdvantage: 0 }],
+    });
+    expect(openingManAdvantageBucket(round, 'ct')).toBe('even');
+    expect(openingManAdvantageBucket(round, 't')).toBe('even');
+  });
+
+  it('reads manAdvantage from the CT perspective directly', () => {
+    const round = buildRound({
+      deaths: [{ player: 'Enemy1', side: 't', x: 0, y: 0, t: 5, manAdvantage: 2 }],
+    });
+    expect(openingManAdvantageBucket(round, 'ct')).toBe('advantage');
+    expect(openingManAdvantageBucket(round, 't')).toBe('disadvantage');
+  });
+
+  it('flips the sign for the T perspective', () => {
+    const round = buildRound({
+      deaths: [{ player: 'Ally1', side: 'ct', x: 0, y: 0, t: 5, manAdvantage: -1 }],
+    });
+    expect(openingManAdvantageBucket(round, 't')).toBe('advantage');
+    expect(openingManAdvantageBucket(round, 'ct')).toBe('disadvantage');
+  });
+});
+
 // ---- consolidateSlot -------------------------------------------------------
 
 jest.mock('fs');
@@ -240,6 +280,55 @@ describe('consolidateSlot', () => {
     // o oponente jogou T eco/slow/passive e perdeu
     expect(result.opponent.tendencyByBuyType.eco.count).toBe(1);
     expect(result.opponent.tendencyByBuyType.eco.winRate).toBe(0);
+  });
+
+  it('buckets tendencyByManAdvantage from the round-opening death, per side perspective', () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    const summary: DemoSummary = {
+      demoId: 'd1',
+      map: 'de_mirage',
+      finalScore: { team: 1, opponent: 0 },
+      rounds: [
+        buildRound({
+          winner: 'ct',
+          deaths: [{ player: 'Enemy1', side: 't', x: 0, y: 0, t: 5, manAdvantage: 1 }], // CT ganhou a abertura
+          keyPositions: [{ player: 'Ally', side: 'ct', x: 0, y: 0, t: 0 }],
+        }),
+      ],
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally'), buildAggregate('76500000000000099', 'Enemy')],
+    };
+    mockedFs.readFileSync.mockReturnValue(JSON.stringify(summary));
+
+    const result = consolidateSlot(slotFolder, [buildDemoRecord('demo-1')]);
+
+    // meu time (CT) abriu em vantagem e venceu a rodada
+    expect(result.myTeam.tendencyByManAdvantage.advantage.count).toBe(1);
+    expect(result.myTeam.tendencyByManAdvantage.advantage.winRate).toBe(1);
+    // o oponente (T) abriu em desvantagem e perdeu a rodada
+    expect(result.opponent.tendencyByManAdvantage.disadvantage.count).toBe(1);
+    expect(result.opponent.tendencyByManAdvantage.disadvantage.winRate).toBe(0);
+  });
+
+  it('falls back to the unknown man-advantage bucket for demos parsed before that field existed', () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    const summary: DemoSummary = {
+      demoId: 'd1',
+      map: 'de_mirage',
+      finalScore: { team: 1, opponent: 0 },
+      rounds: [
+        buildRound({
+          winner: 'ct',
+          deaths: [{ player: 'Enemy1', side: 't', x: 0, y: 0, t: 5 }], // sem manAdvantage — demo antiga
+          keyPositions: [{ player: 'Ally', side: 'ct', x: 0, y: 0, t: 0 }],
+        }),
+      ],
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally')],
+    };
+    mockedFs.readFileSync.mockReturnValue(JSON.stringify(summary));
+
+    const result = consolidateSlot(slotFolder, [buildDemoRecord('demo-1')]);
+
+    expect(result.myTeam.tendencyByManAdvantage.unknown.count).toBe(1);
   });
 
   it('records detailedPatterns keyed by map + side, separately for my team and the opponent, without a top-N slice', () => {

@@ -29,6 +29,7 @@ const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const electron_1 = require("electron");
+const mapGeometryExtractor_1 = require("./mapGeometryExtractor");
 function resolveParserCommand() {
     const isPackaged = electron_1.app.isPackaged;
     if (isPackaged) {
@@ -46,7 +47,11 @@ function parseDemoFile(demoPath) {
     return new Promise((resolve, reject) => {
         const outFile = path.join(os.tmpdir(), `cs-demo-summary-${Date.now()}.json`);
         const { cmd, baseArgs } = resolveParserCommand();
-        const args = [...baseArgs, '--input', demoPath, '--output', outFile];
+        // Diretório cacheado pela extração de geometria (electron/ai/mapGeometryExtractor.ts).
+        // parse_demo.py trata a ausência de .vphys/.tri pro mapa da demo como "sem
+        // geometria disponível" e cai de volta pra heurística distância/ângulo — nunca
+        // é um erro passar um diretório que ainda não tem nada extraído.
+        const args = [...baseArgs, '--input', demoPath, '--output', outFile, '--map-geometry-dir', (0, mapGeometryExtractor_1.mapGeometryDir)()];
         const child = (0, child_process_1.spawn)(cmd, args);
         let stderr = '';
         child.stderr.on('data', (d) => (stderr += d.toString()));

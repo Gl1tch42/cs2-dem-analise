@@ -5,6 +5,7 @@ import pytest
 
 import parse_demo
 from parse_demo import (
+    ROUND_TIME_LIMIT_SECONDS,
     TICK_RATE,
     SPOTTED_WINDOW_SECONDS,
     area_from_place_name,
@@ -13,6 +14,7 @@ from parse_demo import (
     build_round_windows,
     classify_buy_type,
     coerce_side,
+    compute_death_round_state,
     event_xy,
     find_grenade_path,
     normalize_grenade_category,
@@ -336,6 +338,50 @@ def test_pair_grenade_lifespan_attaches_grenade_path_when_matched():
 
 def test_pair_grenade_lifespan_no_start_df():
     assert pair_grenade_lifespan(None, None, 0, 100, 64) == []
+
+
+# --- compute_death_round_state (A05) ---
+
+def test_compute_death_round_state_ct_advantage():
+    state = compute_death_round_state(alive_ct=4, alive_t=3, plant_tick=None, death_tick=1000, death_t=20.0)
+    assert state["aliveCT"] == 4
+    assert state["aliveT"] == 3
+    assert state["manAdvantage"] == 1
+
+
+def test_compute_death_round_state_t_advantage_is_negative():
+    state = compute_death_round_state(alive_ct=2, alive_t=4, plant_tick=None, death_tick=1000, death_t=20.0)
+    assert state["manAdvantage"] == -2
+
+
+def test_compute_death_round_state_even_is_zero():
+    state = compute_death_round_state(alive_ct=3, alive_t=3, plant_tick=None, death_tick=1000, death_t=20.0)
+    assert state["manAdvantage"] == 0
+
+
+def test_compute_death_round_state_bomb_not_planted_when_no_plant_tick():
+    state = compute_death_round_state(alive_ct=4, alive_t=4, plant_tick=None, death_tick=5000, death_t=50.0)
+    assert state["bombPlanted"] is False
+
+
+def test_compute_death_round_state_bomb_planted_only_after_plant_tick():
+    before_plant = compute_death_round_state(alive_ct=4, alive_t=4, plant_tick=2000, death_tick=1500, death_t=20.0)
+    at_plant = compute_death_round_state(alive_ct=4, alive_t=4, plant_tick=2000, death_tick=2000, death_t=20.0)
+    after_plant = compute_death_round_state(alive_ct=4, alive_t=4, plant_tick=2000, death_tick=2500, death_t=25.0)
+    assert before_plant["bombPlanted"] is False
+    assert at_plant["bombPlanted"] is False  # estritamente > plant_tick, não >=
+    assert after_plant["bombPlanted"] is True
+
+
+def test_compute_death_round_state_time_remaining_counts_down_from_round_limit():
+    state = compute_death_round_state(alive_ct=4, alive_t=4, plant_tick=None, death_tick=1000, death_t=30.0)
+    assert state["timeRemainingSec"] == ROUND_TIME_LIMIT_SECONDS - 30.0
+
+
+def test_compute_death_round_state_time_remaining_clamped_at_zero():
+    # morte tardia (pós-plant, retake demorado) não deve gerar tempo negativo
+    state = compute_death_round_state(alive_ct=1, alive_t=1, plant_tick=1000, death_tick=99999, death_t=500.0)
+    assert state["timeRemainingSec"] == 0.0
 
 
 # --- build_round_windows ---

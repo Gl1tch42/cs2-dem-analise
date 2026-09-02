@@ -62,6 +62,10 @@ export interface KeyPosition {
   t: number;
   yaw?: number;
   health?: number;
+  // Área/callout do mapa nesta amostra (A05) — mesmo helper que já calcula
+  // siteHit, só que reaproveitado em vez de descartado. Ausente quando o
+  // demo não expõe last_place_name.
+  zone?: string;
 }
 
 export interface RoundDeath {
@@ -74,6 +78,19 @@ export interface RoundDeath {
   assist?: string;
   weapon?: string;
   headshot?: boolean;
+  // Estado do round no momento desta morte (A05) — ver
+  // compute_death_round_state em parse_demo.py. Todos opcionais porque
+  // demos parseadas antes desse campo existir não vão tê-los.
+  aliveCT?: number;
+  aliveT?: number;
+  // CT-signed: positivo = CT em vantagem numérica, negativo = T em vantagem.
+  manAdvantage?: number;
+  bombPlanted?: boolean;
+  zone?: string;
+  // Aproximado (assume timer padrão competitivo de 115s) — ver
+  // ROUND_TIME_LIMIT_SECONDS em parse_demo.py; não detecta mp_roundtime
+  // customizado.
+  timeRemainingSec?: number;
 }
 
 export interface RoundShot {
@@ -326,10 +343,15 @@ export interface PlayerMovementProfile {
   deaths: number;
 }
 
+// Vantagem numérica resultante do duelo de abertura da rodada (A05) — ver
+// openingManAdvantageBucket em electron/ai/localHeuristics.ts.
+export type ManAdvantageBucket = 'advantage' | 'even' | 'disadvantage' | 'unknown';
+
 export interface TeamTendencyStats {
   tendencyByBuyType: Record<BuyType, { count: number; winRate: number }>;
   tendencyByTempo: Record<RoundTempo, { count: number; winRate: number }>;
   tendencyByStance: Record<RoundStance, { count: number; winRate: number }>;
+  tendencyByManAdvantage: Record<ManAdvantageBucket, { count: number; winRate: number }>;
   topRecurringPatterns: { pattern: string; count: number; winRate: number }[];
   detailedPatterns: PatternStat[];
   playerMovementProfile: PlayerMovementProfile[];

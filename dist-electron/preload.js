@@ -24,6 +24,7 @@ const api = {
     assets: {
         getRadarImage: (map) => electron_1.ipcRenderer.invoke('assets:getRadarImage', map),
         extractRadars: () => electron_1.ipcRenderer.invoke('assets:extractRadars'),
+        extractMapGeometry: () => electron_1.ipcRenderer.invoke('assets:extractMapGeometry'),
     },
     ai: {
         getSettings: () => electron_1.ipcRenderer.invoke('ai:getSettings'),

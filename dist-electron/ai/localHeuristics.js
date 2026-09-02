@@ -23,9 +23,20 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.consolidateSlot = exports.resolveDemoOutcome = void 0;
+exports.consolidateSlot = exports.resolveDemoOutcome = exports.openingManAdvantageBucket = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+function openingManAdvantageBucket(round, side) {
+    const raw = round.deaths?.[0]?.manAdvantage;
+    if (raw === undefined)
+        return 'unknown';
+    const fromSide = side === 'ct' ? raw : -raw;
+    if (fromSide === 0)
+        return 'even';
+    return fromSide > 0 ? 'advantage' : 'disadvantage';
+}
+exports.openingManAdvantageBucket = openingManAdvantageBucket;
+const MAN_ADVANTAGE_BUCKETS = ['advantage', 'even', 'disadvantage', 'unknown'];
 const BUY_TYPES = ['eco', 'force', 'semi', 'full', 'unknown'];
 const TEMPOS = ['rush', 'slow', 'default', 'split', 'unknown'];
 const STANCES = ['aggressive', 'passive', 'passive-aggressive', 'unknown'];
@@ -40,22 +51,26 @@ function createAccumulator() {
         buyWins: { eco: 0, force: 0, semi: 0, full: 0, unknown: 0 },
         tempoWins: { rush: 0, slow: 0, default: 0, split: 0, unknown: 0 },
         stanceWins: { aggressive: 0, passive: 0, 'passive-aggressive': 0, unknown: 0 },
+        manAdvantageWins: { advantage: 0, even: 0, disadvantage: 0, unknown: 0 },
         tendencyByBuyType: emptyTendencyMap(BUY_TYPES),
         tendencyByTempo: emptyTendencyMap(TEMPOS),
         tendencyByStance: emptyTendencyMap(STANCES),
+        tendencyByManAdvantage: emptyTendencyMap(MAN_ADVANTAGE_BUCKETS),
         patternCounts: new Map(),
         detailedPatternCounts: new Map(),
         playerMap: new Map(),
     };
 }
-function addRound(acc, sideData, won, site, map, side) {
+function addRound(acc, sideData, won, site, map, side, manAdvantageBucket) {
     acc.tendencyByBuyType[sideData.buyType].count++;
     acc.tendencyByTempo[sideData.tempo].count++;
     acc.tendencyByStance[sideData.stance].count++;
+    acc.tendencyByManAdvantage[manAdvantageBucket].count++;
     if (won) {
         acc.buyWins[sideData.buyType]++;
         acc.tempoWins[sideData.tempo]++;
         acc.stanceWins[sideData.stance]++;
+        acc.manAdvantageWins[manAdvantageBucket]++;
     }
     const patternKey = `${sideData.buyType}/${sideData.tempo}/${sideData.stance}/${site ?? 'unknown'}`;
     const entry = acc.patternCounts.get(patternKey) ?? { count: 0, wins: 0 };
@@ -109,6 +124,11 @@ function finishAccumulator(acc) {
     for (const s of STANCES) {
         acc.tendencyByStance[s].winRate = acc.tendencyByStance[s].count ? acc.stanceWins[s] / acc.tendencyByStance[s].count : 0;
     }
+    for (const m of MAN_ADVANTAGE_BUCKETS) {
+        acc.tendencyByManAdvantage[m].winRate = acc.tendencyByManAdvantage[m].count
+            ? acc.manAdvantageWins[m] / acc.tendencyByManAdvantage[m].count
+            : 0;
+    }
     const topRecurringPatterns = Array.from(acc.patternCounts.entries())
         .map(([pattern, v]) => ({ pattern, count: v.count, winRate: v.count ? v.wins / v.count : 0 }))
         .sort((a, b) => b.count - a.count)
@@ -135,6 +155,7 @@ function finishAccumulator(acc) {
         tendencyByBuyType: acc.tendencyByBuyType,
         tendencyByTempo: acc.tendencyByTempo,
         tendencyByStance: acc.tendencyByStance,
+        tendencyByManAdvantage: acc.tendencyByManAdvantage,
         topRecurringPatterns,
         detailedPatterns,
         playerMovementProfile,
@@ -207,8 +228,8 @@ function consolidateSlot(slotFolder, demos) {
             if (round.siteHit) {
                 siteHitDistribution[round.siteHit] = (siteHitDistribution[round.siteHit] ?? 0) + 1;
             }
-            addRound(myAcc, round[mySide], round.winner === mySide, round.siteHit, summary.map, mySide);
-            addRound(oppAcc, round[oppSide], round.winner === oppSide, round.siteHit, summary.map, oppSide);
+            addRound(myAcc, round[mySide], round.winner === mySide, round.siteHit, summary.map, mySide, openingManAdvantageBucket(round, mySide));
+            addRound(oppAcc, round[oppSide], round.winner === oppSide, round.siteHit, summary.map, oppSide, openingManAdvantageBucket(round, oppSide));
         }
         for (const player of summary.playerAggregates) {
             addPlayer(myIdSet.has(player.steamId) ? myAcc : oppAcc, player);
