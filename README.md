@@ -25,6 +25,12 @@ SaaS subscription.
   combinations, and a player movement/impact profile (ADR, entry rate, clutch
   rate, favorite map areas). See [How tactical patterns are
   computed](#how-tactical-patterns-are-computed-no-ai).
+- **Matchup Engine** (no AI, instant, local) — from your own team's slot, pick
+  any opponent slot and a map both have demos on, and get a local, structured
+  report of exploitable weaknesses and your own advantages, cross-referencing
+  each side's tactical patterns per map/CT-T side. Always carries an explicit
+  "inferred, not head-to-head" disclaimer — see [How the Matchup Engine
+  works](#how-the-matchup-engine-works-no-ai).
 - **Consolidated Score** — Aim / Utility / Positioning / Rating / Overall
   score (0-100) per player, averaged across every demo where the roster is
   marked, with full per-demo history and CSV export. See [How scores are
@@ -178,6 +184,49 @@ into "your team" vs "opponent" using the marked roster (side is resolved
   `demosPendingRoster` (surfaced in the UI and in the AI prompt) until
   someone marks them.
 
+## How the Matchup Engine works (no AI)
+
+`electron/ai/matchupEngine.ts` cross-references two already-consolidated
+slots — your "own" team's slot and a chosen opponent slot — for a single map
+both have demos on, entirely from local heuristics (no AI call, no token
+cost). It's a **Matchup tab**, own-team slots only, next to the other tabs
+(Overview / 2D Map / Heatmap / Demos / Notebook / AI / Consolidated).
+
+Every `ConsolidatedSlotStats` (own or opponent alike) already carries
+`detailedPatterns` per team side — the same buy/tempo/stance/site breakdown
+used for [tactical patterns](#how-tactical-patterns-are-computed-no-ai), but
+keyed by `map + CT/T side` and kept in full (no top-10 cutoff), so an exact
+pattern from one slot can be matched against the same exact pattern in
+another slot instead of just the most frequent ones:
+
+- **Exploitable weaknesses** — the opponent's own execution patterns
+  (`oppStats.myTeam`) crossed against your team's historical win rate when
+  *facing* that exact pattern (`ownStats.opponent`, from your own demo
+  history — not necessarily against this specific opponent).
+- **Own advantages** — the mirror: your own execution patterns
+  (`ownStats.myTeam`) crossed against the opponent's historical win rate when
+  facing them (`oppStats.opponent`).
+
+An insight only appears once both sides have at least `minSamples`
+occurrences of that exact pattern (default 3) — below that it's dropped
+entirely rather than shown as "low confidence," since a 1-2 round sample
+isn't a usable signal. What does appear gets a **confidence** tag (same
+low/3/8/medium/high buckets as the score confidence badge) based on the
+smaller of the two occurrence counts, and a **severity/strength** tag from
+how far the response win rate sits from 50% — both purely heuristic, same
+spirit as the other unvalidated thresholds in this app.
+
+**The disclaimer matters.** Because the two teams likely never played each
+other in the available demos, this is a statistical correlation across each
+team's separate match history, not an actual head-to-head record — every
+`MatchupReport` carries a fixed `disclaimer: 'inferred-not-head-to-head'`
+field, always rendered in the UI.
+
+Generating an AI-written report on top of a `MatchupReport` (the way the
+"AI analysis" tab does for a single slot) isn't wired up yet — this ships
+the local-heuristics report first, to validate the underlying data against
+real matches before spending tokens narrating it.
+
 ## Architecture
 
 ```
@@ -191,6 +240,7 @@ electron/            main process (Node) — never reachable from Angular direct
   ai/
     demoParserBridge.ts  calls the Python script that does the real demo parsing
     localHeuristics.ts   tactical pattern consolidation (no AI token cost)
+    matchupEngine.ts      own-slot vs. opponent-slot cross-reference, per map (no AI token cost)
     scoreEngine.ts        Aim/Utility/Positioning/Rating/Overall score calculation
     providers.ts           HTTP calls to AI providers (Anthropic/OpenAI/custom)
     analysisRunner.ts      builds the AI prompt from local stats + notebook, calls the provider
@@ -207,7 +257,7 @@ src/app/
   shared/pipes/          `translate` pipe (PT/EN dictionary lookup)
   features/
     shell/               sidebar (21 slots + PT/EN switch) and titlebar
-    slot-detail/          a slot's screen: Overview / 2D Map / Heatmap / Demos / Notebook / AI / Consolidated
+    slot-detail/          a slot's screen: Overview / 2D Map / Heatmap / Demos / Notebook / AI / Consolidated / Matchup (own slots only)
     map2d/                2D animated replay
     heatmap/              per-player position heatmap
     notebook/              Markdown editor with autosave + history
