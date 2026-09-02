@@ -239,13 +239,38 @@ export class Map2dComponent implements OnChanges, OnDestroy {
       if (!res.cs2Found) {
         this.extractError = this.t('Instalação do CS2 não encontrada na Steam local.');
         this.radarStatus = 'missing';
-      } else if (res.error) {
+        return;
+      }
+      if (res.error) {
         this.extractError = res.error;
         this.radarStatus = 'missing';
-      } else if (res.extractedMaps.length === 0) {
+        return;
+      }
+      if (res.extractedMaps.length === 0) {
         this.extractError = this.t('Nenhum radar foi extraído (verifique se o CS2 está atualizado).');
         this.radarStatus = 'missing';
-      } else if (this.summary) {
+        return;
+      }
+
+      // Geometria de colisão (LOS real do Overexposure — A04) usa o mesmo
+      // VPK/CLI do radar, então extraímos na mesma ação em vez de obrigar o
+      // usuário a baixar o Source2Viewer-CLI duas vezes. Falha aqui não
+      // bloqueia o radar: Overexposure só cai de volta pra heurística de
+      // distância/ângulo (comportamento de hoje).
+      try {
+        const geoRes = await this.electron.api.assets.extractMapGeometry();
+        if (geoRes.error || geoRes.extractedMaps.length === 0) {
+          this.extractError = this.t(
+            'Radar extraído. Geometria de colisão (LOS real) não pôde ser extraída — Overexposure vai continuar usando a heurística de distância/ângulo.'
+          );
+        }
+      } catch {
+        this.extractError = this.t(
+          'Radar extraído. Geometria de colisão (LOS real) não pôde ser extraída — Overexposure vai continuar usando a heurística de distância/ângulo.'
+        );
+      }
+
+      if (this.summary) {
         await this.loadRadarImage(this.summary.map);
       }
     } catch (err) {

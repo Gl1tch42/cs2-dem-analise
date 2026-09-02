@@ -15,9 +15,9 @@
       </label>
 
       <span class="radar-status" *ngIf="radarStatus === 'missing'">
-        <a (click)="extractRadars()">{{ '🗺️ usar radar real do CS2 (dust2, mirage, ...)' | translate }}</a>
+        <a (click)="extractRadars()">{{ '🗺️ usar radar + geometria real do CS2 (dust2, mirage, ...)' | translate }}</a>
       </span>
-      <span class="radar-status text-muted" *ngIf="radarStatus === 'extracting'">{{ 'Extraindo radares do CS2 local…' | translate }}</span>
+      <span class="radar-status text-muted" *ngIf="radarStatus === 'extracting'">{{ 'Extraindo radares e geometria do CS2 local…' | translate }}</span>
       <span class="radar-status text-muted" *ngIf="radarStatus === 'loaded'">{{ '🗺️ radar real do CS2' | translate }}</span>
       <span class="help is-danger radar-status" *ngIf="extractError">{{ extractError }}</span>
     </div>

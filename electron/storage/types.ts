@@ -163,6 +163,11 @@ export interface DemoCalibration {
   tempoStanceThresholdSource: 'demo' | 'default';
   lowDisplacementThreshold: number;
   highDisplacementThreshold: number;
+  // Se Overexposure usou raycasting real contra geometria do mapa
+  // (python/geometry/) ou caiu de volta pra heurística distância+ângulo —
+  // ver load_visibility_checker em parse_demo.py (A04). Opcional porque
+  // demos parseadas antes desse campo existir não vão tê-lo.
+  losSource?: 'geometry' | 'heuristic';
 }
 
 export interface DemoSummary {

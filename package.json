@@ -39,6 +39,11 @@
       {
         "from": "python/parse_demo.py",
         "to": "python/parse_demo.py"
+      },
+      {
+        "from": "python/geometry",
+        "to": "python/geometry",
+        "filter": ["**/*.py", "THIRD_PARTY_NOTICE.md"]
       }
     ],
     "win": {

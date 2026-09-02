@@ -40,6 +40,7 @@ declare global {
       assets: {
         getRadarImage: (map: string) => Promise<string | null>;
         extractRadars: () => Promise<{ cs2Found: boolean; extractedMaps: string[]; error?: string }>;
+        extractMapGeometry: () => Promise<{ cs2Found: boolean; extractedMaps: string[]; error?: string }>;
       };
       ai: {
         getSettings: () => Promise<AiSettings>;

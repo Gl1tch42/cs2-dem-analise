@@ -97,6 +97,38 @@ def build_dense_spot_window_ticks(fire_df, demo_start_tick: int, demo_end_tick: 
 def eprint(*args):
     print(*args, file=sys.stderr)
 
+def load_visibility_checker(geometry_dir: Optional[str], map_name: str):
+    """Carrega um VisibilityChecker (LOS real, ver python/geometry/) pro mapa
+    da demo, se houver geometria extraída. Retorna None (nunca lança) quando
+    geometry_dir não foi passado, quando não há .tri/.vphys pro mapa, ou
+    quando o .vphys existente falha ao ser interpretado — em todos os casos
+    o chamador deve cair de volta pra heurística distância+FOV (ver
+    Overexposure em main()), nunca tratar isso como erro fatal do parse.
+    """
+    if not geometry_dir:
+        return None
+    try:
+        from geometry.visibility import VisibilityChecker, VphysParser
+    except Exception as exc:
+        eprint(f"[parse_demo] aviso: módulo de geometria indisponível ({exc}), usando heurística distância/ângulo")
+        return None
+
+    tri_path = os.path.join(geometry_dir, f"{map_name}.tri")
+    vphys_path = os.path.join(geometry_dir, f"{map_name}.vphys")
+    try:
+        if os.path.isfile(tri_path):
+            return VisibilityChecker(path=tri_path)
+        if os.path.isfile(vphys_path):
+            parsed = VphysParser(vphys_path)
+            parsed.to_tri(tri_path)
+            return VisibilityChecker(path=tri_path)
+    except Exception as exc:
+        eprint(
+            f"[parse_demo] aviso: falha ao carregar geometria de {map_name} ({exc}), "
+            "usando heurística distância/ângulo"
+        )
+    return None
+
 def classify_buy_type(avg_equip_value: float) -> str:
     if avg_equip_value <= 0:
         return "unknown"
@@ -407,6 +439,12 @@ def main():
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--input", required=True)
     arg_parser.add_argument("--output", required=True)
+    arg_parser.add_argument(
+        "--map-geometry-dir",
+        default=None,
+        help="Pasta com geometria de colisão extraída (.vphys/.tri por mapa, ver python/geometry/). "
+        "Opcional — sem ela, Overexposure usa a heurística distância/ângulo de sempre.",
+    )
     args = arg_parser.parse_args()
 
     parser = DemoParser(args.input)
@@ -417,6 +455,8 @@ def main():
     except Exception as exc:
         eprint(f"[parse_demo] aviso: falha ao ler header ({exc})")
     map_name = header.get("map_name") or header.get("map") or "unknown"
+    visibility_checker = load_visibility_checker(args.map_geometry_dir, map_name)
+    los_source = "geometry" if visibility_checker is not None else "heuristic"
 
     windows = build_round_windows(parser)
     if not windows:
@@ -1690,8 +1730,26 @@ def main():
                             if dist > OVEREXPOSURE_SIGHT_DISTANCE:
                                 continue
                             deg = angle_to_target_deg(r, victim_row)
-                            if deg is not None and deg <= OVEREXPOSURE_FOV_DEG:
-                                watchers += 1
+                            if deg is None or deg > OVEREXPOSURE_FOV_DEG:
+                                continue
+                            # LOS real (ver python/geometry/): quando há geometria pro mapa,
+                            # exige linha de visão desobstruída além de distância+ângulo, não
+                            # só como substituto — um "watcher" atrás de uma parede não conta
+                            # mesmo se distância/ângulo já teriam marcado como plausível.
+                            if visibility_checker is not None:
+                                ez = getattr(r, "Z", None)
+                                victim_z = getattr(victim_row, "Z", None)
+                                if ez is None or str(ez) == "nan" or victim_z is None or str(victim_z) == "nan":
+                                    continue
+                                shooter_eye = (float(ex), float(ey), float(ez) + EYE_HEIGHT_OFFSET)
+                                victim_eye = (
+                                    float(victim_pos[0]),
+                                    float(victim_pos[1]),
+                                    float(victim_z) + EYE_HEIGHT_OFFSET,
+                                )
+                                if not visibility_checker.is_visible(shooter_eye, victim_eye):
+                                    continue
+                            watchers += 1
                         if watchers >= 2:
                             mitigated = plant_tick is not None and death_tick > plant_tick
                             if not mitigated:
@@ -2156,6 +2214,7 @@ def main():
             "tempoStanceThresholdSource": "demo" if tempo_stance_sample_size >= MIN_SAMPLES_FOR_DYNAMIC_THRESHOLDS else "default",
             "lowDisplacementThreshold": round(low_displacement_threshold, 1),
             "highDisplacementThreshold": round(high_displacement_threshold, 1),
+            "losSource": los_source,
         },
     }
 

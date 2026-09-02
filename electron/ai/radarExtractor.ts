@@ -8,7 +8,7 @@ import { RADAR_EXTRACTABLE_MAPS } from '../storage/radarCalibration';
 const VRF_RELEASE_TAG = '20.0';
 const VRF_CLI_ZIP_URL = `https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/${VRF_RELEASE_TAG}/cli-windows-x64.zip`;
 
-function appDataRoot(): string {
+export function appDataRoot(): string {
   return path.join(app.getPath('userData'), 'cs-demo-analyst');
 }
 
@@ -24,7 +24,7 @@ function toolsDir(): string {
   return dir;
 }
 
-function findCs2InstallDir(): string | null {
+export function findCs2InstallDir(): string | null {
   const steamRoots = ['C:\\Program Files (x86)\\Steam', 'C:\\Program Files\\Steam'];
   for (const steamRoot of steamRoots) {
     if (!fs.existsSync(steamRoot)) continue;
@@ -72,7 +72,7 @@ function downloadFile(url: string, destPath: string): Promise<void> {
   });
 }
 
-function runCommand(cmd: string, args: string[]): Promise<string> {
+export function runCommand(cmd: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args);
     let stdout = '';
@@ -87,7 +87,7 @@ function runCommand(cmd: string, args: string[]): Promise<string> {
   });
 }
 
-async function ensureExtractorCli(): Promise<string> {
+export async function ensureExtractorCli(): Promise<string> {
   const dir = toolsDir();
   const exe = path.join(dir, 'Source2Viewer-CLI.exe');
   if (fs.existsSync(exe)) return exe;

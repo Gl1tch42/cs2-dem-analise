@@ -8,6 +8,7 @@ import { parseDemoFile } from '../ai/demoParserBridge';
 import { getPlayerScores, getSlotStats, runSlotAnalysis } from '../ai/analysisRunner';
 import { commonMaps, generateMatchup } from '../ai/matchupEngine';
 import { extractRadarsFromLocalCs2, getCachedRadarPath } from '../ai/radarExtractor';
+import { extractMapPhysicsFromLocalCs2 } from '../ai/mapGeometryExtractor';
 
 export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, settings: SettingsManager) {
   ipcMain.handle('slots:list', () => slots.listSlots());
@@ -114,6 +115,7 @@ export function registerIpcHandlers(win: BrowserWindow, slots: SlotManager, sett
   );
 
   ipcMain.handle('assets:extractRadars', () => extractRadarsFromLocalCs2());
+  ipcMain.handle('assets:extractMapGeometry', () => extractMapPhysicsFromLocalCs2());
   ipcMain.handle('assets:getRadarImage', (_e, map: string) => {
     const filePath = getCachedRadarPath(map);
     if (!filePath) return null;

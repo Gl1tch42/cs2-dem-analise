@@ -26,6 +26,7 @@ const api = {
   assets: {
     getRadarImage: (map: string) => ipcRenderer.invoke('assets:getRadarImage', map),
     extractRadars: () => ipcRenderer.invoke('assets:extractRadars'),
+    extractMapGeometry: () => ipcRenderer.invoke('assets:extractMapGeometry'),
   },
   ai: {
     getSettings: () => ipcRenderer.invoke('ai:getSettings'),
