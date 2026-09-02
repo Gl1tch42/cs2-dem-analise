@@ -200,7 +200,7 @@ export class ConsolidatedScoreComponent {
     return this.displayAim(p)[key];
   }
 
-  utilityValue(p: PlayerScoreAggregate, key: keyof PlayerUtilityStats): number {
+  utilityValue(p: PlayerScoreAggregate, key: keyof PlayerUtilityStats): number | null {
     return this.displayUtility(p)[key];
   }
 

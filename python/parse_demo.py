@@ -12,6 +12,8 @@ for _stream in (sys.stdout, sys.stderr):
 
 from demoparser2 import DemoParser
 
+from analytics.economy import classify_buy_type, classify_round_economy
+
 TICK_RATE = 64.0
 
 # Bump whenever detection logic for any metric changes (opening duel, trade,
@@ -46,10 +48,6 @@ def coerce_side(value) -> Optional[str]:
     if low in ("t", "terrorist"):
         return "t"
     return None
-
-BUY_ECO_MAX = 2000
-BUY_FORCE_MAX = 3000
-BUY_SEMI_MAX = 4000
 
 EARLY_CONTACT_SECONDS = 15.0
 HIGH_DISPLACEMENT = 900.0
@@ -151,17 +149,6 @@ def load_visibility_checker(geometry_dir: Optional[str], map_name: str):
             "usando heurística distância/ângulo"
         )
     return None
-
-def classify_buy_type(avg_equip_value: float) -> str:
-    if avg_equip_value <= 0:
-        return "unknown"
-    if avg_equip_value < BUY_ECO_MAX:
-        return "eco"
-    if avg_equip_value < BUY_FORCE_MAX:
-        return "force"
-    if avg_equip_value < BUY_SEMI_MAX:
-        return "semi"
-    return "full"
 
 def area_from_place_name(place: Optional[str]) -> str:
     if not place or not isinstance(place, str):
@@ -522,9 +509,49 @@ def main():
     has_hitgroup = hurt_df is not None and "hitgroup" in hurt_df.columns
     has_hurt_weapon = hurt_df is not None and "weapon" in hurt_df.columns
     has_fire_weapon = fire_df is not None and "weapon" in fire_df.columns
-    has_blind_attacker = blind_df is not None and "attacker_steamid" in blind_df.columns
+
+    # Confirmado rodando demoparser2 direto numa demo real (GOTV/SourceTV, o
+    # formato padrão de toda demo profissional distribuída por torneio/HLTV):
+    # o evento player_blind simplesmente NÃO OCORRE nesse tipo de demo — o
+    # servidor CS2 não transmite pro stream de observador, só pro cliente do
+    # próprio jogador (blind_df vem None). Separado do caso "coluna existe mas
+    # attacker_steamid vem nula", que é um bug histórico diferente já visto no
+    # demoparser2 (https://github.com/LaihoE/demoparser/issues/90 e #69, ambos
+    # fechados, mas sem garantia contra regressão). Os três casos abaixo têm
+    # avisos distintos pra dar pra diferenciar "demo GOTV sem esse evento" de
+    # "bug de parsing" na hora de debugar.
+    has_blind_attacker_col = blind_df is not None and "attacker_steamid" in blind_df.columns
+    has_blind_attacker = bool(has_blind_attacker_col and blind_df["attacker_steamid"].notna().any())
+    if blind_df is None:
+        eprint(
+            "[parse_demo] aviso: evento player_blind não ocorre nesta demo (comum em demos "
+            "GOTV/SourceTV, que não transmitem esse evento pro stream de observador) — "
+            "flash assists/enemies flashed/blind time ficarão sem dado (null)."
+        )
+    elif not has_blind_attacker_col:
+        eprint(
+            "[parse_demo] aviso: player_blind não expõe attacker_steamid nesta demo — "
+            "flash assists/enemies flashed/blind time ficarão sem dado (null)."
+        )
+    elif not has_blind_attacker:
+        eprint(
+            "[parse_demo] aviso: player_blind expõe attacker_steamid, mas todos os valores "
+            "são nulos nesta demo — flash assists/enemies flashed/blind time ficarão sem dado (null)."
+        )
+
     has_purchase_weapon = purchase_df is not None and "weapon" in purchase_df.columns
     has_purchase_item = purchase_df is not None and "item" in purchase_df.columns
+    if purchase_df is None:
+        eprint(
+            "[parse_demo] aviso: evento item_purchase não ocorre nesta demo (comum em demos "
+            "GOTV/SourceTV) — utility comprada e não jogada (unused utility value) ficará "
+            "sem dado (null)."
+        )
+    elif not has_purchase_weapon and not has_purchase_item:
+        eprint(
+            "[parse_demo] aviso: item_purchase não expõe weapon nem item nesta demo — "
+            "utility comprada e não jogada (unused utility value) ficará sem dado (null)."
+        )
 
     GRENADE_PRICES = {
         "flashbang": 200,
@@ -814,9 +841,6 @@ def main():
     def bump(d: dict, key, amount=1):
         d[key] = d.get(key, 0) + amount
 
-    def avg(vals):
-        return sum(vals) / len(vals) if vals else 0.0
-
     FIRST_BULLET_GAP_TICKS = int(0.4 * TICK_RATE)
     SPRAY_MIN_SHOT_INDEX = 3  # 1º tiro = first bullet, 2º não conta em nenhum dos dois, 3º+ = spray
     FLASH_ASSIST_WINDOW_SECONDS = 5.0
@@ -976,36 +1000,15 @@ def main():
             if occupying_side == winner:
                 roster_wins[roster_side] = roster_wins.get(roster_side, 0) + 1
 
-        buy_type = {
-            side: classify_buy_type(sum(vals) / len(vals) if vals else 0.0) for side, vals in equip_by_side.items()
-        }
-
-        tempo_by_side = {}
-        stance_by_side = {}
-        for side in ("ct", "t"):
-            disp = displacement_by_side[side]
-            avg_disp = avg(disp)
-            spread = len(areas_reached_by_side[side])
-            if avg_disp >= high_displacement_threshold and spread <= 1:
-                tempo_by_side[side] = "rush"
-            elif spread >= 2:
-                tempo_by_side[side] = "split"
-            elif avg_disp <= low_displacement_threshold:
-                tempo_by_side[side] = "slow"
-            else:
-                tempo_by_side[side] = "default"
-
-            if not disp:
-                stance_by_side[side] = "unknown"
-            else:
-                high = sum(1 for d in disp if d >= high_displacement_threshold)
-                low = sum(1 for d in disp if d <= low_displacement_threshold)
-                if high >= len(disp) * 0.6:
-                    stance_by_side[side] = "aggressive"
-                elif low >= len(disp) * 0.6:
-                    stance_by_side[side] = "passive"
-                else:
-                    stance_by_side[side] = "passive-aggressive"
+        # Classificação de economia/tempo/stance (A06 "Parser modular" — primeira
+        # fatia extraída pra python/analytics/economy.py).
+        economy = classify_round_economy(
+            equip_by_side, displacement_by_side, areas_reached_by_side,
+            low_displacement_threshold, high_displacement_threshold,
+        )
+        buy_type = economy["buyType"]
+        tempo_by_side = economy["tempo"]
+        stance_by_side = economy["stance"]
 
         round_deaths = None
         if death_df is not None:
@@ -1019,6 +1022,8 @@ def main():
 
         entry_by = None
         entry_on = None
+        entry_by_steamid = None
+        entry_on_steamid = None
         if round_deaths is not None and len(round_deaths) > 0:
             first = round_deaths.iloc[0]
             attacker_id = first.get("attacker_steamid")
@@ -1028,8 +1033,10 @@ def main():
             if attacker_id is not None and str(attacker_id) != "nan":
                 bump(player_entry_attempts, int(attacker_id))
                 bump(player_entry_success, int(attacker_id))
+                entry_by_steamid = str(int(attacker_id))
             if user_id is not None and str(user_id) != "nan":
                 bump(player_entry_attempts, int(user_id))
+                entry_on_steamid = str(int(user_id))
 
         if round_deaths is not None:
             for d in round_deaths.itertuples():
@@ -1824,6 +1831,7 @@ def main():
                     continue
                 position_entry = {
                     "player": player_names.get(steamid, str(steamid)),
+                    "steamId": str(steamid),
                     "side": side,
                     "x": round(float(x), 1),
                     "y": round(float(y), 1),
@@ -1908,6 +1916,10 @@ def main():
                 death_t = round((death_tick - freeze_tick) / TICK_RATE, 1)
                 death_entry = {
                     "player": player_names.get(user_id, str(user_id)),
+                    # A06: steamId ao lado do nome — nome pode colidir entre jogadores/times
+                    # ou faltar em demos anonimizadas; steamId é o identificador confiável já
+                    # usado internamente (side_map/player_names), só não exposto até agora.
+                    "steamId": str(user_id),
                     "side": side,
                     "x": round(float(drow.iloc[0]["X"]), 1),
                     "y": round(float(drow.iloc[0]["Y"]), 1),
@@ -1922,9 +1934,15 @@ def main():
                 attacker_name = getattr(d, "attacker_name", None)
                 if attacker_name and str(attacker_name) != "nan":
                     death_entry["by"] = attacker_name
+                attacker_id = getattr(d, "attacker_steamid", None)
+                if attacker_id is not None and str(attacker_id) != "nan":
+                    death_entry["bySteamId"] = str(int(attacker_id))
                 assister_name = getattr(d, "assister_name", None)
                 if assister_name and str(assister_name) != "nan":
                     death_entry["assist"] = assister_name
+                assister_id = getattr(d, "assister_steamid", None)
+                if assister_id is not None and str(assister_id) != "nan":
+                    death_entry["assistSteamId"] = str(int(assister_id))
                 weapon_used = getattr(d, "weapon", None)
                 if weapon_used and str(weapon_used) != "nan":
                     death_entry["weapon"] = str(weapon_used)
@@ -1959,6 +1977,7 @@ def main():
             equip = getattr(r, "current_equip_value", None)
             loadout_entry = {
                 "player": player_names.get(steamid, str(steamid)),
+                "steamId": str(steamid),
                 "side": side,
                 "weapon": None,
                 "equipValue": int(float(equip)) if equip is not None and str(equip) != "nan" else 0,
@@ -2090,6 +2109,8 @@ def main():
                 },
                 "entryFragBy": entry_by,
                 "entryFragOn": entry_on,
+                "entryFragBySteamId": entry_by_steamid,
+                "entryFragOnSteamId": entry_on_steamid,
                 "siteHit": site_hit,
                 "keyPositions": key_positions,
                 "deaths": deaths_out,
@@ -2170,6 +2191,16 @@ def main():
         molotovs_thrown = player_molotovs_thrown.get(steamid, 0)
         blinds_caused = player_blinds_caused.get(steamid, 0)
         friendly_blinds = player_friends_flashed.get(steamid, 0)
+        # GOTV/SourceTV demos (o formato padrão de toda demo profissional distribuída
+        # por torneio/HLTV) não transmitem player_blind nem item_purchase pro stream
+        # de observador — só pro cliente do próprio jogador. Confirmado rodando
+        # demoparser2 direto numa demo real da Vitality: list_game_events() nem lista
+        # esses dois eventos. Quando isso acontece (has_blind_attacker/has_purchase_*
+        # False), os campos abaixo saem None em vez de 0 — 0 diria "medido e deu zero",
+        # quando na verdade é "não dá pra medir nesta demo". None deixa o resto do
+        # pipeline (scoreEngine.ts, UI) tratar isso do mesmo jeito que já trata
+        # avgCrosshairPlacementDeg/avgTradeDelayMs nulos.
+        purchase_data_available = bool(has_purchase_weapon or has_purchase_item)
         utility = {
             "flashesThrown": flashes_thrown,
             "smokesThrown": player_smokes_thrown.get(steamid, 0),
@@ -2177,20 +2208,30 @@ def main():
             "heThrown": he_thrown,
             "flashAssists": player_flash_assists.get(steamid, 0),
             "enemiesFlashed": player_enemies_flashed.get(steamid, 0),
-            "enemiesFlashedPct": pct(player_enemies_flashed.get(steamid, 0), flashes_thrown),
+            "enemiesFlashedPct": (
+                pct(player_enemies_flashed.get(steamid, 0), flashes_thrown) if has_blind_attacker else None
+            ),
             "friendsFlashed": friendly_blinds,
             "avgBlindTimeSec": (
-                round(player_blind_duration_sum.get(steamid, 0.0) / blinds_caused, 1) if blinds_caused else 0.0
+                (round(player_blind_duration_sum.get(steamid, 0.0) / blinds_caused, 1) if blinds_caused else 0.0)
+                if has_blind_attacker
+                else None
             ),
             "avgHeDamage": round(player_he_damage_enemy.get(steamid, 0.0) / he_thrown, 1) if he_thrown else 0.0,
             "avgHeTeamDamage": round(player_he_damage_team.get(steamid, 0.0) / he_thrown, 1) if he_thrown else 0.0,
             # Flashbang Efficiency: só cegueiras >=1.5s em inimigo contam como "efetivas".
             "effectiveEnemyFlashes": player_effective_enemy_flashes.get(steamid, 0),
-            "effectiveFlashPct": pct(player_effective_enemy_flashes.get(steamid, 0), flashes_thrown),
+            "effectiveFlashPct": (
+                pct(player_effective_enemy_flashes.get(steamid, 0), flashes_thrown) if has_blind_attacker else None
+            ),
             "avgFriendlyBlindTimeSec": (
-                round(player_friendly_blind_duration_sum.get(steamid, 0.0) / friendly_blinds, 1)
-                if friendly_blinds
-                else 0.0
+                (
+                    round(player_friendly_blind_duration_sum.get(steamid, 0.0) / friendly_blinds, 1)
+                    if friendly_blinds
+                    else 0.0
+                )
+                if has_blind_attacker
+                else None
             ),
             "avgMolotovDamage": (
                 round(player_molotov_damage_enemy.get(steamid, 0.0) / molotovs_thrown, 1) if molotovs_thrown else 0.0
@@ -2199,8 +2240,12 @@ def main():
                 round(player_molotov_damage_team.get(steamid, 0.0) / molotovs_thrown, 1) if molotovs_thrown else 0.0
             ),
             "smokesWasted": player_smokes_wasted.get(steamid, 0),
-            "unusedUtilityValue": round(player_unused_utility_value.get(steamid, 0.0), 0),
-            "unusedUtilityRounds": player_unused_utility_rounds.get(steamid, 0),
+            "unusedUtilityValue": (
+                round(player_unused_utility_value.get(steamid, 0.0), 0) if purchase_data_available else None
+            ),
+            "unusedUtilityRounds": (
+                player_unused_utility_rounds.get(steamid, 0) if purchase_data_available else None
+            ),
         }
 
         entry_attempts = player_entry_attempts.get(steamid, 0)
@@ -2263,6 +2308,13 @@ def main():
             "lowDisplacementThreshold": round(low_displacement_threshold, 1),
             "highDisplacementThreshold": round(high_displacement_threshold, 1),
             "losSource": los_source,
+            # Ver aviso emitido acima quando False — deixa explícito na própria
+            # saída (não só no stderr, que hoje é descartado em caso de sucesso
+            # por demoParserBridge.ts) que flash assists/enemies flashed/blind
+            # time e unused utility value são zero por FALTA DE DADO nesta demo,
+            # não porque foram medidos e deram zero.
+            "flashAttackerDataAvailable": has_blind_attacker,
+            "purchaseItemDataAvailable": bool(has_purchase_weapon or has_purchase_item),
         },
     }
 

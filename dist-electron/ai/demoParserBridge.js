@@ -61,6 +61,15 @@ function parseDemoFile(demoPath) {
                 reject(new Error(`Parser de demo terminou com erro (código ${code}): ${stderr}`));
                 return;
             }
+            // Mesmo com sucesso (código 0), parse_demo.py pode ter emitido avisos de
+            // degradação de dado (ex: "player_blind não expõe attacker_steamid nesta
+            // demo") — sem isso esses avisos desapareciam em silêncio; agora pelo
+            // menos ficam no console do processo principal, e o campo correspondente
+            // em summary.calibration (flashAttackerDataAvailable/purchaseItemDataAvailable)
+            // é a forma "oficial", visível na própria UI, de saber que algo faltou.
+            if (stderr.trim()) {
+                console.warn(`[parse_demo] avisos durante o parse de ${path.basename(demoPath)}:\n${stderr}`);
+            }
             try {
                 const summary = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
                 fs.rmSync(outFile, { force: true });

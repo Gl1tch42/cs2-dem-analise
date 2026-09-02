@@ -228,11 +228,15 @@ function finishAccumulator(acc: TeamAccumulator): TeamTendencyStats {
   };
 }
 
-function resolveMySideForRound(round: RoundSummary, myNames: Set<string>): 'ct' | 't' | null {
+// A06: prefere casar por steamId (confiável — não colide entre jogadores/times
+// nem quebra em demos anonimizadas) e só cai pra nome quando a linha não tem
+// steamId (demo parseada antes desse campo existir).
+function resolveMySideForRound(round: RoundSummary, myIdSet: Set<string>, myNames: Set<string>): 'ct' | 't' | null {
   const rows = round.loadout && round.loadout.length > 0 ? round.loadout : round.keyPositions;
   const votes = { ct: 0, t: 0 };
   for (const row of rows ?? []) {
-    if (myNames.has(row.player)) votes[row.side]++;
+    const matches = row.steamId ? myIdSet.has(row.steamId) : myNames.has(row.player);
+    if (matches) votes[row.side]++;
   }
   if (votes.ct === 0 && votes.t === 0) return null;
   return votes.ct >= votes.t ? 'ct' : 't';
@@ -255,7 +259,7 @@ export function resolveDemoOutcome(
   let myWins = 0;
   let oppWins = 0;
   for (const round of summary.rounds) {
-    const mySide = resolveMySideForRound(round, myNames);
+    const mySide = resolveMySideForRound(round, myIdSet, myNames);
     if (!mySide) continue;
     if (round.winner === mySide) myWins++;
     else oppWins++;
@@ -292,7 +296,7 @@ export function consolidateSlot(slotFolder: string, demos: DemoRecord[]): Consol
     );
 
     for (const round of summary.rounds) {
-      const mySide = resolveMySideForRound(round, myNames);
+      const mySide = resolveMySideForRound(round, myIdSet, myNames);
       if (!mySide) continue;
       const oppSide = mySide === 'ct' ? 't' : 'ct';
 

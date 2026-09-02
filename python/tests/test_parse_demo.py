@@ -12,7 +12,6 @@ from parse_demo import (
     build_dense_spot_window_ticks,
     build_grenade_flight_paths,
     build_round_windows,
-    classify_buy_type,
     coerce_side,
     compute_death_round_state,
     event_xy,
@@ -49,27 +48,6 @@ def test_coerce_side_valid(value, expected):
 @pytest.mark.parametrize("value", [None, "", "  ", "nan", "NaN", "unknown_side", 0, 1, 99])
 def test_coerce_side_invalid(value):
     assert coerce_side(value) is None
-
-
-# --- classify_buy_type ---
-
-@pytest.mark.parametrize(
-    "value,expected",
-    [
-        (0, "unknown"),
-        (-500, "unknown"),
-        (1, "eco"),
-        (1999, "eco"),
-        (2000, "force"),
-        (2999, "force"),
-        (3000, "semi"),
-        (3999, "semi"),
-        (4000, "full"),
-        (10000, "full"),
-    ],
-)
-def test_classify_buy_type(value, expected):
-    assert classify_buy_type(value) == expected
 
 
 # --- area_from_place_name ---

@@ -157,6 +157,45 @@ describe('resolveDemoOutcome', () => {
     };
     expect(resolveDemoOutcome(summary, ['76500000000000001'])).toBe('win');
   });
+
+  it('resolves the correct side by steamId even when two players share a display name (A06)', () => {
+    // Duas "Ally" em times OPOSTOS (nome duplicado, nada incomum em demos reais/
+    // anonimizadas) — casamento por nome pegaria os dois votos e desempataria
+    // errado; steamId distingue corretamente qual delas é o roster marcado.
+    const summary: DemoSummary = {
+      demoId: 'd1',
+      map: 'de_mirage',
+      finalScore: { team: 1, opponent: 0 },
+      rounds: [
+        buildRound({
+          winner: 't',
+          loadout: [
+            { player: 'Ally', steamId: '76500000000000001', side: 't', weapon: 'ak47', equipValue: 2700 },
+            { player: 'Ally', steamId: '76500000000000099', side: 'ct', weapon: 'm4a1', equipValue: 2700 },
+          ],
+        }),
+      ],
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally')],
+    };
+    // roster marcado (76500000000000001) estava no T, que venceu -> win.
+    expect(resolveDemoOutcome(summary, ['76500000000000001'])).toBe('win');
+  });
+
+  it('falls back to name matching when loadout rows predate the steamId field (old demos)', () => {
+    const summary: DemoSummary = {
+      demoId: 'd1',
+      map: 'de_mirage',
+      finalScore: { team: 1, opponent: 0 },
+      rounds: [
+        buildRound({
+          winner: 't',
+          loadout: [{ player: 'Ally', side: 't', weapon: 'ak47', equipValue: 2700 }], // sem steamId
+        }),
+      ],
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally')],
+    };
+    expect(resolveDemoOutcome(summary, ['76500000000000001'])).toBe('win');
+  });
 });
 
 // ---- openingManAdvantageBucket ---------------------------------------------

@@ -56,6 +56,10 @@ export interface RoundSideSummary {
 
 export interface KeyPosition {
   player: string;
+  // A06: identificador confiável — nome pode colidir entre jogadores/times ou
+  // faltar em demos anonimizadas. Opcional porque demos parseadas antes desse
+  // campo existir não vão tê-lo (nesse caso, casar por nome como antes).
+  steamId?: string;
   side: 'ct' | 't';
   x: number;
   y: number;
@@ -70,12 +74,18 @@ export interface KeyPosition {
 
 export interface RoundDeath {
   player: string;
+  // A06: steamId da vítima — ver comentário em KeyPosition.steamId.
+  steamId?: string;
   side: 'ct' | 't';
   x: number;
   y: number;
   t: number;
   by?: string;
+  // A06: steamId de quem matou — ver comentário em KeyPosition.steamId.
+  bySteamId?: string;
   assist?: string;
+  // A06: steamId de quem assistiu — ver comentário em KeyPosition.steamId.
+  assistSteamId?: string;
   weapon?: string;
   headshot?: boolean;
   // Estado do round no momento desta morte (A05) — ver
@@ -101,6 +111,8 @@ export interface RoundShot {
 
 export interface RoundLoadout {
   player: string;
+  // A06: steamId — ver comentário em KeyPosition.steamId.
+  steamId?: string;
   side: 'ct' | 't';
   weapon: string | null;
   equipValue: number;
@@ -188,6 +200,9 @@ export interface RoundSummary {
   t: RoundSideSummary;
   entryFragBy?: string;
   entryFragOn?: string;
+  // A06: steamId — ver comentário em KeyPosition.steamId.
+  entryFragBySteamId?: string;
+  entryFragOnSteamId?: string;
   siteHit?: 'A' | 'B' | 'mid' | 'unknown';
   keyPositions: KeyPosition[];
   deaths?: RoundDeath[];
@@ -231,19 +246,27 @@ export interface PlayerUtilityStats {
   heThrown: number;
   flashAssists: number;
   enemiesFlashed: number;
-  enemiesFlashedPct: number;
+  // null quando a demo não tem player_blind com atribuição de autor utilizável
+  // (típico de demos GOTV/SourceTV — o padrão de toda demo profissional; o
+  // servidor CS2 não transmite esse evento pro stream de observador). Ver
+  // DemoCalibration.flashAttackerDataAvailable. null != 0: não é "mediu e deu
+  // zero", é "não dá pra medir nesta demo".
+  enemiesFlashedPct: number | null;
   friendsFlashed: number;
-  avgBlindTimeSec: number;
+  avgBlindTimeSec: number | null;
   avgHeDamage: number;
   avgHeTeamDamage: number;
   effectiveEnemyFlashes: number;
-  effectiveFlashPct: number;
-  avgFriendlyBlindTimeSec: number;
+  effectiveFlashPct: number | null;
+  avgFriendlyBlindTimeSec: number | null;
   avgMolotovDamage: number;
   avgMolotovTeamDamage: number;
   smokesWasted: number;
-  unusedUtilityValue: number;
-  unusedUtilityRounds: number;
+  // null quando a demo não tem item_purchase com weapon/item utilizável (mesma
+  // limitação de demos GOTV/SourceTV que afeta player_blind acima). Ver
+  // DemoCalibration.purchaseItemDataAvailable.
+  unusedUtilityValue: number | null;
+  unusedUtilityRounds: number | null;
 }
 
 export interface PlayerPositioningStats {
@@ -301,6 +324,16 @@ export interface DemoCalibration {
   // ver load_visibility_checker em parse_demo.py (A04). Opcional porque
   // demos parseadas antes desse campo existir não vão tê-lo.
   losSource?: 'geometry' | 'heuristic';
+  // False quando o evento player_blind desta demo não trouxe attacker_steamid
+  // utilizável (coluna ausente OU presente mas só com valores nulos — bug já
+  // visto no demoparser2 pro CS2, https://github.com/LaihoE/demoparser/issues/90).
+  // Quando False, os zeros em flash assists/enemies flashed/blindTime/friendly
+  // blind time são FALTA DE DADO, não uma medição real — a UI deve distinguir
+  // os dois casos em vez de mostrar "0%" como se fosse medido.
+  flashAttackerDataAvailable?: boolean;
+  // Idem, mas pro evento item_purchase não trazer nem "weapon" nem "item" —
+  // zera unused utility value/rounds por falta de dado, não por medição real.
+  purchaseItemDataAvailable?: boolean;
 }
 
 export interface DemoSummary {

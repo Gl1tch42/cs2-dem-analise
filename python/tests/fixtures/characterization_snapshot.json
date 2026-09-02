@@ -1,0 +1,1476 @@
+{
+  "calibration": {
+    "flashAttackerDataAvailable": true,
+    "highDisplacementThreshold": 223.6,
+    "losSource": "heuristic",
+    "lowDisplacementThreshold": 92.2,
+    "purchaseItemDataAvailable": true,
+    "tempoStanceSampleSize": 8,
+    "tempoStanceThresholdSource": "demo"
+  },
+  "demoId": "placeholder",
+  "featureModelVersion": "v1-heuristic",
+  "fileName": "fake.dem",
+  "finalScore": {
+    "opponent": 1,
+    "team": 1
+  },
+  "map": "de_mirage",
+  "playerAggregates": [
+    {
+      "adr": 15.0,
+      "aim": {
+        "accuracy": 100.0,
+        "avgCrosshairPlacementDeg": null,
+        "avgTimeToDamageMs": null,
+        "avgTimeToKillMs": null,
+        "counterStrafePct": 0.0,
+        "firstBulletAccuracy": 100.0,
+        "firstBulletShots": 1,
+        "headAccuracy": 0.0,
+        "headHits": 0,
+        "hsKillPct": 0.0,
+        "hsKills": 0,
+        "shotsFired": 1,
+        "shotsHit": 1,
+        "spottedAccuracy": 0.0,
+        "sprayAccuracy": 0.0,
+        "sprayShots": 0
+      },
+      "assists": 0,
+      "clutchesLost": 1,
+      "clutchesWon": 0,
+      "deaths": 2,
+      "entryAttempts": 1,
+      "entrySuccess": 1,
+      "favoriteAreas": [
+        {
+          "area": "Mid",
+          "count": 16
+        },
+        {
+          "area": "TSpawn",
+          "count": 4
+        }
+      ],
+      "kills": 1,
+      "name": "Ally1",
+      "positioning": {
+        "avgNearestTeammateDist": 49.4,
+        "avgTradeDelayMs": null,
+        "isolatedDeathPct": 0.0,
+        "openingDuelParticipationPct": 50.0,
+        "openingDuelWinPct": 100.0,
+        "overexposedDeathPct": 0.0,
+        "tradeKillPct": 0.0,
+        "tradeKills": 0,
+        "tradedDeathPct": 50.0
+      },
+      "side": "ct",
+      "steamId": "100",
+      "utility": {
+        "avgBlindTimeSec": 1.5,
+        "avgFriendlyBlindTimeSec": 0.0,
+        "avgHeDamage": 0.0,
+        "avgHeTeamDamage": 0.0,
+        "avgMolotovDamage": 0.0,
+        "avgMolotovTeamDamage": 0.0,
+        "effectiveEnemyFlashes": 1,
+        "effectiveFlashPct": 100.0,
+        "enemiesFlashed": 1,
+        "enemiesFlashedPct": 100.0,
+        "flashAssists": 0,
+        "flashesThrown": 1,
+        "friendsFlashed": 0,
+        "heThrown": 0,
+        "molotovsThrown": 0,
+        "smokesThrown": 0,
+        "smokesWasted": 0,
+        "unusedUtilityRounds": 1,
+        "unusedUtilityValue": 300.0
+      }
+    },
+    {
+      "adr": 0.0,
+      "aim": {
+        "accuracy": 0.0,
+        "avgCrosshairPlacementDeg": null,
+        "avgTimeToDamageMs": null,
+        "avgTimeToKillMs": null,
+        "counterStrafePct": 0.0,
+        "firstBulletAccuracy": 0.0,
+        "firstBulletShots": 0,
+        "headAccuracy": 0.0,
+        "headHits": 0,
+        "hsKillPct": 100.0,
+        "hsKills": 1,
+        "shotsFired": 0,
+        "shotsHit": 0,
+        "spottedAccuracy": 0.0,
+        "sprayAccuracy": 0.0,
+        "sprayShots": 0
+      },
+      "assists": 1,
+      "clutchesLost": 0,
+      "clutchesWon": 0,
+      "deaths": 1,
+      "entryAttempts": 1,
+      "entrySuccess": 0,
+      "favoriteAreas": [
+        {
+          "area": "Mid",
+          "count": 17
+        },
+        {
+          "area": "TSpawn",
+          "count": 3
+        }
+      ],
+      "kills": 1,
+      "name": "Ally2",
+      "positioning": {
+        "avgNearestTeammateDist": 49.4,
+        "avgTradeDelayMs": 2812.0,
+        "isolatedDeathPct": 0.0,
+        "openingDuelParticipationPct": 50.0,
+        "openingDuelWinPct": 0.0,
+        "overexposedDeathPct": 0.0,
+        "tradeKillPct": 100.0,
+        "tradeKills": 1,
+        "tradedDeathPct": 0.0
+      },
+      "side": "ct",
+      "steamId": "101",
+      "utility": {
+        "avgBlindTimeSec": 0.0,
+        "avgFriendlyBlindTimeSec": 0.0,
+        "avgHeDamage": 0.0,
+        "avgHeTeamDamage": 0.0,
+        "avgMolotovDamage": 0.0,
+        "avgMolotovTeamDamage": 0.0,
+        "effectiveEnemyFlashes": 0,
+        "effectiveFlashPct": 0.0,
+        "enemiesFlashed": 0,
+        "enemiesFlashedPct": 0.0,
+        "flashAssists": 0,
+        "flashesThrown": 0,
+        "friendsFlashed": 0,
+        "heThrown": 0,
+        "molotovsThrown": 0,
+        "smokesThrown": 1,
+        "smokesWasted": 0,
+        "unusedUtilityRounds": 0,
+        "unusedUtilityValue": 0.0
+      }
+    },
+    {
+      "adr": 0.0,
+      "aim": {
+        "accuracy": 0.0,
+        "avgCrosshairPlacementDeg": null,
+        "avgTimeToDamageMs": null,
+        "avgTimeToKillMs": null,
+        "counterStrafePct": 0.0,
+        "firstBulletAccuracy": 0.0,
+        "firstBulletShots": 0,
+        "headAccuracy": 0.0,
+        "headHits": 0,
+        "hsKillPct": 0.0,
+        "hsKills": 0,
+        "shotsFired": 0,
+        "shotsHit": 0,
+        "spottedAccuracy": 0.0,
+        "sprayAccuracy": 0.0,
+        "sprayShots": 0
+      },
+      "assists": 0,
+      "clutchesLost": 0,
+      "clutchesWon": 0,
+      "deaths": 1,
+      "entryAttempts": 1,
+      "entrySuccess": 0,
+      "favoriteAreas": [
+        {
+          "area": "Mid",
+          "count": 16
+        },
+        {
+          "area": "BombsiteA",
+          "count": 4
+        }
+      ],
+      "kills": 1,
+      "name": "Enemy1",
+      "positioning": {
+        "avgNearestTeammateDist": 67.8,
+        "avgTradeDelayMs": null,
+        "isolatedDeathPct": 0.0,
+        "openingDuelParticipationPct": 50.0,
+        "openingDuelWinPct": 0.0,
+        "overexposedDeathPct": 0.0,
+        "tradeKillPct": 0.0,
+        "tradeKills": 0,
+        "tradedDeathPct": 100.0
+      },
+      "side": "t",
+      "steamId": "200",
+      "utility": {
+        "avgBlindTimeSec": 0.0,
+        "avgFriendlyBlindTimeSec": 0.0,
+        "avgHeDamage": 0.0,
+        "avgHeTeamDamage": 0.0,
+        "avgMolotovDamage": 0.0,
+        "avgMolotovTeamDamage": 0.0,
+        "effectiveEnemyFlashes": 0,
+        "effectiveFlashPct": 0.0,
+        "enemiesFlashed": 0,
+        "enemiesFlashedPct": 0.0,
+        "flashAssists": 0,
+        "flashesThrown": 0,
+        "friendsFlashed": 0,
+        "heThrown": 0,
+        "molotovsThrown": 0,
+        "smokesThrown": 0,
+        "smokesWasted": 0,
+        "unusedUtilityRounds": 0,
+        "unusedUtilityValue": 0.0
+      }
+    },
+    {
+      "adr": 0.0,
+      "aim": {
+        "accuracy": 0.0,
+        "avgCrosshairPlacementDeg": null,
+        "avgTimeToDamageMs": null,
+        "avgTimeToKillMs": null,
+        "counterStrafePct": 0.0,
+        "firstBulletAccuracy": 0.0,
+        "firstBulletShots": 0,
+        "headAccuracy": 0.0,
+        "headHits": 0,
+        "hsKillPct": 0.0,
+        "hsKills": 1,
+        "shotsFired": 0,
+        "shotsHit": 0,
+        "spottedAccuracy": 0.0,
+        "sprayAccuracy": 0.0,
+        "sprayShots": 0
+      },
+      "assists": 0,
+      "clutchesLost": 1,
+      "clutchesWon": 0,
+      "deaths": 1,
+      "entryAttempts": 1,
+      "entrySuccess": 1,
+      "favoriteAreas": [
+        {
+          "area": "BombsiteA",
+          "count": 14
+        },
+        {
+          "area": "Mid",
+          "count": 6
+        }
+      ],
+      "kills": 2,
+      "name": "Enemy2",
+      "positioning": {
+        "avgNearestTeammateDist": 67.8,
+        "avgTradeDelayMs": 312.0,
+        "isolatedDeathPct": 0.0,
+        "openingDuelParticipationPct": 50.0,
+        "openingDuelWinPct": 100.0,
+        "overexposedDeathPct": 0.0,
+        "tradeKillPct": 50.0,
+        "tradeKills": 1,
+        "tradedDeathPct": 0.0
+      },
+      "side": "t",
+      "steamId": "201",
+      "utility": {
+        "avgBlindTimeSec": 0.0,
+        "avgFriendlyBlindTimeSec": 0.0,
+        "avgHeDamage": 0.0,
+        "avgHeTeamDamage": 0.0,
+        "avgMolotovDamage": 0.0,
+        "avgMolotovTeamDamage": 0.0,
+        "effectiveEnemyFlashes": 0,
+        "effectiveFlashPct": 0.0,
+        "enemiesFlashed": 0,
+        "enemiesFlashedPct": 0.0,
+        "flashAssists": 0,
+        "flashesThrown": 0,
+        "friendsFlashed": 0,
+        "heThrown": 0,
+        "molotovsThrown": 0,
+        "smokesThrown": 0,
+        "smokesWasted": 0,
+        "unusedUtilityRounds": 0,
+        "unusedUtilityValue": 0.0
+      }
+    }
+  ],
+  "rounds": [
+    {
+      "blinds": [
+        {
+          "duration": 1.5,
+          "player": "Enemy1",
+          "side": "t",
+          "t": 0.9
+        }
+      ],
+      "bombDefuse": null,
+      "bombExplode": null,
+      "bombPlant": {
+        "player": "Enemy2",
+        "site": "A",
+        "t": 4.7,
+        "x": 380.0,
+        "y": 200.0
+      },
+      "ct": {
+        "buyType": "semi",
+        "stance": "aggressive",
+        "tempo": "rush",
+        "utilityUsed": {
+          "flashes": 1,
+          "he": 0,
+          "molotovs": 0,
+          "smokes": 1
+        }
+      },
+      "deaths": [
+        {
+          "aliveCT": 2,
+          "aliveT": 1,
+          "assist": "Ally2",
+          "assistSteamId": "101",
+          "bombPlanted": false,
+          "by": "Ally1",
+          "bySteamId": "100",
+          "manAdvantage": 1,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 3.1,
+          "timeRemainingSec": 111.9,
+          "weapon": "ak47",
+          "x": 350.0,
+          "y": 180.0,
+          "zone": "mid"
+        },
+        {
+          "aliveCT": 1,
+          "aliveT": 1,
+          "bombPlanted": false,
+          "by": "Enemy2",
+          "bySteamId": "201",
+          "manAdvantage": 0,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 3.4,
+          "timeRemainingSec": 111.6,
+          "weapon": "ak47",
+          "x": 250.0,
+          "y": 100.0,
+          "zone": "mid"
+        },
+        {
+          "aliveCT": 1,
+          "aliveT": 0,
+          "bombPlanted": true,
+          "by": "Ally2",
+          "bySteamId": "101",
+          "headshot": true,
+          "manAdvantage": 1,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 6.2,
+          "timeRemainingSec": 108.8,
+          "weapon": "ak47",
+          "x": 380.0,
+          "y": 200.0,
+          "zone": "A"
+        }
+      ],
+      "decoys": [],
+      "entryFragBy": "Ally1",
+      "entryFragBySteamId": "100",
+      "entryFragOn": "Enemy1",
+      "entryFragOnSteamId": "200",
+      "fires": [],
+      "flashes": [
+        {
+          "player": "Ally1",
+          "t": 0.8,
+          "x": 300.0,
+          "y": 150.0
+        }
+      ],
+      "he": [],
+      "keyPositions": [
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 0.0,
+          "x": 0.0,
+          "y": 0.0,
+          "yaw": 90.0,
+          "zone": "TSpawn"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 0.0,
+          "x": 50.0,
+          "y": 0.0,
+          "yaw": 90.0,
+          "zone": "TSpawn"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 0.0,
+          "x": 400.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 0.0,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 2.3,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 2.3,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 2.3,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 2.3,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 2.4,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 2.4,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 2.4,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 2.4,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 3.0,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 3.0,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 3.0,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 3.0,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 3.1,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 3.1,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 3.1,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 3.1,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 3.4,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 3.4,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 3.4,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 3.4,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 6.0,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 6.0,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 6.0,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 6.0,
+          "x": 380.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 6.2,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 6.2,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 6.2,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 6.2,
+          "x": 380.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 9.0,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 9.0,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 9.0,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 9.0,
+          "x": 380.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 12.0,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 12.0,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 12.0,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 12.0,
+          "x": 380.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 15.0,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 15.0,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 15.0,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 15.0,
+          "x": 380.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 15.6,
+          "x": 250.0,
+          "y": 100.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 15.6,
+          "x": 300.0,
+          "y": 120.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 15.6,
+          "x": 350.0,
+          "y": 180.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 15.6,
+          "x": 380.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        }
+      ],
+      "loadout": [
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "weapon": null
+        },
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "weapon": null
+        },
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "weapon": null
+        },
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "weapon": null
+        }
+      ],
+      "roundNumber": 1,
+      "shots": [
+        {
+          "player": "Ally1",
+          "side": "ct",
+          "t": 2.3
+        }
+      ],
+      "siteHit": "A",
+      "smokes": [
+        {
+          "endT": 4.7,
+          "player": "Ally2",
+          "startT": 0.9,
+          "x": 200.0,
+          "y": 200.0
+        }
+      ],
+      "t": {
+        "buyType": "semi",
+        "stance": "passive",
+        "tempo": "split",
+        "utilityUsed": {
+          "flashes": 0,
+          "he": 0,
+          "molotovs": 0,
+          "smokes": 0
+        }
+      },
+      "winner": "ct"
+    },
+    {
+      "blinds": [],
+      "bombDefuse": null,
+      "bombExplode": null,
+      "bombPlant": null,
+      "ct": {
+        "buyType": "semi",
+        "stance": "passive-aggressive",
+        "tempo": "default",
+        "utilityUsed": {
+          "flashes": 0,
+          "he": 0,
+          "molotovs": 0,
+          "smokes": 0
+        }
+      },
+      "deaths": [
+        {
+          "aliveCT": 1,
+          "aliveT": 2,
+          "bombPlanted": false,
+          "by": "Enemy2",
+          "bySteamId": "201",
+          "headshot": true,
+          "manAdvantage": -1,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 6.2,
+          "timeRemainingSec": 108.8,
+          "weapon": "awp",
+          "x": 120.0,
+          "y": 60.0,
+          "zone": "mid"
+        },
+        {
+          "aliveCT": 0,
+          "aliveT": 2,
+          "bombPlanted": false,
+          "by": "Enemy1",
+          "bySteamId": "200",
+          "manAdvantage": -2,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 7.8,
+          "timeRemainingSec": 107.2,
+          "weapon": "m4a1",
+          "x": 100.0,
+          "y": 50.0,
+          "zone": "mid"
+        }
+      ],
+      "decoys": [],
+      "entryFragBy": "Enemy2",
+      "entryFragBySteamId": "201",
+      "entryFragOn": "Ally2",
+      "entryFragOnSteamId": "101",
+      "fires": [],
+      "flashes": [],
+      "he": [],
+      "keyPositions": [
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 0.0,
+          "x": 0.0,
+          "y": 0.0,
+          "yaw": 90.0,
+          "zone": "TSpawn"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 0.0,
+          "x": 50.0,
+          "y": 0.0,
+          "yaw": 90.0,
+          "zone": "TSpawn"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 0.0,
+          "x": 400.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 0.0,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 3.0,
+          "x": 0.0,
+          "y": 0.0,
+          "yaw": 90.0,
+          "zone": "TSpawn"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 3.0,
+          "x": 50.0,
+          "y": 0.0,
+          "yaw": 90.0,
+          "zone": "TSpawn"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 3.0,
+          "x": 400.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 3.0,
+          "x": 450.0,
+          "y": 220.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 6.0,
+          "x": 0.0,
+          "y": 0.0,
+          "yaw": 90.0,
+          "zone": "TSpawn"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 6.0,
+          "x": 120.0,
+          "y": 60.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 6.0,
+          "x": 400.0,
+          "y": 200.0,
+          "yaw": 270.0,
+          "zone": "A"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 6.0,
+          "x": 250.0,
+          "y": 120.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 6.2,
+          "x": 100.0,
+          "y": 50.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 6.2,
+          "x": 120.0,
+          "y": 60.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 6.2,
+          "x": 200.0,
+          "y": 100.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 6.2,
+          "x": 250.0,
+          "y": 120.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 7.8,
+          "x": 100.0,
+          "y": 50.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 7.8,
+          "x": 120.0,
+          "y": 60.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 7.8,
+          "x": 200.0,
+          "y": 100.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 7.8,
+          "x": 250.0,
+          "y": 120.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 9.0,
+          "x": 100.0,
+          "y": 50.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 9.0,
+          "x": 120.0,
+          "y": 60.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 9.0,
+          "x": 200.0,
+          "y": 100.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 9.0,
+          "x": 250.0,
+          "y": 120.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 12.0,
+          "x": 100.0,
+          "y": 50.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 12.0,
+          "x": 120.0,
+          "y": 60.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 12.0,
+          "x": 200.0,
+          "y": 100.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 12.0,
+          "x": 250.0,
+          "y": 120.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "t": 14.1,
+          "x": 100.0,
+          "y": 50.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "t": 14.1,
+          "x": 120.0,
+          "y": 60.0,
+          "yaw": 90.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "t": 14.1,
+          "x": 200.0,
+          "y": 100.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        },
+        {
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "t": 14.1,
+          "x": 250.0,
+          "y": 120.0,
+          "yaw": 270.0,
+          "zone": "mid"
+        }
+      ],
+      "loadout": [
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Ally1",
+          "side": "ct",
+          "steamId": "100",
+          "weapon": null
+        },
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Ally2",
+          "side": "ct",
+          "steamId": "101",
+          "weapon": null
+        },
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Enemy1",
+          "side": "t",
+          "steamId": "200",
+          "weapon": null
+        },
+        {
+          "equipValue": 3000,
+          "health": 100,
+          "player": "Enemy2",
+          "side": "t",
+          "steamId": "201",
+          "weapon": null
+        }
+      ],
+      "roundNumber": 2,
+      "shots": [],
+      "siteHit": "mid",
+      "smokes": [],
+      "t": {
+        "buyType": "semi",
+        "stance": "aggressive",
+        "tempo": "rush",
+        "utilityUsed": {
+          "flashes": 0,
+          "he": 0,
+          "molotovs": 0,
+          "smokes": 0
+        }
+      },
+      "winner": "t"
+    }
+  ]
+}

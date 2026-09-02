@@ -258,15 +258,20 @@ function round2(value: number): number {
 // Python) e, desses, quantos o time dele mesmo assim venceu — sinal de que a
 // morte comprou informação/espaço que valeu o round, distinto de "ganhar o
 // duelo de abertura" (isso já é `openingDuelWinPct` em PlayerPositioningStats).
-// Casamento por nome (não steamId) porque é o único identificador disponível
-// em `RoundDeath` — mesma limitação que outros campos de round já têm no
-// resto do código (ex.: `entryFragBy`/`entryFragOn`).
-function computeSacrificeOpens(rounds: RoundSummary[], playerName: string): { opened: number; openedWon: number } {
+// A06: prefere casar por steamId (confiável) e só cai pra nome quando o death
+// não tem steamId (demo parseada antes desse campo existir em RoundDeath).
+function computeSacrificeOpens(
+  rounds: RoundSummary[],
+  playerSteamId: string,
+  playerName: string
+): { opened: number; openedWon: number } {
   let opened = 0;
   let openedWon = 0;
   for (const round of rounds) {
     const firstDeath = round.deaths && round.deaths.length > 0 ? round.deaths[0] : undefined;
-    if (!firstDeath || firstDeath.player !== playerName) continue;
+    if (!firstDeath) continue;
+    const matches = firstDeath.steamId ? firstDeath.steamId === playerSteamId : firstDeath.player === playerName;
+    if (!matches) continue;
     opened++;
     if (firstDeath.side === round.winner) openedWon++;
   }
@@ -306,7 +311,13 @@ export function computeUtilityScore(utility: PlayerUtilityStats, roundsInDemo: n
     sum += normalize(value, cfg.targetMin, cfg.targetMax) * cfg.weight;
     totalWeight += cfg.weight;
   };
-  add(utility.effectiveFlashPct, UTILITY_QUALITY_WEIGHTS.effectiveFlashPct);
+  // null em demos GOTV/SourceTV sem player_blind com autor utilizável (ver
+  // PlayerUtilityStats.effectiveFlashPct) — excluído do denominador em vez de
+  // contar como 0, senão toda demo pro puxaria a nota de utility pra baixo por
+  // um dado que nunca existiu, não por desempenho real.
+  if (utility.effectiveFlashPct !== null) {
+    add(utility.effectiveFlashPct, UTILITY_QUALITY_WEIGHTS.effectiveFlashPct);
+  }
   // Razão por flashbang jogada, não por round — bate com "Friends Flashed per
   // Flashbang" (mantido como razão crua, não %, pra ficar na mesma escala do
   // valor de referência 0.5 fornecido pelo usuário).
@@ -320,10 +331,15 @@ export function computeUtilityScore(utility: PlayerUtilityStats, roundsInDemo: n
   add(smokesWastedPerRound, UTILITY_QUALITY_WEIGHTS.smokeWastedPenalty);
   const flashKillPct = utility.flashesThrown ? (100 * utility.flashAssists) / utility.flashesThrown : 0;
   add(flashKillPct, UTILITY_QUALITY_WEIGHTS.flashKillPct);
-  // $ de utility não usada por morte-com-utility-sobrando, não diluído por todos os
-  // rounds — bate com "Unused Utility on Death".
-  const unusedUtilityPerDeath = utility.unusedUtilityRounds ? utility.unusedUtilityValue / utility.unusedUtilityRounds : 0;
-  add(unusedUtilityPerDeath, UTILITY_QUALITY_WEIGHTS.unusedUtilityPenalty);
+  // null em demos GOTV/SourceTV sem item_purchase com weapon/item utilizável
+  // (ver PlayerUtilityStats.unusedUtilityValue) — mesmo raciocínio do
+  // effectiveFlashPct acima: excluído, não tratado como "nunca desperdiça".
+  if (utility.unusedUtilityValue !== null && utility.unusedUtilityRounds !== null) {
+    // $ de utility não usada por morte-com-utility-sobrando, não diluído por todos os
+    // rounds — bate com "Unused Utility on Death".
+    const unusedUtilityPerDeath = utility.unusedUtilityRounds ? utility.unusedUtilityValue / utility.unusedUtilityRounds : 0;
+    add(unusedUtilityPerDeath, UTILITY_QUALITY_WEIGHTS.unusedUtilityPenalty);
+  }
   const qualityScore = totalWeight ? sum / totalWeight : 0;
 
   const totalThrown = utility.flashesThrown + utility.smokesThrown + utility.molotovsThrown + utility.heThrown;
@@ -391,7 +407,7 @@ export function computeOverallScore(
 // sacrifício de abertura, calculado aqui a partir de `rounds` (ver
 // `computeSacrificeOpens`).
 function buildImpactStats(player: PlayerAggregate, roundsInDemo: number, rounds: RoundSummary[]): PlayerImpactStats {
-  const { opened, openedWon } = computeSacrificeOpens(rounds, player.name);
+  const { opened, openedWon } = computeSacrificeOpens(rounds, player.steamId, player.name);
   const { clutchesWon, clutchesLost } = player;
   return {
     kills: player.kills,
@@ -445,6 +461,16 @@ interface PlayerScoreAccumulator {
   heThrown: number;
   flashAssists: number;
   enemiesFlashed: number;
+  // Denominador restrito de enemiesFlashedPct/effectiveFlashPct: soma de
+  // flashesThrown só nas demos onde player_blind trouxe atribuição de autor
+  // utilizável (ver PlayerUtilityStats.enemiesFlashedPct). Usar acc.flashesThrown
+  // (todas as demos) diluiria a % com o volume de flashes de demos GOTV/SourceTV
+  // que não têm como saber se acertaram alguém.
+  flashesThrownWithBlindData: number;
+  // Quantas demos contribuíram pra avgBlindTimeSecSum/avgFriendlyBlindTimeSecSum
+  // — não é acc.demosCount, porque demos GOTV/SourceTV (sem player_blind
+  // utilizável) não têm esse valor pra somar.
+  flashDataDemosCount: number;
   friendsFlashed: number;
   avgBlindTimeSecSum: number;
   avgHeDamageSum: number;
@@ -456,6 +482,9 @@ interface PlayerScoreAccumulator {
   smokesWasted: number;
   unusedUtilityValue: number;
   unusedUtilityRounds: number;
+  // Quantas demos contribuíram pro total acima — não é acc.demosCount, porque
+  // demos GOTV/SourceTV (sem item_purchase utilizável) não têm esse valor.
+  purchaseDataDemosCount: number;
 
   openingDuelWinPctSum: number;
   openingDuelParticipationPctSum: number;
@@ -519,6 +548,8 @@ function newAccumulator(name: string): PlayerScoreAccumulator {
     heThrown: 0,
     flashAssists: 0,
     enemiesFlashed: 0,
+    flashesThrownWithBlindData: 0,
+    flashDataDemosCount: 0,
     friendsFlashed: 0,
     avgBlindTimeSecSum: 0,
     avgHeDamageSum: 0,
@@ -530,6 +561,7 @@ function newAccumulator(name: string): PlayerScoreAccumulator {
     smokesWasted: 0,
     unusedUtilityValue: 0,
     unusedUtilityRounds: 0,
+    purchaseDataDemosCount: 0,
     openingDuelWinPctSum: 0,
     openingDuelParticipationPctSum: 0,
     tradeKills: 0,
@@ -625,16 +657,31 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       acc.flashAssists += player.utility.flashAssists;
       acc.enemiesFlashed += player.utility.enemiesFlashed;
       acc.friendsFlashed += player.utility.friendsFlashed;
-      acc.avgBlindTimeSecSum += player.utility.avgBlindTimeSec;
+      // null em demos GOTV/SourceTV sem player_blind com autor utilizável —
+      // excluído do denominador/soma em vez de contar como 0 (ver
+      // PlayerUtilityStats.enemiesFlashedPct e o comentário no accumulator).
+      if (player.utility.enemiesFlashedPct !== null) {
+        acc.flashesThrownWithBlindData += player.utility.flashesThrown;
+      }
+      if (player.utility.avgBlindTimeSec !== null && player.utility.avgFriendlyBlindTimeSec !== null) {
+        acc.avgBlindTimeSecSum += player.utility.avgBlindTimeSec;
+        acc.avgFriendlyBlindTimeSecSum += player.utility.avgFriendlyBlindTimeSec;
+        acc.flashDataDemosCount++;
+      }
       acc.avgHeDamageSum += player.utility.avgHeDamage;
       acc.avgHeTeamDamageSum += player.utility.avgHeTeamDamage;
       acc.effectiveEnemyFlashes += player.utility.effectiveEnemyFlashes;
-      acc.avgFriendlyBlindTimeSecSum += player.utility.avgFriendlyBlindTimeSec;
       acc.avgMolotovDamageSum += player.utility.avgMolotovDamage;
       acc.avgMolotovTeamDamageSum += player.utility.avgMolotovTeamDamage;
       acc.smokesWasted += player.utility.smokesWasted;
-      acc.unusedUtilityValue += player.utility.unusedUtilityValue;
-      acc.unusedUtilityRounds += player.utility.unusedUtilityRounds;
+      // null em demos GOTV/SourceTV sem item_purchase com weapon/item utilizável
+      // — excluído do total em vez de contar como "nunca desperdiça" (ver
+      // PlayerUtilityStats.unusedUtilityValue).
+      if (player.utility.unusedUtilityValue !== null && player.utility.unusedUtilityRounds !== null) {
+        acc.unusedUtilityValue += player.utility.unusedUtilityValue;
+        acc.unusedUtilityRounds += player.utility.unusedUtilityRounds;
+        acc.purchaseDataDemosCount++;
+      }
 
       acc.openingDuelWinPctSum += player.positioning.openingDuelWinPct;
       acc.openingDuelParticipationPctSum += player.positioning.openingDuelParticipationPct;
@@ -740,19 +787,25 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
           heThrown: acc.heThrown,
           flashAssists: acc.flashAssists,
           enemiesFlashed: acc.enemiesFlashed,
-          enemiesFlashedPct: acc.flashesThrown ? round1((100 * acc.enemiesFlashed) / acc.flashesThrown) : 0,
+          enemiesFlashedPct: acc.flashesThrownWithBlindData
+            ? round1((100 * acc.enemiesFlashed) / acc.flashesThrownWithBlindData)
+            : null,
           friendsFlashed: acc.friendsFlashed,
-          avgBlindTimeSec: acc.demosCount ? round1(acc.avgBlindTimeSecSum / acc.demosCount) : 0,
+          avgBlindTimeSec: acc.flashDataDemosCount ? round1(acc.avgBlindTimeSecSum / acc.flashDataDemosCount) : null,
           avgHeDamage: acc.demosCount ? round1(acc.avgHeDamageSum / acc.demosCount) : 0,
           avgHeTeamDamage: acc.demosCount ? round1(acc.avgHeTeamDamageSum / acc.demosCount) : 0,
           effectiveEnemyFlashes: acc.effectiveEnemyFlashes,
-          effectiveFlashPct: acc.flashesThrown ? round1((100 * acc.effectiveEnemyFlashes) / acc.flashesThrown) : 0,
-          avgFriendlyBlindTimeSec: acc.demosCount ? round1(acc.avgFriendlyBlindTimeSecSum / acc.demosCount) : 0,
+          effectiveFlashPct: acc.flashesThrownWithBlindData
+            ? round1((100 * acc.effectiveEnemyFlashes) / acc.flashesThrownWithBlindData)
+            : null,
+          avgFriendlyBlindTimeSec: acc.flashDataDemosCount
+            ? round1(acc.avgFriendlyBlindTimeSecSum / acc.flashDataDemosCount)
+            : null,
           avgMolotovDamage: acc.demosCount ? round1(acc.avgMolotovDamageSum / acc.demosCount) : 0,
           avgMolotovTeamDamage: acc.demosCount ? round1(acc.avgMolotovTeamDamageSum / acc.demosCount) : 0,
           smokesWasted: acc.smokesWasted,
-          unusedUtilityValue: acc.unusedUtilityValue,
-          unusedUtilityRounds: acc.unusedUtilityRounds,
+          unusedUtilityValue: acc.purchaseDataDemosCount ? acc.unusedUtilityValue : null,
+          unusedUtilityRounds: acc.purchaseDataDemosCount ? acc.unusedUtilityRounds : null,
         },
         positioning: {
           openingDuelWinPct: acc.demosCount ? round1(acc.openingDuelWinPctSum / acc.demosCount) : 0,

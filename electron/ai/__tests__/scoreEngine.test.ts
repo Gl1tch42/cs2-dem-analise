@@ -247,6 +247,19 @@ describe('computeUtilityScore', () => {
     const score = computeUtilityScore(utilityAtCeiling(), 10);
     expect(score).toBe(93.3);
   });
+
+  it('excludes null effectiveFlashPct/unusedUtilityValue instead of treating them as 0 (demos GOTV/SourceTV sem player_blind/item_purchase)', () => {
+    // mesma lógica do teste "excludes null crosshair/TTD/TTK" pro aim score:
+    // as demais submétricas continuam no teto -> média ponderada continua 100
+    // mesmo com esses dois pesos removidos do denominador.
+    const utility = {
+      ...utilityAtCeiling(),
+      effectiveFlashPct: null,
+      unusedUtilityValue: null,
+      unusedUtilityRounds: null,
+    };
+    expect(computeUtilityScore({ ...utility, smokesThrown: 2 }, 10)).toBe(100);
+  });
 });
 
 // ---- computePositioningScore --------------------------------------------
@@ -478,6 +491,90 @@ describe('computePlayerScores', () => {
     expect(result[0].history).toHaveLength(2);
   });
 
+  it('excludes GOTV/SourceTV demos (null flash/purchase utility fields) from the consolidated averages instead of diluting them with 0', () => {
+    // demo 1: POV real, dado de flash/purchase disponível.
+    const povUtility = {
+      ...utilityAtCeiling(),
+      flashesThrown: 10,
+      enemiesFlashed: 8,
+      enemiesFlashedPct: 80,
+      effectiveEnemyFlashes: 6,
+      effectiveFlashPct: 60,
+      avgBlindTimeSec: 2.0,
+      avgFriendlyBlindTimeSec: 0,
+      unusedUtilityValue: 100,
+      unusedUtilityRounds: 1,
+    };
+    // demo 2: GOTV/SourceTV, sem player_blind/item_purchase (ver parse_demo.py) —
+    // flashesThrown continua real (flashbang_detonate funciona em GOTV), mas tudo
+    // que depende de attacker_steamid/weapon-item vem null.
+    const gotvUtility = {
+      ...utilityAtCeiling(),
+      flashesThrown: 20,
+      enemiesFlashed: 0,
+      enemiesFlashedPct: null as any,
+      effectiveEnemyFlashes: 0,
+      effectiveFlashPct: null as any,
+      avgBlindTimeSec: null as any,
+      avgFriendlyBlindTimeSec: null as any,
+      unusedUtilityValue: null as any,
+      unusedUtilityRounds: null as any,
+    };
+    mockedFs.existsSync.mockReturnValue(true);
+    const povSummary = buildSummary({
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally', { utility: povUtility })],
+    });
+    const gotvSummary = buildSummary({
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally', { utility: gotvUtility })],
+    });
+    mockedFs.readFileSync
+      .mockReturnValueOnce(JSON.stringify(povSummary))
+      .mockReturnValueOnce(JSON.stringify(gotvSummary));
+
+    const result = computePlayerScores(slotFolder, [buildDemoRecord('demo-1'), buildDemoRecord('demo-2')]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].demosCount).toBe(2);
+    // Denominador restrito: só os 10 flashes da demo POV contam, não 10+20=30 —
+    // senão a % cairia pela metade só por causa da demo GOTV, sem relação com
+    // desempenho real.
+    expect(result[0].utility.enemiesFlashedPct).toBe(80);
+    expect(result[0].utility.effectiveFlashPct).toBe(60);
+    // Média só sobre a 1 demo que tinha o dado, não dividida por demosCount(2).
+    expect(result[0].utility.avgBlindTimeSec).toBe(2.0);
+    // Soma só da demo com dado real, não com a GOTV somando 0 disfarçado de "sem gasto".
+    expect(result[0].utility.unusedUtilityValue).toBe(100);
+    expect(result[0].utility.unusedUtilityRounds).toBe(1);
+    // flashesThrown continua a soma real das duas demos (não depende de player_blind).
+    expect(result[0].utility.flashesThrown).toBe(30);
+  });
+
+  it('returns null for consolidated flash/purchase utility fields when every demo is GOTV/SourceTV (no usable data anywhere)', () => {
+    const gotvUtility = {
+      ...utilityAtCeiling(),
+      enemiesFlashedPct: null as any,
+      effectiveFlashPct: null as any,
+      avgBlindTimeSec: null as any,
+      avgFriendlyBlindTimeSec: null as any,
+      unusedUtilityValue: null as any,
+      unusedUtilityRounds: null as any,
+    };
+    mockedFs.existsSync.mockReturnValue(true);
+    const summary = buildSummary({
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally', { utility: gotvUtility })],
+    });
+    mockedFs.readFileSync.mockReturnValue(JSON.stringify(summary));
+
+    const result = computePlayerScores(slotFolder, [buildDemoRecord('demo-1')]);
+
+    expect(result[0].utility.enemiesFlashedPct).toBeNull();
+    expect(result[0].utility.effectiveFlashPct).toBeNull();
+    expect(result[0].utility.avgBlindTimeSec).toBeNull();
+    expect(result[0].utility.avgFriendlyBlindTimeSec).toBeNull();
+    expect(result[0].utility.unusedUtilityValue).toBeNull();
+    expect(result[0].utility.unusedUtilityRounds).toBeNull();
+  });
+
   it('threads calibration quality and null-submetric coverage into confidenceScore', () => {
     mockedFs.existsSync.mockReturnValue(true);
     const summary = buildSummary({
@@ -503,6 +600,55 @@ describe('computePlayerScores', () => {
     // -> demosFactor(1/8)*0.4 + roundsFactor(1/190)*0.3 = 0.05 + 0.0016 -> arredonda pra 0.05.
     expect(result[0].confidenceScore).toBe(0.05);
     expect(result[0].confidence).toBe('low');
+  });
+
+  it('attributes sacrifice-opens by steamId, not by display name, when two players share a name (A06)', () => {
+    // "Ally" no nosso roster (steamId 001) NÃO é quem abriu o round — quem abriu
+    // foi uma "Ally" diferente (steamId 099, inimiga). Casamento por nome (bug
+    // antigo) atribuiria o sacrifício de abertura errado pro nosso jogador só
+    // por coincidência de nome.
+    mockedFs.existsSync.mockReturnValue(true);
+    const summary = buildSummary({
+      rounds: [
+        {
+          roundNumber: 1,
+          winner: 't',
+          ct: { buyType: 'full', tempo: 'default', stance: 'aggressive', utilityUsed: { flashes: 0, smokes: 0, molotovs: 0, he: 0 } },
+          t: { buyType: 'full', tempo: 'default', stance: 'aggressive', utilityUsed: { flashes: 0, smokes: 0, molotovs: 0, he: 0 } },
+          keyPositions: [],
+          deaths: [{ player: 'Ally', steamId: '76500000000000099', side: 't', x: 0, y: 0, t: 5 }],
+        },
+      ],
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally')],
+    });
+    mockedFs.readFileSync.mockReturnValue(JSON.stringify(summary));
+
+    const result = computePlayerScores(slotFolder, [buildDemoRecord('demo-1')]);
+
+    expect(result[0].impact.roundsOpened).toBe(0);
+  });
+
+  it('falls back to name matching for sacrifice-opens when the death predates the steamId field (old demos)', () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    const summary = buildSummary({
+      rounds: [
+        {
+          roundNumber: 1,
+          winner: 'ct',
+          ct: { buyType: 'full', tempo: 'default', stance: 'aggressive', utilityUsed: { flashes: 0, smokes: 0, molotovs: 0, he: 0 } },
+          t: { buyType: 'full', tempo: 'default', stance: 'aggressive', utilityUsed: { flashes: 0, smokes: 0, molotovs: 0, he: 0 } },
+          keyPositions: [],
+          deaths: [{ player: 'Ally', side: 'ct', x: 0, y: 0, t: 5 }], // sem steamId
+        },
+      ],
+      playerAggregates: [buildAggregate('76500000000000001', 'Ally')],
+    });
+    mockedFs.readFileSync.mockReturnValue(JSON.stringify(summary));
+
+    const result = computePlayerScores(slotFolder, [buildDemoRecord('demo-1')]);
+
+    expect(result[0].impact.roundsOpened).toBe(1);
+    expect(result[0].impact.roundsOpenedWon).toBe(1);
   });
 
   it('sorts the resulting roster by avgOverallScore descending', () => {

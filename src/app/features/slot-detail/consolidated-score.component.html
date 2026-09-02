@@ -115,7 +115,7 @@
     <div class="utility-counts">
       <div class="utility-count-pill" *ngFor="let m of utilityCounts">
         <span class="pill-label">{{ m.label | translate }}</span>
-        <span class="pill-value">{{ utilityValue(p, m.key) }}</span>
+        <span class="pill-value">{{ formatMetric(utilityValue(p, m.key), m.unit) }}</span>
       </div>
     </div>
 
