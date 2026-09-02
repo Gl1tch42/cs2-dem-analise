@@ -5,6 +5,6 @@ module.exports = {
   rootDir: 'electron',
   testMatch: ['**/__tests__/**/*.test.ts'],
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/../tsconfig.electron.json' }],
+    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/../tsconfig.electron.spec.json' }],
   },
 };

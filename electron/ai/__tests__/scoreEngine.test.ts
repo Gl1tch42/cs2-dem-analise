@@ -64,16 +64,19 @@ function aimAtCeiling(): PlayerAimStats {
   };
 }
 
+// roundsInDemo=10 nos testes que usam esta fixture sem alterações, então os
+// campos derivados de razão (smokesWasted/round, flashKillPct, quantidade
+// jogada/round) já são escritos aqui assumindo esse denominador.
 function utilityAtFloor(): PlayerUtilityStats {
   return {
-    flashesThrown: 10,
+    flashesThrown: 3, // totalThrown(3)/roundsInDemo(10) = 0.3 -> floor de UTILITY_QUANTITY_TARGET
     smokesThrown: 0,
     molotovsThrown: 0,
     heThrown: 0,
-    flashAssists: 0,
+    flashAssists: 0.123, // flashKillPct = 100*0.123/3 = 4.1 -> floor
     enemiesFlashed: 0,
     enemiesFlashedPct: 0,
-    friendsFlashed: 12.5, // friendsFlashedPerFlashbang = 12.5/10 = 1.25 -> floor
+    friendsFlashed: 3.75, // friendsFlashedPerFlashbang = 3.75/3 = 1.25 -> floor
     avgBlindTimeSec: 0,
     avgHeDamage: 3.8,
     avgHeTeamDamage: 0.75, // + molotov team damage 0 -> teamDamage floor 0.75
@@ -82,9 +85,9 @@ function utilityAtFloor(): PlayerUtilityStats {
     avgFriendlyBlindTimeSec: 0,
     avgMolotovDamage: 5,
     avgMolotovTeamDamage: 0,
-    smokesWasted: 0, // per-round value patched per test via roundsInDemo
-    unusedUtilityValue: 0,
-    unusedUtilityRounds: 0,
+    smokesWasted: 3, // smokesWasted/roundsInDemo(10) = 0.3 -> floor
+    unusedUtilityValue: 657.5,
+    unusedUtilityRounds: 1, // unusedUtilityPerDeath = 657.5/1 = 657.5 -> floor
   };
 }
 
@@ -140,6 +143,9 @@ function positioningAtCeiling(): PlayerPositioningStats {
   };
 }
 
+// clutchWinPct/sacrificeOpenPct aqui só importam nos testes que NÃO zeram
+// clutchesWon+clutchesLost / roundsOpened (que excluiriam essas submétricas
+// do cálculo) — mantidos nos valores-piso (15% e 30%) por completude.
 function impactAtFloor(): PlayerImpactStats {
   return {
     kills: 0,
@@ -147,9 +153,9 @@ function impactAtFloor(): PlayerImpactStats {
     assists: 0,
     adr: 60,
     kpr: 0.5,
-    clutchesWon: 1,
-    clutchesLost: 9, // clutchWinPct = 10 -> below floor(15), clamps to 0
-    clutchWinPct: 10,
+    clutchesWon: 3,
+    clutchesLost: 17, // clutchWinPct = 15 -> floor
+    clutchWinPct: 15,
     roundsOpened: 10,
     roundsOpenedWon: 3, // sacrificeOpenPct = 30 -> floor
     sacrificeOpenPct: 30,
@@ -213,8 +219,10 @@ describe('computeUtilityScore', () => {
   });
 
   it('returns 100 when every quality submetric is at its ceiling and quantity hits its target', () => {
-    // perRound = totalThrown/roundsInDemo precisa bater o teto de UTILITY_QUANTITY_TARGET (1.2)
-    const utility = { ...utilityAtCeiling(), flashesThrown: 12 };
+    // flashesThrown fica fixo em 10 (usado nas razões de friendlyFlashPenalty/flashKillPct);
+    // a quantidade é levada ao teto (perRound = 1.2) via smokesThrown, que não entra em
+    // nenhuma submétrica de qualidade.
+    const utility = { ...utilityAtCeiling(), smokesThrown: 2 };
     expect(computeUtilityScore(utility, 10)).toBe(100);
   });
 
@@ -231,13 +239,12 @@ describe('computeUtilityScore', () => {
   });
 
   it('blends quality (70%) and quantity (30%) rather than averaging them evenly', () => {
-    // quality no teto (100), quantity no piso (perRound = 0 grenades) -> 100*0.7 + 0*0.3 = 70
-    const utility = { ...utilityAtCeiling(), flashesThrown: 10 }; // sem outras granadas -> perRound = 10/10 = 1.0, dentro do range (0.3-1.2)
-    // força quantity ao piso zerando tudo que é jogado
-    const zeroThrown = { ...utility, flashesThrown: 0, friendsFlashed: 0, flashAssists: 0, effectiveEnemyFlashes: 0, effectiveFlashPct: 0 };
-    const score = computeUtilityScore(zeroThrown, 10);
-    expect(score).toBeLessThan(100);
-    expect(score).toBeGreaterThan(0);
+    // qualidade no teto (100, todas as razões usam flashesThrown=10 sem alteração).
+    // quantidade fica no meio do range: perRound = flashesThrown(10)/roundsInDemo(10) = 1.0,
+    // normalize(1.0, 0.3, 1.2) = (1.0-0.3)/(1.2-0.3)*100 = 77.78.
+    // blend esperado: 100*0.7 + 77.78*0.3 = 93.33 -> round1 = 93.3.
+    const score = computeUtilityScore(utilityAtCeiling(), 10);
+    expect(score).toBe(93.3);
   });
 });
 
@@ -261,6 +268,10 @@ describe('computePositioningScore', () => {
 // ---- computeImpactScore --------------------------------------------------
 
 describe('computeImpactScore', () => {
+  it('returns 0 when kpr/adr/clutch/sacrifice all sit at the floor', () => {
+    expect(computeImpactScore(impactAtFloor())).toBe(0);
+  });
+
   it('returns 0 when kpr/adr sit at the floor and there is no clutch/opening sample', () => {
     const impact = { ...impactAtFloor(), clutchesWon: 0, clutchesLost: 0, roundsOpened: 0 };
     expect(computeImpactScore(impact)).toBe(0);

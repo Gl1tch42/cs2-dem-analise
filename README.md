@@ -1,174 +1,262 @@
 # CS Demo Analyst
 
-App desktop (Electron + Angular + Bulma) para ler demos de CS, consolidar padrões
-táticos entre partidas e manter um notebook de analista por time — tudo salvo
-localmente, sem banco de dados.
+Desktop app (Electron + Angular + Bulma) for reading Counter-Strike demos,
+consolidating tactical patterns across matches, scoring individual player
+performance, and keeping a per-team analyst notebook — everything saved
+locally, no database, no server.
 
-## Como rodar em desenvolvimento
+## Features
+
+- **Slot management** — 1 "own team" slot + 20 opponent slots, each holding
+  up to 100 demos.
+- **Demo parsing** — real extraction via `demoparser2` (buy type, tempo,
+  stance, site, per-round positions, grenades, kills/deaths, and per-player
+  aggregates), run through a local Python script.
+- **Per-demo roster marking** — mark which 5 steamIDs are "your team" in each
+  demo; the app resolves CT/T per round from that (handles the halftime side
+  swap) instead of relying on which side started the match.
+- **Tactical pattern consolidation** (no AI, instant, local) — win rate by buy
+  type / round tempo / round stance, most recurring compra+ritmo+postura+site
+  combinations, and a player movement/impact profile (ADR, entry rate, clutch
+  rate, favorite map areas). See [How tactical patterns are
+  computed](#how-tactical-patterns-are-computed-no-ai).
+- **Consolidated Score** — Aim / Utility / Positioning / Rating / Overall
+  score (0-100) per player, averaged across every demo where the roster is
+  marked, with full per-demo history and CSV export. See [How scores are
+  calculated](#how-scores-are-calculated).
+- **2D animated replay** ("Mapa 2D" tab) — canvas replay per round with a
+  scrub bar, play/pause, speed control, live scoreboard (HP/armor/weapon/
+  money), kill/death markers, grenade trajectories and effects (smoke,
+  molotov, flash, HE, decoy), bomb plant/defuse/explode HUD, and a per-player
+  timeline of that round's events. Uses the real CS2 radar images when it can
+  find a local CS2 install (extracted once, reused after); falls back to a
+  plain grid otherwise.
+- **Heatmap** — per-player, per-map position heatmap (overall / CT side / T
+  side), built from the same parsed position samples.
+- **Analyst Notebook** — free-form Markdown notes per slot with a `/`
+  slash-command menu, autosave, and version history (checkpoints every few
+  minutes of editing, restorable).
+- **AI analysis** — sends the locally consolidated stats (never raw demo
+  data or tick-by-tick positions) plus the analyst's notebook to a
+  configurable AI provider, which returns a structured report. Two modes:
+  a **development report** for your own team, or a **scouting/matchup prep
+  report** for an opponent slot. You can focus the analysis on the whole
+  team or on specific players.
+- **Pluggable AI providers** — Anthropic, OpenAI, a custom HTTP endpoint, or
+  a Mock provider (returns the exact prompt that would be sent, so you can
+  check the data without spending real credit). API keys are encrypted
+  locally via Electron's `safeStorage` and never leave the main process.
+- **Slot export/import** — package a slot's demos + notebook into a single
+  `.csda-slot` file to hand to another analyst or move between machines
+  (dedupes by file+map+score, merges rosters, keeps your local notebook as
+  the source of truth and files the imported one into history instead of
+  overwriting).
+- **PT/EN UI** — every screen is available in Portuguese and English, toggled
+  instantly from the sidebar footer (persisted per device).
+- **Fully local** — no backend, no telemetry, no database; everything lives
+  under the Electron user-data folder.
+
+## How scores are calculated
+
+Every player gets four **sub-scores** (Aim, Utility, Positioning, Rating) and
+one **Overall score**, each on a 0-100 scale, computed per demo
+(`electron/ai/scoreEngine.ts`) and then averaged across every demo in the
+slot where that player's team roster was marked.
+
+**Normalization.** Every sub-metric is mapped linearly onto 0-100 against a
+target range `[targetMin, targetMax]` and clamped:
+
+```
+normalized = clamp((value - targetMin) / (targetMax - targetMin) * 100, 0, 100)
+```
+
+For "lower is better" metrics (crosshair placement, time to damage/kill,
+team-damage penalties, wasted utility, etc.) `targetMin` is simply set higher
+than `targetMax`, which flips the direction automatically. Each sub-score is
+the weighted average of its normalized sub-metrics.
+
+- **Aim score** — 10 sub-metrics: accuracy, head accuracy, HS kill %, first
+  bullet accuracy, spray accuracy, counter-strafing %, crosshair placement
+  (degrees), spotted accuracy, time to damage, time to kill. Weights and
+  target ranges were seeded from a Leetify-style 0-5 importance matrix
+  (normalized to sum to 1.0) and then partially recalibrated against one
+  real reference point — a FACEIT Level 10 stat line the user supplied,
+  pinned to land at ≈82/100.
+- **Utility score** — a **quality** component (70%: effective flash %,
+  friendly-flash penalty, average HE/Molotov damage, team-damage penalty,
+  wasted-smoke penalty, flash→kill %, unused-utility-on-death penalty) and a
+  **quantity** component (30%: grenades thrown per round, targeted at
+  0.3-1.2/round). Same seeding approach as Aim — a Leetify-style weight
+  matrix plus one FACEIT Level 10 reference point pinned at ≈60/100.
+- **Positioning score** — 7 sub-metrics: traded-death %, isolated-death
+  penalty, trade-kill %, trade delay (ms, within a 3s window), opening-duel
+  win %, overexposure penalty, and average distance to the nearest teammate.
+  No real reference point yet for this one — ranges are a competitive-CS
+  heuristic to be recalibrated once more demo data is available.
+- **Rating (impact) score** — added later to also reward raw production and
+  the value of winning a round even at a cost. 4 sub-metrics: KPR (kills per
+  round), ADR, clutch win %, and "opening sacrifice %" — how often this
+  player is the round's first death *and the team still wins the round*
+  (they bought information/space with that death). This last one is
+  distinct from Positioning's `openingDuelWinPct`, which tracks who *wins*
+  the opening duel, not who dies opening it usefully.
+- **Overall score** — a fixed blend: `Aim 50% + Rating 25% + Utility 15% +
+  Positioning 10%`.
+
+All of this is a **starting point, not a validated model**: the weights come
+from an externally supplied importance matrix and, where available, a single
+real reference stat line per category — not a regression fit against a large
+labeled dataset. Treat the numbers as directionally useful and tune the
+constants in `scoreEngine.ts` once you have enough real games to calibrate
+against.
+
+## How tactical patterns are computed (no AI)
+
+`electron/ai/localHeuristics.ts` consolidates every demo in a slot, split
+into "your team" vs "opponent" using the marked roster (side is resolved
+**per round**, so a halftime swap doesn't corrupt the split):
+
+- **Buy type / tempo / stance** classification happens in the Python parser
+  (`classify_buy_type` and friends in `parse_demo.py`) using **per-demo
+  dynamic thresholds**: instead of one fixed "rush = moved > 900 units"
+  constant for every map, the 33rd/67th percentile of the displacement
+  distribution *observed inside that same demo* is used, so the same logic
+  adapts to a fast map like de_dust2 and a slower one without a
+  map-by-map lookup table. With very few rounds (<6) this is noisy, so each
+  demo's summary carries a `calibration.tempoStanceThresholdSource` flag
+  (`'demo'` or `'default'`), and the UI/AI prompt warn when a demo fell back
+  to the generic default because it didn't have enough rounds to calibrate
+  itself.
+- Win rate is tracked per buy type, per tempo, per stance, and per
+  `buyType/tempo/stance/site` combination (the "recurring patterns" table),
+  each with an occurrence count so low-sample noise is visible rather than
+  hidden.
+- A **player movement/impact profile** is built per player: average ADR,
+  entry (opening duel) attempt/success rate, clutch rate, kills/deaths, and
+  the top 5 most-visited map areas (from CS2's own `last_place_name` per
+  tick — no manual per-map callout polygon mapping needed).
+- Demos with no roster marked are excluded and listed in
+  `demosPendingRoster` (surfaced in the UI and in the AI prompt) until
+  someone marks them.
+
+## Architecture
+
+```
+electron/            main process (Node) — never reachable from Angular directly
+  main.ts             creates the window, registers the IPC handlers
+  preload.ts          safe bridge (contextBridge) exposed as window.electronAPI
+  storage/
+    types.ts           shared types (same shape as src/app/core/models)
+    slotManager.ts      CRUD for the 21 slots (1 own + 20 opponents), demos, notebook
+    settingsManager.ts  AI config (default provider + encrypted keys)
+  ai/
+    demoParserBridge.ts  calls the Python script that does the real demo parsing
+    localHeuristics.ts   tactical pattern consolidation (no AI token cost)
+    scoreEngine.ts        Aim/Utility/Positioning/Rating/Overall score calculation
+    providers.ts           HTTP calls to AI providers (Anthropic/OpenAI/custom)
+    analysisRunner.ts      builds the AI prompt from local stats + notebook, calls the provider
+  __tests__/            Jest unit tests (`npm run test:electron`)
+
+python/
+  parse_demo.py         Real parser built on `demoparser2` (pip install -r python/requirements.txt).
+  requirements.txt      Parser dependency (demoparser2, pinned).
+  requirements-dev.txt  Adds pytest for `python/tests/`.
+  tests/                pytest unit tests for the parser.
+
+src/app/
+  core/                 models + ElectronService (window.electronAPI wrapper) + TranslationService
+  shared/pipes/          `translate` pipe (PT/EN dictionary lookup)
+  features/
+    shell/               sidebar (21 slots + PT/EN switch) and titlebar
+    slot-detail/          a slot's screen: Overview / 2D Map / Heatmap / Demos / Notebook / AI / Consolidated
+    map2d/                2D animated replay
+    heatmap/              per-player position heatmap
+    notebook/              Markdown editor with autosave + history
+    ai-settings/           global AI provider configuration screen
+```
+
+## Where data is stored
+
+Everything lives inside Electron's user-data folder
+(`app.getPath('userData')`), with no external server or database:
+
+- Windows: `%APPDATA%/cs-demo-analyst/`
+- macOS: `~/Library/Application Support/cs-demo-analyst/`
+- Linux: `~/.config/cs-demo-analyst/`
+
+Inside it: `slots/<slot-id>/{meta.json, notebook.md, notebook-history/, demos/<demo-id>/{record.json, summary.json}}`
+plus `ai-settings.json` and `keys/*.key` (API keys encrypted with `safeStorage`).
+
+## Running in development
 
 ```bash
 npm install
 npm start
 ```
 
-Isso sobe o `ng serve` (porta 4200) e, quando ele estiver pronto, abre a janela
-do Electron apontando pra lá. Hot-reload do Angular funciona normal; se mexer
-em algo dentro de `electron/`, pare (Ctrl+C) e rode `npm start` de novo.
+This starts `ng serve` (port 4200) and, once it's ready, opens the Electron
+window pointing at it. Angular hot-reload works as usual; if you change
+anything under `electron/`, stop (Ctrl+C) and run `npm start` again.
 
-## Estrutura
-
-```
-electron/            processo principal (Node) — nunca acessível pelo Angular direto
-  main.ts            cria a janela, registra os handlers IPC
-  preload.ts          ponte segura (contextBridge) exposta como window.electronAPI
-  storage/
-    types.ts          tipos compartilhados (mesma forma em src/app/core/models)
-    slotManager.ts     CRUD dos 21 slots (1 time + 20 adversários), demos, notebook
-    settingsManager.ts config de IA (provedor padrão + chaves criptografadas)
-  ai/
-    demoParserBridge.ts chama o script Python que faz o parsing real da demo
-    localHeuristics.ts   ALGORITMO LOCAL: consolida padrões sem gastar token de IA
-    providers.ts          chamadas HTTP pros provedores (Anthropic/OpenAI/custom)
-    analysisRunner.ts     junta consolidação local + notebook -> 1 chamada de IA
-
-python/
-  parse_demo.py        Parser real com `demoparser2` (pip install -r python/requirements.txt).
-  requirements.txt     Dependência do parser (demoparser2, pinada).
-
-src/app/
-  core/                modelos + ElectronService (wrapper do window.electronAPI)
-  features/
-    shell/              sidebar com os 21 slots
-    slot-detail/        tela de um slot: Visão Geral / Mapa 2D / Demos / Notebook / IA
-    notebook/            textarea com autosave (markdown livre do analista)
-    ai-settings/         tela global de configuração dos provedores de IA
-```
-
-## Onde os dados ficam salvos
-
-Tudo dentro da pasta de dados do usuário do Electron
-(`app.getPath('userData')`), sem nenhum servidor ou banco externo:
-
-- Windows: `%APPDATA%/cs-demo-analyst/`
-- macOS: `~/Library/Application Support/cs-demo-analyst/`
-- Linux: `~/.config/cs-demo-analyst/`
-
-Dentro dela: `slots/<slot-id>/{meta.json, notebook.md, demos/<demo-id>/{record.json, summary.json}}`
-e `ai-settings.json` + `keys/*.key` (chaves de API criptografadas com `safeStorage`).
-
-## Setup do parser Python (dev)
+### Python parser setup
 
 ```bash
 pip install -r python/requirements.txt
 ```
 
-`demoParserBridge.ts` chama `python`/`python3` do sistema em desenvolvimento
-(troca pro binário empacotado via PyInstaller só quando `app.isPackaged`
-— ver item 5 abaixo, ainda não feito).
+`demoParserBridge.ts` calls the system `python`/`python3` in development
+(it switches to a PyInstaller-packaged binary only once `app.isPackaged` —
+see "What's left" below, not done yet).
 
-## O que falta implementar (próximos passos, nessa ordem sugerida)
+### Tests
 
-1. ~~**Parser real** (`python/parse_demo.py`)~~ — feito e **validado contra
-   demos reais** (2 demos FACEIT, de_dust2 e de_anubis). Esse teste achou e
-   corrigiu 3 bugs que só apareciam com dado real (nenhum tinha como ser
-   pego sem uma `.dem` de verdade):
-   - `bomb_exploded` (e qualquer evento que nunca ocorre na demo inteira)
-     vem como lista vazia `[]` em vez de DataFrame — quebrava com
-     `AttributeError` na primeira demo sem bomba explodida. `safe_parse_event`
-     agora normaliza isso pra `None`.
-   - A classificação de utilitário lia a coluna errada de
-     `parser.parse_grenades()`: `name` é o nome do JOGADOR (não o tipo da
-     granada — isso vem em `grenade_type`), e o steamid de quem jogou vem em
-     `steamid`, não em `thrower_steamid` (esse campo nem existe nesse df).
-     Resultado prático: flashes/smokes/molotovs/HE usados saíam sempre
-     zerados.
-   - Pior: `parse_grenades()` retorna uma linha **por tick** da trajetória
-     de cada granada (uma smoke ativa por 18s vira ~1150 linhas), não uma
-     linha por lançamento — contar linhas inflava o total em ordens de
-     grandeza (centenas de milhares de "usos" numa partida de 25 rounds).
-     Trocado por contagem dos eventos pontuais que já eram parseados
-     (`flashbang_detonate`, `smokegrenade_detonate`, `inferno_startburn`,
-     `hegrenade_detonate`), que também tirou ~30% do tempo de parsing.
+```bash
+npm test              # Angular (Karma/Jasmine)
+npm run test:electron # main-process logic (Jest, electron/__tests__/**/*.test.ts)
+pip install -r python/requirements-dev.txt && pytest python/tests  # parser (pytest)
+```
 
-   Extração real com `demoparser2` (buy type, tempo, postura, site, posições
-   esparsas por round, agregados por jogador). Como toda demo tem dois lados,
-   os campos táticos de round saem separados por lado (`round.ct` / `round.t`)
-   e `playerAggregates` traz os 10 jogadores da partida — ver comentário em
-   `electron/storage/types.ts`.
-2. ~~**Escolher o lado do slot**~~ — feito: a aba Demos deixa marcar quais
-   steamIds são "meu time" por demo (`slotManager.setDemoRoster`), e
-   `localHeuristics.ts` usa `resolveMySideForRound` pra decidir ct/t
-   round a round (cobre troca de lado no intervalo) antes de separar as
-   tendências em `myTeam` / `opponent`. Demos sem roster marcado ficam de
-   fora das tendências e aparecem em `demosPendingRoster` (aviso na UI e no
-   prompt da IA) até alguém marcar.
-3. **Mapa 2D animado** (aba "Mapa 2D", hoje só um placeholder): renderizar o
-   radar do mapa + posições de `keyPositions` com um scrub de tempo por round.
-   Um `<canvas>` com `requestAnimationFrame` ou uma lib leve tipo Pixi/Konva
-   resolve bem, sem precisar de nada pesado.
-4. ~~**Rotulagem de áreas do mapa**~~ — resolvido de graça: o próprio CS2
-   expõe `last_place_name` por tick (nome de área do nav mesh do jogo, ex:
-   `"BombsiteA"`, `"Mid"`), então `parse_demo.py` já usa isso pra
-   `siteHit`/`favoriteAreas` em vez de precisar mapear polígono por callout
-   manualmente. Callouts mais finos (ex: distinguir "A-site" de "A-Ramp")
-   ficam pra depois, se fizer falta.
-5. **Empacotamento do Python**: usar PyInstaller pra gerar um binário
-   standalone e configurar `extraResources` no `electron-builder` (já
-   referenciado em `demoParserBridge.ts`), assim o usuário final não precisa
-   ter Python instalado.
-6. **Calibração de tempo/postura** (`classify_buy_type`/tempo/postura em
-   `parse_demo.py`): os limiares de deslocamento (rush/slow, agressivo/
-   passivo) eram constantes fixas em "unidades do mapa" nunca checadas
-   contra dado real — testar contra as 2 demos reais mostrou que
-   `HIGH_DISPLACEMENT=900` classificava praticamente todo round como
-   "rush"/"aggressive", porque de_dust2 tem sightlines de milhares de
-   unidades e o deslocamento mediano observado em 15s foi ~1665. Trocado por
-   limiares dinâmicos: percentil 33/67 da distribuição de deslocamento
-   observada dentro da própria demo (se adapta a qualquer mapa sem tabela de
-   constante por mapa). Com poucos rounds (<6) isso é ruidoso, então o
-   summary carrega um campo `calibration` (`tempoStanceThresholdSource:
-   'demo' | 'default'`) e o app avisa o analista (UI + prompt da IA) quando
-   uma demo caiu no limiar padrão por amostra pequena — trate "ritmo" e
-   "postura" dessas com mais cautela. Isso é ainda uma heurística de regra
-   simples, não um modelo estatístico calibrado com histórico de várias
-   partidas/times — o dado real ajudou a corrigir a escala, não a validar a
-   classificação em si. Uma dose real de confiança viria de comparar contra
-   rótulo humano (analista concorda que o round foi "rush"?) em um conjunto
-   maior de demos, o que fica pra quando houver amostra suficiente.
-7. ~~**Versionamento do notebook**~~ — feito: `saveNotebook` grava um
-   checkpoint do conteúdo anterior em `slots/<id>/notebook-history/` antes
-   de sobrescrever, no máximo 1 a cada 5 minutos (autosave dispara a cada
-   poucos ms de digitação — sem esse throttle viraria uma cópia por
-   keystroke) e mantém só os últimos 200. Botão "Histórico" na aba Notebook
-   lista os checkpoints e permite restaurar (a versão atual também vira
-   checkpoint antes de ser substituída, então restaurar é reversível).
-8. ~~**Sync entre analistas / múltiplas máquinas**~~ — resolvido na medida
-   que dá pra resolver sem virar um app com servidor: botões "Exportar slot"
-   / "Importar de arquivo .csda-slot" na aba Demos. Exportar empacota
-   meta + notebook + todas as demos (record + summary já parseado) de um
-   slot num único arquivo `.csda-slot` (JSON gzipado — sem dependência nova),
-   pra mandar por Drive/Slack/pendrive pra outro analista. Importar faz merge
-   no slot local: demo é considerada duplicata por arquivo+mapa+placar (o
-   UUID interno não sobrevive entre máquinas) e pula quem já existe; roster
-   marcado (`myTeamSteamIds`) vem junto, então o segundo analista não precisa
-   remarcar quem é "meu time" nas demos já processadas por outro; e o
-   notebook do export **nunca sobrescreve** o notebook local — vira um
-   checkpoint no histórico (item 7) pra revisão/merge manual. Isso não é
-   sync automático (precisa alguém rodar export/import manualmente, e não há
-   resolução automática de conflito) — se algum dia fizer sentido ter sync de
-   verdade entre máquinas em tempo real, isso é uma decisão de arquitetura
-   maior (servidor central vs. pasta compartilhada com merge) que muda a
-   proposta "tudo local, sem infra" do app.
+## AI providers
 
-## Provedores de IA
+Configurable in AI Settings: Anthropic (Claude), OpenAI, or a custom HTTP
+endpoint (for whichever other AI you prefer). The key is encrypted locally
+via Electron's `safeStorage` and is never sent back to Angular in plain
+text — it's only used inside the main process when calling the provider.
 
-Configuráveis em Configurações de IA: Anthropic (Claude), OpenAI, ou um
-endpoint HTTP customizado (pra outra IA que você preferir). A chave fica
-criptografada localmente via `safeStorage` do Electron e nunca é devolvida
-ao Angular em texto puro — só usada dentro do processo principal na hora de
-chamar a API.
+Each analysis sends the AI **only** the locally consolidated summary
+(`ConsolidatedSlotStats` from `localHeuristics.ts`, plus the per-player
+scores from `scoreEngine.ts`) and the analyst's notebook text — never the
+raw demo or tick-by-tick positions — to keep token usage low even with
+dozens of demos per team.
 
-A cada análise, o app manda pra IA **apenas** o resumo consolidado localmente
-(`ConsolidatedSlotStats`, gerado por `localHeuristics.ts`) + o texto do
-notebook do analista — nunca a demo bruta nem posições tick-a-tick — pra
-manter o consumo de tokens baixo mesmo com dezenas de demos por time.
+## What's left (suggested order)
+
+1. ~~**Real parser** (`python/parse_demo.py`)~~ — done, validated against
+   real demos, and now covered by a pytest suite (`python/tests/`).
+2. ~~**Choosing the slot's side per demo**~~ — done (roster marking, see
+   Features above).
+3. ~~**2D animated map**~~ — done: full replay with playback, timeline,
+   grenade effects, bomb HUD, and real CS2 radar extraction.
+4. ~~**Map area labeling**~~ — done for free via CS2's own
+   `last_place_name`; finer callouts (e.g. distinguishing "A-site" from
+   "A-Ramp") are a later nice-to-have if it turns out to matter.
+5. **Python packaging** — use PyInstaller to produce a standalone binary and
+   wire up `extraResources` in `electron-builder` (already referenced in
+   `demoParserBridge.ts`), so end users don't need Python installed.
+6. ~~**Tempo/stance calibration**~~ — done: per-demo dynamic percentile
+   thresholds replaced the fixed constants (see [How tactical patterns are
+   computed](#how-tactical-patterns-are-computed-no-ai)). Confidence in the
+   classification itself (not just the scale) would still benefit from
+   comparing against human-labeled rounds once enough demos exist.
+7. ~~**Notebook versioning**~~ — done (checkpoints + restore, see Features).
+8. ~~**Sync between analysts / multiple machines**~~ — solved as far as it
+   can be without turning this into a server-backed app: `.csda-slot`
+   export/import (see Features). Not real-time sync — if that's ever truly
+   needed, it's a bigger architectural call (central server vs. shared
+   folder with merge) that changes the "everything local, no infra" premise
+   of the app.
+9. ~~**Player scoring (Aim/Utility/Positioning/Rating)**~~ — done, see [How
+   scores are calculated](#how-scores-are-calculated). Still heuristic, not
+   a statistically validated model — recalibrate the weight/range constants
+   once there's enough real match data.
+10. ~~**PT/EN translation**~~ — done, toggle in the sidebar footer.
