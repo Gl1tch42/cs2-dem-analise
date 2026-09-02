@@ -44,10 +44,11 @@ function createAccumulator() {
         tendencyByTempo: emptyTendencyMap(TEMPOS),
         tendencyByStance: emptyTendencyMap(STANCES),
         patternCounts: new Map(),
+        detailedPatternCounts: new Map(),
         playerMap: new Map(),
     };
 }
-function addRound(acc, sideData, won, site) {
+function addRound(acc, sideData, won, site, map, side) {
     acc.tendencyByBuyType[sideData.buyType].count++;
     acc.tendencyByTempo[sideData.tempo].count++;
     acc.tendencyByStance[sideData.stance].count++;
@@ -62,6 +63,13 @@ function addRound(acc, sideData, won, site) {
     if (won)
         entry.wins++;
     acc.patternCounts.set(patternKey, entry);
+    const detailedKey = { map, side, buyType: sideData.buyType, tempo: sideData.tempo, stance: sideData.stance, site };
+    const detailedMapKey = `${map}|${side}|${sideData.buyType}|${sideData.tempo}|${sideData.stance}|${site ?? 'unknown'}`;
+    const detailedEntry = acc.detailedPatternCounts.get(detailedMapKey) ?? { key: detailedKey, count: 0, wins: 0 };
+    detailedEntry.count++;
+    if (won)
+        detailedEntry.wins++;
+    acc.detailedPatternCounts.set(detailedMapKey, detailedEntry);
 }
 function addPlayer(acc, player) {
     const p = acc.playerMap.get(player.steamId) ?? {
@@ -105,6 +113,11 @@ function finishAccumulator(acc) {
         .map(([pattern, v]) => ({ pattern, count: v.count, winRate: v.count ? v.wins / v.count : 0 }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 10);
+    const detailedPatterns = Array.from(acc.detailedPatternCounts.values()).map((v) => ({
+        key: v.key,
+        count: v.count,
+        winRate: v.count ? v.wins / v.count : 0,
+    }));
     const playerMovementProfile = Array.from(acc.playerMap.entries()).map(([steamId, p]) => ({
         steamId,
         name: p.name,
@@ -118,7 +131,14 @@ function finishAccumulator(acc) {
         kills: p.kills,
         deaths: p.deaths,
     }));
-    return { tendencyByBuyType: acc.tendencyByBuyType, tendencyByTempo: acc.tendencyByTempo, tendencyByStance: acc.tendencyByStance, topRecurringPatterns, playerMovementProfile };
+    return {
+        tendencyByBuyType: acc.tendencyByBuyType,
+        tendencyByTempo: acc.tendencyByTempo,
+        tendencyByStance: acc.tendencyByStance,
+        topRecurringPatterns,
+        detailedPatterns,
+        playerMovementProfile,
+    };
 }
 function resolveMySideForRound(round, myNames) {
     const rows = round.loadout && round.loadout.length > 0 ? round.loadout : round.keyPositions;
@@ -187,8 +207,8 @@ function consolidateSlot(slotFolder, demos) {
             if (round.siteHit) {
                 siteHitDistribution[round.siteHit] = (siteHitDistribution[round.siteHit] ?? 0) + 1;
             }
-            addRound(myAcc, round[mySide], round.winner === mySide, round.siteHit);
-            addRound(oppAcc, round[oppSide], round.winner === oppSide, round.siteHit);
+            addRound(myAcc, round[mySide], round.winner === mySide, round.siteHit, summary.map, mySide);
+            addRound(oppAcc, round[oppSide], round.winner === oppSide, round.siteHit, summary.map, oppSide);
         }
         for (const player of summary.playerAggregates) {
             addPlayer(myIdSet.has(player.steamId) ? myAcc : oppAcc, player);

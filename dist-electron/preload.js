@@ -34,6 +34,8 @@ const api = {
         analyzeSlot: (slotId, providerId, focusSteamIds) => electron_1.ipcRenderer.invoke('ai:analyzeSlot', slotId, providerId, focusSteamIds),
         getSlotStats: (slotId) => electron_1.ipcRenderer.invoke('ai:getSlotStats', slotId),
         getPlayerScores: (slotId) => electron_1.ipcRenderer.invoke('ai:getPlayerScores', slotId),
+        matchupMaps: (ownSlotId, opponentSlotId) => electron_1.ipcRenderer.invoke('ai:matchupMaps', ownSlotId, opponentSlotId),
+        generateMatchup: (ownSlotId, opponentSlotId, map) => electron_1.ipcRenderer.invoke('ai:generateMatchup', ownSlotId, opponentSlotId, map),
     },
     app: {
         getVersion: () => electron_1.ipcRenderer.invoke('app:getVersion'),

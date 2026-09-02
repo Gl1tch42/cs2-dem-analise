@@ -29,6 +29,7 @@ const fs = __importStar(require("fs"));
 const zlib = __importStar(require("zlib"));
 const demoParserBridge_1 = require("../ai/demoParserBridge");
 const analysisRunner_1 = require("../ai/analysisRunner");
+const matchupEngine_1 = require("../ai/matchupEngine");
 const radarExtractor_1 = require("../ai/radarExtractor");
 function registerIpcHandlers(win, slots, settings) {
     electron_1.ipcMain.handle('slots:list', () => slots.listSlots());
@@ -107,6 +108,12 @@ function registerIpcHandlers(win, slots, settings) {
     electron_1.ipcMain.handle('ai:analyzeSlot', (_e, slotId, providerId, focusSteamIds) => (0, analysisRunner_1.runSlotAnalysis)(slots, settings, slotId, providerId, focusSteamIds));
     electron_1.ipcMain.handle('ai:getSlotStats', (_e, slotId) => (0, analysisRunner_1.getSlotStats)(slots, slotId));
     electron_1.ipcMain.handle('ai:getPlayerScores', (_e, slotId) => (0, analysisRunner_1.getPlayerScores)(slots, slotId));
+    electron_1.ipcMain.handle('ai:matchupMaps', (_e, ownSlotId, opponentSlotId) => {
+        const own = slots.getSlot(ownSlotId);
+        const opp = slots.getSlot(opponentSlotId);
+        return (0, matchupEngine_1.commonMaps)(own.demos, opp.demos);
+    });
+    electron_1.ipcMain.handle('ai:generateMatchup', (_e, ownSlotId, opponentSlotId, map) => (0, matchupEngine_1.generateMatchup)(slots, ownSlotId, opponentSlotId, map));
     electron_1.ipcMain.handle('assets:extractRadars', () => (0, radarExtractor_1.extractRadarsFromLocalCs2)());
     electron_1.ipcMain.handle('assets:getRadarImage', (_e, map) => {
         const filePath = (0, radarExtractor_1.getCachedRadarPath)(map);
