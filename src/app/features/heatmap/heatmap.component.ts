@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ElectronService } from '../../core/services/electron.service';
 import { DemoRecord, DemoSummary } from '../../core/models/slot.model';
 import { RADAR_CALIBRATION, RADAR_REFERENCE_SIZE } from '../map2d/radar-calibration';
+import { TranslationService } from '../../core/services/translation.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 interface PlayerOption {
   steamId: string;
@@ -21,7 +23,7 @@ const MIN_POINT_RADIUS = 14;
 @Component({
   selector: 'app-heatmap',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslatePipe],
   templateUrl: './heatmap.component.html',
   styleUrl: './heatmap.component.scss',
 })
@@ -57,7 +59,7 @@ export class HeatmapComponent implements OnChanges {
   private radarLoaded = false;
   private paletteCache?: Uint8ClampedArray;
 
-  constructor(private electron: ElectronService) {}
+  constructor(private electron: ElectronService, private translation: TranslationService) {}
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     if (changes['demos']) {
@@ -178,7 +180,7 @@ export class HeatmapComponent implements OnChanges {
       }
       await this.loadRadarImage(this.selectedMap);
     } catch (err) {
-      this.loadError = (err as Error).message ?? 'Falha ao carregar posições.';
+      this.loadError = (err as Error).message ?? this.translation.t('Falha ao carregar posições.');
     } finally {
       this.loading = false;
     }

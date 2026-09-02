@@ -8,6 +8,9 @@ import {
   PlayerAimStats,
   PlayerUtilityStats,
   PlayerPositioningStats,
+  PlayerImpactStats,
+  PlayerAggregate,
+  RoundSummary,
 } from '../storage/types';
 
 // Pesos e faixas-alvo da nota de mira/utility — ponto de partida razoável, não
@@ -147,10 +150,38 @@ const POSITIONING_WEIGHTS: PositioningWeights = {
   // não modela a exceção de Lurker (sem dado de função/role disponível).
   nearestTeammateDist: { weight: 0.1875, targetMin: 1200, targetMax: 400 },
 };
-// Com a nota de Posicionamento entrando, mira continua a maior fatia mas
-// abre espaço pra posicionamento (Trade Kill sozinho pesa 5.0/5 no adendo,
-// o item mais pesado de qualquer um dos três engines) — split ajustável.
-const OVERALL_SPLIT = { aim: 0.45, utility: 0.25, positioning: 0.3 };
+// Pesos da nota de "Rating"/Impacto — pedido do usuário (02/09/2026) pra que a
+// nota geral também considere kills por mapa, tenha mais peso pra mira e pro
+// "rating", e reflita o impacto real de vencer rounds, incluindo o sacrifício
+// de morrer primeiro (abrindo informação/espaço) mesmo quando o round ainda
+// assim é vencido pelo time. Sem matriz de referência externa pra isso ainda
+// (ao contrário de mira/utility, que vieram de adendos "estilo Leetify") —
+// faixas são heurística de CS competitivo a calibrar com dados reais depois:
+// KPR (kills por round) ruim ~0.5, elite ~1.0; ADR ruim ~60, elite ~95;
+// clutch win% baixo ~15%, bom ~50%; sacrifício de abertura (round vencido
+// mesmo morrendo primeiro) baixo ~30%, bom ~60% (referência solta: perto do
+// win rate geral do time é "neutro", acima disso é a morte tendo valido a pena).
+interface ImpactWeights {
+  kpr: SubmetricWeight;
+  adr: SubmetricWeight;
+  clutchWinPct: SubmetricWeight;
+  sacrificeOpenPct: SubmetricWeight;
+}
+
+const IMPACT_WEIGHTS: ImpactWeights = {
+  kpr: { weight: 0.35, targetMin: 0.5, targetMax: 1.0 },
+  adr: { weight: 0.3, targetMin: 60, targetMax: 95 },
+  clutchWinPct: { weight: 0.15, targetMin: 15, targetMax: 50 },
+  sacrificeOpenPct: { weight: 0.2, targetMin: 30, targetMax: 60 },
+};
+
+// Split geral: mira e rating/impacto sobem (kills, ADR, clutch, sacrifício de
+// abertura entram só no rating pra não duplicar contagem com posicionamento,
+// que já cobre quem GANHA o duelo de abertura/trade — rating cobre produção
+// crua e o valor de morrer primeiro mesmo perdendo o duelo). Utility e
+// posicionamento puro (trade/isolamento/overexposure) encolhem, mas continuam
+// entrando — split ajustável, ponto de partida.
+const OVERALL_SPLIT = { aim: 0.5, impact: 0.25, utility: 0.15, positioning: 0.1 };
 
 function normalize(value: number, targetMin: number, targetMax: number): number {
   if (targetMax === targetMin) return 50;
@@ -160,6 +191,32 @@ function normalize(value: number, targetMin: number, targetMax: number): number 
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+// KPR fica numa escala pequena (~0.5-1.0) — 1 casa decimal (round1) esmagaria
+// a diferença entre jogadores; usado só nesse campo.
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+// "Sacrifício de abertura": conta, por demo, quantos rounds esse jogador foi
+// a PRIMEIRA morte do round (`rounds[].deaths` já vem ordenado por tick do
+// Python) e, desses, quantos o time dele mesmo assim venceu — sinal de que a
+// morte comprou informação/espaço que valeu o round, distinto de "ganhar o
+// duelo de abertura" (isso já é `openingDuelWinPct` em PlayerPositioningStats).
+// Casamento por nome (não steamId) porque é o único identificador disponível
+// em `RoundDeath` — mesma limitação que outros campos de round já têm no
+// resto do código (ex.: `entryFragBy`/`entryFragOn`).
+function computeSacrificeOpens(rounds: RoundSummary[], playerName: string): { opened: number; openedWon: number } {
+  let opened = 0;
+  let openedWon = 0;
+  for (const round of rounds) {
+    const firstDeath = round.deaths && round.deaths.length > 0 ? round.deaths[0] : undefined;
+    if (!firstDeath || firstDeath.player !== playerName) continue;
+    opened++;
+    if (firstDeath.side === round.winner) openedWon++;
+  }
+  return { opened, openedWon };
 }
 
 export function computeAimScore(aim: PlayerAimStats): number {
@@ -243,10 +300,58 @@ export function computePositioningScore(positioning: PlayerPositioningStats): nu
   return totalWeight ? round1(sum / totalWeight) : 0;
 }
 
-export function computeOverallScore(aimScore: number, utilityScore: number, positioningScore: number): number {
+export function computeImpactScore(impact: PlayerImpactStats): number {
+  let sum = 0;
+  let totalWeight = 0;
+  const add = (value: number, cfg: SubmetricWeight) => {
+    sum += normalize(value, cfg.targetMin, cfg.targetMax) * cfg.weight;
+    totalWeight += cfg.weight;
+  };
+  add(impact.kpr, IMPACT_WEIGHTS.kpr);
+  add(impact.adr, IMPACT_WEIGHTS.adr);
+  if (impact.clutchesWon + impact.clutchesLost > 0) {
+    add(impact.clutchWinPct, IMPACT_WEIGHTS.clutchWinPct);
+  }
+  if (impact.roundsOpened > 0) {
+    add(impact.sacrificeOpenPct, IMPACT_WEIGHTS.sacrificeOpenPct);
+  }
+  return totalWeight ? round1(sum / totalWeight) : 0;
+}
+
+export function computeOverallScore(
+  aimScore: number,
+  utilityScore: number,
+  positioningScore: number,
+  impactScore: number
+): number {
   return round1(
-    aimScore * OVERALL_SPLIT.aim + utilityScore * OVERALL_SPLIT.utility + positioningScore * OVERALL_SPLIT.positioning
+    aimScore * OVERALL_SPLIT.aim +
+      utilityScore * OVERALL_SPLIT.utility +
+      positioningScore * OVERALL_SPLIT.positioning +
+      impactScore * OVERALL_SPLIT.impact
   );
+}
+
+// Monta o `PlayerImpactStats` de UMA demo a partir do `PlayerAggregate` bruto
+// (kills/deaths/assists/adr/clutches já vêm prontos do Python) mais o
+// sacrifício de abertura, calculado aqui a partir de `rounds` (ver
+// `computeSacrificeOpens`).
+function buildImpactStats(player: PlayerAggregate, roundsInDemo: number, rounds: RoundSummary[]): PlayerImpactStats {
+  const { opened, openedWon } = computeSacrificeOpens(rounds, player.name);
+  const { clutchesWon, clutchesLost } = player;
+  return {
+    kills: player.kills,
+    deaths: player.deaths,
+    assists: player.assists,
+    adr: player.adr,
+    kpr: roundsInDemo ? round2(player.kills / roundsInDemo) : 0,
+    clutchesWon,
+    clutchesLost,
+    clutchWinPct: clutchesWon + clutchesLost ? round1((100 * clutchesWon) / (clutchesWon + clutchesLost)) : 0,
+    roundsOpened: opened,
+    roundsOpenedWon: openedWon,
+    sacrificeOpenPct: opened ? round1((100 * openedWon) / opened) : 0,
+  };
 }
 
 // Acumulador guarda somas cruas (nunca médias parciais encadeadas) — as médias
@@ -310,9 +415,23 @@ interface PlayerScoreAccumulator {
   nearestTeammateDistSum: number;
   nearestTeammateDistCount: number;
 
+  // Rating/Impacto: kills/assists somados como total; adr e kpr promediados
+  // (kpr sobre a soma real de rounds jogados, não a média das médias por
+  // demo, pra não distorcer quando as demos têm contagens de round diferentes).
+  kills: number;
+  deaths: number;
+  assists: number;
+  adrSum: number;
+  roundsSum: number;
+  clutchesWon: number;
+  clutchesLost: number;
+  roundsOpened: number;
+  roundsOpenedWon: number;
+
   aimScoreSum: number;
   utilityScoreSum: number;
   positioningScoreSum: number;
+  impactScoreSum: number;
   overallScoreSum: number;
   history: PlayerScoreHistoryEntry[];
 }
@@ -367,9 +486,19 @@ function newAccumulator(name: string): PlayerScoreAccumulator {
     overexposedDeathPctSum: 0,
     nearestTeammateDistSum: 0,
     nearestTeammateDistCount: 0,
+    kills: 0,
+    deaths: 0,
+    assists: 0,
+    adrSum: 0,
+    roundsSum: 0,
+    clutchesWon: 0,
+    clutchesLost: 0,
+    roundsOpened: 0,
+    roundsOpenedWon: 0,
     aimScoreSum: 0,
     utilityScoreSum: 0,
     positioningScoreSum: 0,
+    impactScoreSum: 0,
     overallScoreSum: 0,
     history: [],
   };
@@ -399,7 +528,9 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       const aimScore = computeAimScore(player.aim);
       const utilityScore = computeUtilityScore(player.utility, roundsInDemo);
       const positioningScore = computePositioningScore(player.positioning);
-      const overallScore = computeOverallScore(aimScore, utilityScore, positioningScore);
+      const impact = buildImpactStats(player, roundsInDemo, summary.rounds);
+      const impactScore = computeImpactScore(impact);
+      const overallScore = computeOverallScore(aimScore, utilityScore, positioningScore, impactScore);
 
       const acc = accMap.get(player.steamId) ?? newAccumulator(player.name);
       acc.name = player.name;
@@ -464,9 +595,20 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         acc.nearestTeammateDistCount++;
       }
 
+      acc.kills += impact.kills;
+      acc.deaths += impact.deaths;
+      acc.assists += impact.assists;
+      acc.adrSum += impact.adr;
+      acc.roundsSum += roundsInDemo;
+      acc.clutchesWon += impact.clutchesWon;
+      acc.clutchesLost += impact.clutchesLost;
+      acc.roundsOpened += impact.roundsOpened;
+      acc.roundsOpenedWon += impact.roundsOpenedWon;
+
       acc.aimScoreSum += aimScore;
       acc.utilityScoreSum += utilityScore;
       acc.positioningScoreSum += positioningScore;
+      acc.impactScoreSum += impactScore;
       acc.overallScoreSum += overallScore;
       acc.history.push({
         demoId: demo.id,
@@ -476,10 +618,12 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         aimScore,
         utilityScore,
         positioningScore,
+        impactScore,
         overallScore,
         aim: player.aim,
         utility: player.utility,
         positioning: player.positioning,
+        impact,
       });
 
       accMap.set(player.steamId, acc);
@@ -494,6 +638,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       avgAimScore: acc.demosCount ? round1(acc.aimScoreSum / acc.demosCount) : 0,
       avgUtilityScore: acc.demosCount ? round1(acc.utilityScoreSum / acc.demosCount) : 0,
       avgPositioningScore: acc.demosCount ? round1(acc.positioningScoreSum / acc.demosCount) : 0,
+      avgImpactScore: acc.demosCount ? round1(acc.impactScoreSum / acc.demosCount) : 0,
       avgOverallScore: acc.demosCount ? round1(acc.overallScoreSum / acc.demosCount) : 0,
       aim: {
         shotsFired: acc.shotsFired,
@@ -548,6 +693,20 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         avgNearestTeammateDist: acc.nearestTeammateDistCount
           ? round1(acc.nearestTeammateDistSum / acc.nearestTeammateDistCount)
           : null,
+      },
+      impact: {
+        kills: acc.kills,
+        deaths: acc.deaths,
+        assists: acc.assists,
+        adr: acc.demosCount ? round1(acc.adrSum / acc.demosCount) : 0,
+        kpr: acc.roundsSum ? round2(acc.kills / acc.roundsSum) : 0,
+        clutchesWon: acc.clutchesWon,
+        clutchesLost: acc.clutchesLost,
+        clutchWinPct:
+          acc.clutchesWon + acc.clutchesLost ? round1((100 * acc.clutchesWon) / (acc.clutchesWon + acc.clutchesLost)) : 0,
+        roundsOpened: acc.roundsOpened,
+        roundsOpenedWon: acc.roundsOpenedWon,
+        sacrificeOpenPct: acc.roundsOpened ? round1((100 * acc.roundsOpenedWon) / acc.roundsOpened) : 0,
       },
       history: acc.history.sort((a, b) => a.addedAt.localeCompare(b.addedAt)),
     }))

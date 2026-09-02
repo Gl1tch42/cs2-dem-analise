@@ -1,12 +1,12 @@
 <div class="map2d">
   <ng-container *ngIf="demos.length === 0">
-    <p class="text-muted">Importe pelo menos uma demo pra ver o replay 2D.</p>
+    <p class="text-muted">{{ 'Importe pelo menos uma demo pra ver o replay 2D.' | translate }}</p>
   </ng-container>
 
   <ng-container *ngIf="demos.length > 0">
     <div class="map2d-toolbar">
       <label class="demo-select-label">
-        Demo:
+        {{ 'Demo:' | translate }}
         <div class="select is-small">
           <select [(ngModel)]="selectedDemoId" (ngModelChange)="onDemoChange()">
             <option *ngFor="let d of demos" [value]="d.id">{{ d.fileName }} ({{ d.map }})</option>
@@ -15,19 +15,19 @@
       </label>
 
       <span class="radar-status" *ngIf="radarStatus === 'missing'">
-        <a (click)="extractRadars()">🗺️ usar radar real do CS2 (dust2, mirage, ...)</a>
+        <a (click)="extractRadars()">{{ '🗺️ usar radar real do CS2 (dust2, mirage, ...)' | translate }}</a>
       </span>
-      <span class="radar-status text-muted" *ngIf="radarStatus === 'extracting'">Extraindo radares do CS2 local…</span>
-      <span class="radar-status text-muted" *ngIf="radarStatus === 'loaded'">🗺️ radar real do CS2</span>
+      <span class="radar-status text-muted" *ngIf="radarStatus === 'extracting'">{{ 'Extraindo radares do CS2 local…' | translate }}</span>
+      <span class="radar-status text-muted" *ngIf="radarStatus === 'loaded'">{{ '🗺️ radar real do CS2' | translate }}</span>
       <span class="help is-danger radar-status" *ngIf="extractError">{{ extractError }}</span>
     </div>
 
-    <p class="text-muted" *ngIf="loading">Carregando posições…</p>
+    <p class="text-muted" *ngIf="loading">{{ 'Carregando posições…' | translate }}</p>
     <p class="help is-danger" *ngIf="loadError">{{ loadError }}</p>
 
     <ng-container *ngIf="summary && !loading">
       <div class="round-nav" *ngIf="summary.rounds.length > 0">
-        <button class="button is-small" (click)="prevRound()" [disabled]="roundIndex === 0">‹ anterior</button>
+        <button class="button is-small" (click)="prevRound()" [disabled]="roundIndex === 0">{{ '‹ anterior' | translate }}</button>
         <span class="round-label">
           <div class="select is-small round-select">
             <select [ngModel]="roundIndex" (ngModelChange)="setRound($event)">
@@ -41,7 +41,7 @@
             [class.badge-ct]="currentRound?.winner === 'ct'"
             [class.badge-t]="currentRound?.winner === 't'"
           >
-            {{ currentRound?.winner === 'ct' ? 'CT venceu' : 'TR venceu' }}
+            {{ (currentRound?.winner === 'ct' ? 'CT venceu' : 'TR venceu') | translate }}
           </span>
           <span class="text-muted" *ngIf="currentRound?.siteHit && currentRound?.siteHit !== 'unknown'">
             · site {{ currentRound?.siteHit }}
@@ -52,24 +52,24 @@
           (click)="nextRound()"
           [disabled]="roundIndex === summary.rounds.length - 1"
         >
-          próxima ›
+          {{ 'próxima ›' | translate }}
         </button>
         <span class="bomb-hud" *ngIf="currentRound?.bombPlant" [class]="'bomb-' + bombState">
           <span class="bomb-hud-dot"></span>
           <span class="bomb-hud-label">
-            {{ bombState === 'idle' ? 'C4 não plantada' : bombState === 'planted' ? ('C4 plantada · ' + bombCountdownLabel) : bombState === 'defused' ? 'C4 defusada' : 'C4 explodiu' }}
+            {{ bombHudLabel }}
           </span>
         </span>
       </div>
 
-      <p class="text-muted" *ngIf="summary.rounds.length === 0">Esta demo não tem rounds parseados.</p>
+      <p class="text-muted" *ngIf="summary.rounds.length === 0">{{ 'Esta demo não tem rounds parseados.' | translate }}</p>
 
       <ng-container *ngIf="summary.rounds.length > 0">
         <div class="map2d-body">
           <div class="map2d-canvas-wrap panel-block-data">
             <canvas #canvas width="640" height="640"></canvas>
             <p class="text-muted no-data" *ngIf="!currentRound?.keyPositions?.length">
-              Sem amostras de posição gravadas para esta rodada.
+              {{ 'Sem amostras de posição gravadas para esta rodada.' | translate }}
             </p>
           </div>
 
@@ -85,7 +85,7 @@
                 <span class="sb-stripe"></span>
                 <div class="sb-main">
                   <span class="sb-hp mono">{{ liveHealth(l.player) ?? l.health ?? '—' }}</span>
-                  <span class="sb-armor-icon" [class.filled]="l.armor && l.armor > 0" [class.helmet]="l.hasHelmet" [title]="l.armor ? (l.armor + ' de colete' + (l.hasHelmet ? ' + capacete' : '')) : 'sem colete'">
+                  <span class="sb-armor-icon" [class.filled]="l.armor && l.armor > 0" [class.helmet]="l.hasHelmet" [title]="armorTitle(l)">
                     <svg viewBox="0 0 24 24" width="13" height="13">
                       <path d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" />
                     </svg>
@@ -93,19 +93,19 @@
                   <span
                     class="sb-name is-clickable"
                     [class.is-selected]="selectedTimelinePlayer === l.player"
-                    title="Ver timeline deste jogador"
+                    [title]="'Ver timeline deste jogador' | translate"
                     (click)="selectPlayerTimeline(l.player)"
                     >{{ l.player }}</span
                   >
                   <span class="sb-weapon text-muted">{{ formatWeapon(l.weapon) }}</span>
                   <span class="sb-money mono">${{ l.equipValue }}</span>
-                  <span class="sb-dead" *ngIf="liveDeath(l.player) as death" [title]="death.by ? ('morto por ' + death.by) : ''">✕</span>
+                  <span class="sb-dead" *ngIf="liveDeath(l.player)" [title]="deathTitle(l.player)">✕</span>
                 </div>
                 <div class="sb-sub" *ngIf="l.kills !== undefined">
                   <span class="mono">K {{ l.kills }}</span>
                   <span class="mono">D {{ l.deaths }}</span>
                   <span class="mono" *ngIf="l.assists">A {{ l.assists }}</span>
-                  <span class="sb-roundkill" *ngIf="killsThisRound(l.player) as k">+{{ k }} neste round</span>
+                  <span class="sb-roundkill" *ngIf="killsThisRound(l.player) as k">+{{ k }} {{ 'neste round' | translate }}</span>
                 </div>
               </div>
             </ng-container>
@@ -118,7 +118,7 @@
             <button class="button is-small" (click)="closeTimeline()">✕</button>
           </div>
           <p class="text-muted no-events" *ngIf="timelineEvents.length === 0">
-            Nenhuma morte, abate ou uso de utility registrado pra este jogador neste round.
+            {{ 'Nenhuma morte, abate ou uso de utility registrado pra este jogador neste round.' | translate }}
           </p>
           <ng-container *ngIf="timelineEvents.length > 0">
             <div class="timeline-track">
@@ -144,7 +144,7 @@
                 <span class="timeline-detail-text">{{ ev.detail }}</span>
               </ng-container>
               <ng-template #timelineHint>
-                <span class="text-muted">passe o mouse ou clique em um marcador pra ver o detalhe e pular pro momento</span>
+                <span class="text-muted">{{ 'passe o mouse ou clique em um marcador pra ver o detalhe e pular pro momento' | translate }}</span>
               </ng-template>
             </div>
           </ng-container>
@@ -156,7 +156,7 @@
             (click)="togglePlay()"
             [disabled]="!currentRound?.keyPositions?.length"
           >
-            {{ playing ? '❚❚ pausar' : '▶ tocar' }}
+            {{ playPauseLabel }}
           </button>
           <input
             type="range"
@@ -183,19 +183,19 @@
             class="button is-small notes-toggle"
             [class.is-active]="notesOpen"
             (click)="toggleNotes()"
-            title="Anotar enquanto o replay roda — vai direto pro Notebook deste slot"
+            [title]="'Anotar enquanto o replay roda — vai direto pro Notebook deste slot' | translate"
           >
-            📝 Anotar
+            {{ '📝 Anotar' | translate }}
           </button>
         </div>
 
         <div class="replay-notes" *ngIf="notesOpen">
           <div class="replay-notes-toolbar">
             <button class="button is-small is-primary" [disabled]="!currentRound" (click)="insertMoment()">
-              📍 Marcar momento · R{{ currentRound?.roundNumber }} · {{ formatTime(currentTime) }}
+              {{ '📍 Marcar momento · R' | translate }}{{ currentRound?.roundNumber }} · {{ formatTime(currentTime) }}
             </button>
             <span class="text-muted replay-notes-hint">
-              Este é o Notebook do slot, o mesmo da aba Notebook — o que você escrever aqui já é salvo lá.
+              {{ 'Este é o Notebook do slot, o mesmo da aba Notebook — o que você escrever aqui já é salvo lá.' | translate }}
             </span>
           </div>
           <app-notebook
@@ -208,20 +208,20 @@
         <div class="legend">
           <span class="legend-item"><span class="dot dot-ct"></span> CT</span>
           <span class="legend-item"><span class="dot dot-t"></span> TR</span>
-          <span class="legend-item"><span class="x-mark">✕</span> morto</span>
-          <span class="legend-item"><span class="dot dot-glow"></span> ponta brilhando = atirando</span>
-          <span class="legend-item"><span class="swatch swatch-smoke"></span> fumaça</span>
-          <span class="legend-item"><span class="swatch swatch-fire"></span> molotov</span>
-          <span class="legend-item"><span class="swatch swatch-flash"></span> flash</span>
-          <span class="legend-item"><span class="ring-mark"></span> cego</span>
-          <span class="legend-item"><span class="swatch swatch-decoy"></span> decoy</span>
+          <span class="legend-item"><span class="x-mark">✕</span> {{ 'morto' | translate }}</span>
+          <span class="legend-item"><span class="dot dot-glow"></span> {{ 'ponta brilhando = atirando' | translate }}</span>
+          <span class="legend-item"><span class="swatch swatch-smoke"></span> {{ 'fumaça' | translate }}</span>
+          <span class="legend-item"><span class="swatch swatch-fire"></span> {{ 'molotov' | translate }}</span>
+          <span class="legend-item"><span class="swatch swatch-flash"></span> {{ 'flash' | translate }}</span>
+          <span class="legend-item"><span class="ring-mark"></span> {{ 'cego' | translate }}</span>
+          <span class="legend-item"><span class="swatch swatch-decoy"></span> {{ 'decoy' | translate }}</span>
           <span class="legend-item"><span class="swatch swatch-he"></span> HE</span>
           <span class="legend-item"><span class="swatch swatch-bomb"></span> C4</span>
         </div>
 
         <div class="match-progress panel-block-data">
           <div class="match-progress-header">
-            <span class="match-progress-title">Progresso da partida</span>
+            <span class="match-progress-title">{{ 'Progresso da partida' | translate }}</span>
             <span class="match-progress-score mono">
               <span class="score-ct">{{ ctWinsUpToCurrent }} CT</span>
               ·
@@ -238,7 +238,7 @@
               [class.segment-ct]="r.winner === 'ct'"
               [class.segment-t]="r.winner === 't'"
               [class.is-current]="i === roundIndex"
-              [title]="'Round ' + r.roundNumber + ' · ' + (r.winner === 'ct' ? 'CT venceu' : 'TR venceu')"
+              [title]="roundSegmentTitle(r)"
               (click)="setRound(i)"
             ></button>
           </div>

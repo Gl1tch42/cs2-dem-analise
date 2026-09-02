@@ -16,6 +16,8 @@ import {
   PlayerMovementProfile,
   PlayerScoreAggregate,
 } from '../../core/models/slot.model';
+import { TranslationService } from '../../core/services/translation.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai' | 'consolidado';
 
@@ -30,6 +32,7 @@ type TabId = 'overview' | 'map' | 'heatmap' | 'demos' | 'notebook' | 'ai' | 'con
     HeatmapComponent,
     TeamStatsComponent,
     ConsolidatedScoreComponent,
+    TranslatePipe,
   ],
   templateUrl: './slot-detail.component.html',
   styleUrl: './slot-detail.component.scss',
@@ -70,7 +73,15 @@ export class SlotDetailComponent implements OnInit {
   rosterError = '';
   rosterDraft = new Set<string>();
 
-  constructor(private route: ActivatedRoute, private electron: ElectronService) {}
+  constructor(
+    private route: ActivatedRoute,
+    private electron: ElectronService,
+    public translation: TranslationService
+  ) {}
+
+  private t(key: string): string {
+    return this.translation.t(key);
+  }
 
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
@@ -108,7 +119,7 @@ export class SlotDetailComponent implements OnInit {
     try {
       this.playerScores = await this.electron.api.ai.getPlayerScores(this.slot.id);
     } catch (err) {
-      this.playerScoresError = (err as Error).message ?? 'Falha ao calcular notas consolidadas.';
+      this.playerScoresError = (err as Error).message ?? this.t('Falha ao calcular notas consolidadas.');
     } finally {
       this.playerScoresLoading = false;
     }
@@ -162,7 +173,7 @@ export class SlotDetailComponent implements OnInit {
       await this.electron.api.demos.importDemo(this.slot.id);
       await this.loadSlot(this.slot.id);
     } catch (err) {
-      this.importError = (err as Error).message ?? 'Falha ao importar demo.';
+      this.importError = (err as Error).message ?? this.t('Falha ao importar demo.');
     } finally {
       this.importing = false;
     }
@@ -174,9 +185,9 @@ export class SlotDetailComponent implements OnInit {
     this.exportMessage = '';
     try {
       const result = await this.electron.api.slots.exportSlot(this.slot.id);
-      this.exportMessage = result.canceled ? '' : `Exportado para ${result.filePath}`;
+      this.exportMessage = result.canceled ? '' : `${this.t('Exportado para')} ${result.filePath}`;
     } catch (err) {
-      this.exportMessage = (err as Error).message ?? 'Falha ao exportar slot.';
+      this.exportMessage = (err as Error).message ?? this.t('Falha ao exportar slot.');
     } finally {
       this.exporting = false;
     }
@@ -189,15 +200,15 @@ export class SlotDetailComponent implements OnInit {
     try {
       const result = await this.electron.api.slots.importSlot(this.slot.id);
       if (!result.canceled) {
-        const parts = [`${result.demosImported} demo(s) importada(s)`];
-        if (result.demosSkippedDuplicate > 0) parts.push(`${result.demosSkippedDuplicate} já existiam`);
-        if (result.demosSkippedLimit > 0) parts.push(`${result.demosSkippedLimit} não couberam (limite do slot)`);
-        if (result.notebookSavedAsHistory) parts.push('notebook do export salvo em Histórico pra revisar/mesclar');
+        const parts = [`${result.demosImported} ${this.t('demo(s) importada(s)')}`];
+        if (result.demosSkippedDuplicate > 0) parts.push(`${result.demosSkippedDuplicate} ${this.t('já existiam')}`);
+        if (result.demosSkippedLimit > 0) parts.push(`${result.demosSkippedLimit} ${this.t('não couberam (limite do slot)')}`);
+        if (result.notebookSavedAsHistory) parts.push(this.t('notebook do export salvo em Histórico pra revisar/mesclar'));
         this.importSlotMessage = parts.join(' · ');
         await this.loadSlot(this.slot.id);
       }
     } catch (err) {
-      this.importSlotMessage = (err as Error).message ?? 'Falha ao importar slot.';
+      this.importSlotMessage = (err as Error).message ?? this.t('Falha ao importar slot.');
     } finally {
       this.importingSlot = false;
     }
@@ -222,7 +233,7 @@ export class SlotDetailComponent implements OnInit {
     try {
       this.rosterSummary = await this.electron.api.demos.getSummary(this.slot!.id, demo.id);
     } catch (err) {
-      this.rosterError = (err as Error).message ?? 'Falha ao carregar jogadores da demo.';
+      this.rosterError = (err as Error).message ?? this.t('Falha ao carregar jogadores da demo.');
     } finally {
       this.rosterLoading = false;
     }
@@ -250,7 +261,7 @@ export class SlotDetailComponent implements OnInit {
       demo.myTeamSteamIds = updated.myTeamSteamIds;
       this.rosterOpenFor = null;
     } catch (err) {
-      this.rosterError = (err as Error).message ?? 'Falha ao salvar time.';
+      this.rosterError = (err as Error).message ?? this.t('Falha ao salvar time.');
     } finally {
       this.rosterSaving = false;
     }
@@ -273,10 +284,10 @@ export class SlotDetailComponent implements OnInit {
               .filter((p) => focusSteamIds.includes(p.steamId))
               .map((p) => p.name)
               .join(', ')
-          : 'Time inteiro';
+          : this.t('Time inteiro');
       this.analysisResult = await this.electron.api.ai.analyzeSlot(this.slot.id, undefined, focusSteamIds);
     } catch (err) {
-      this.analysisError = (err as Error).message ?? 'Falha ao rodar análise de IA.';
+      this.analysisError = (err as Error).message ?? this.t('Falha ao rodar análise de IA.');
     } finally {
       this.analyzing = false;
     }

@@ -6,7 +6,10 @@ import {
   PlayerScoreHistoryEntry,
   PlayerUtilityStats,
   PlayerPositioningStats,
+  PlayerImpactStats,
 } from '../../core/models/slot.model';
+import { TranslationService } from '../../core/services/translation.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 interface KpiDef<T> {
   label: string;
@@ -17,12 +20,14 @@ interface KpiDef<T> {
 @Component({
   selector: 'app-consolidated-score',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslatePipe],
   templateUrl: './consolidated-score.component.html',
   styleUrl: './consolidated-score.component.scss',
 })
 export class ConsolidatedScoreComponent {
   @Input({ required: true }) players!: PlayerScoreAggregate[];
+
+  constructor(private translation: TranslationService) {}
 
   // Cartões da matriz de mira, na ordem de exibição.
   readonly aimKpis: KpiDef<PlayerAimStats>[] = [
@@ -82,6 +87,26 @@ export class ConsolidatedScoreComponent {
     { label: 'Trade Kills', key: 'tradeKills', unit: '' },
   ];
 
+  // Cartões de Rating/Impacto — produção crua (kills/ADR/KPR) e o valor real de
+  // vencer o round (clutch, sacrifício de abrir o round). Recebem color-coding.
+  readonly impactKpis: KpiDef<PlayerImpactStats>[] = [
+    { label: 'KPR', key: 'kpr', unit: '' },
+    { label: 'ADR', key: 'adr', unit: '' },
+    { label: 'Clutch Win %', key: 'clutchWinPct', unit: '%' },
+    { label: 'Sacrifício de Abertura', key: 'sacrificeOpenPct', unit: '%' },
+  ];
+
+  // Contagem bruta — sem color-coding.
+  readonly impactCounts: KpiDef<PlayerImpactStats>[] = [
+    { label: 'Kills', key: 'kills', unit: '' },
+    { label: 'Deaths', key: 'deaths', unit: '' },
+    { label: 'Assists', key: 'assists', unit: '' },
+    { label: 'Clutches Ganhos', key: 'clutchesWon', unit: '' },
+    { label: 'Clutches Perdidos', key: 'clutchesLost', unit: '' },
+    { label: 'Rounds Abertos', key: 'roundsOpened', unit: '' },
+    { label: 'Rounds Abertos e Vencidos', key: 'roundsOpenedWon', unit: '' },
+  ];
+
   // Mesmas faixas-alvo usadas em electron/ai/scoreEngine.ts (AIM_SUBMETRIC_WEIGHTS /
   // UTILITY_QUALITY_WEIGHTS / POSITIONING_WEIGHTS) — reproduzidas aqui só pra
   // colorir os cards da grade. Não influenciam a nota real; se as faixas do
@@ -113,6 +138,10 @@ export class ConsolidatedScoreComponent {
     avgTradeDelayMs: { min: 2500, max: 1200 },
     overexposedDeathPct: { min: 35, max: 5 },
     avgNearestTeammateDist: { min: 1200, max: 400 },
+    kpr: { min: 0.5, max: 1.0 },
+    adr: { min: 60, max: 95 },
+    clutchWinPct: { min: 15, max: 50 },
+    sacrificeOpenPct: { min: 30, max: 60 },
   };
 
   // steamId -> demoId da demo isolada em exibição. Sem entrada (ou null) = mostra o consolidado.
@@ -159,6 +188,10 @@ export class ConsolidatedScoreComponent {
     return this.displayPositioning(p)[key];
   }
 
+  impactValue(p: PlayerScoreAggregate, key: keyof PlayerImpactStats): number {
+    return this.displayImpact(p)[key];
+  }
+
   // Trunca hashes de arquivo longas (ex.: "1-99dc0f7c-81c9-...-abcde12357d3.dem")
   // pra algo escaneável ("1-99dc0f7c...12357d3.dem"), mantendo o nome completo no title.
   truncateLabel(label: string, headLen = 10, tailLen = 12): string {
@@ -192,6 +225,10 @@ export class ConsolidatedScoreComponent {
     return this.getSelectedHistory(p)?.positioning ?? p.positioning;
   }
 
+  displayImpact(p: PlayerScoreAggregate): PlayerImpactStats {
+    return this.getSelectedHistory(p)?.impact ?? p.impact;
+  }
+
   displayAimScore(p: PlayerScoreAggregate): number {
     return this.getSelectedHistory(p)?.aimScore ?? p.avgAimScore;
   }
@@ -202,6 +239,10 @@ export class ConsolidatedScoreComponent {
 
   displayPositioningScore(p: PlayerScoreAggregate): number {
     return this.getSelectedHistory(p)?.positioningScore ?? p.avgPositioningScore;
+  }
+
+  displayImpactScore(p: PlayerScoreAggregate): number {
+    return this.getSelectedHistory(p)?.impactScore ?? p.avgImpactScore;
   }
 
   displayOverallScore(p: PlayerScoreAggregate): number {
@@ -217,6 +258,7 @@ export class ConsolidatedScoreComponent {
       'Nota Mira',
       'Nota Utility',
       'Nota Posicionamento',
+      'Nota Rating',
       'Accuracy %',
       'Head Accuracy %',
       'HS Kill %',
@@ -253,7 +295,18 @@ export class ConsolidatedScoreComponent {
       'Avg Trade Delay (ms)',
       'Overexposed Death %',
       'Avg Dist. Aliado Mais Próximo',
-    ];
+      'Kills',
+      'Deaths',
+      'Assists',
+      'KPR',
+      'ADR',
+      'Clutches Ganhos',
+      'Clutches Perdidos',
+      'Clutch Win %',
+      'Rounds Abertos',
+      'Rounds Abertos e Vencidos',
+      'Sacrifício de Abertura %',
+    ].map((h) => this.translation.t(h));
     const rows = this.players.map((p) => [
       p.name,
       p.demosCount,
@@ -261,6 +314,7 @@ export class ConsolidatedScoreComponent {
       p.avgAimScore,
       p.avgUtilityScore,
       p.avgPositioningScore,
+      p.avgImpactScore,
       p.aim.accuracy,
       p.aim.headAccuracy,
       p.aim.hsKillPct,
@@ -297,6 +351,17 @@ export class ConsolidatedScoreComponent {
       p.positioning.avgTradeDelayMs ?? '',
       p.positioning.overexposedDeathPct,
       p.positioning.avgNearestTeammateDist ?? '',
+      p.impact.kills,
+      p.impact.deaths,
+      p.impact.assists,
+      p.impact.kpr,
+      p.impact.adr,
+      p.impact.clutchesWon,
+      p.impact.clutchesLost,
+      p.impact.clutchWinPct,
+      p.impact.roundsOpened,
+      p.impact.roundsOpenedWon,
+      p.impact.sacrificeOpenPct,
     ]);
     // ';' como separador (não ',') porque Excel em pt-BR usa vírgula como separador
     // decimal e trataria um CSV separado por vírgula como uma coluna só.

@@ -21,13 +21,15 @@ import { Markdown } from 'tiptap-markdown';
 import { ElectronService } from '../../core/services/electron.service';
 import { SlashCommand } from './notebook-slash-command';
 import { NoImages, hasImageFile } from './notebook-no-images';
+import { TranslationService } from '../../core/services/translation.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 const SAVE_DEBOUNCE_MS = 300;
 
 @Component({
   selector: 'app-notebook',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslatePipe],
   templateUrl: './notebook.component.html',
   styleUrl: './notebook.component.scss',
   encapsulation: ViewEncapsulation.None,
@@ -51,7 +53,7 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
   private viewReady = false;
   private loadedSlotId?: string;
 
-  constructor(private electron: ElectronService) {}
+  constructor(private electron: ElectronService, private translation: TranslationService) {}
 
   ngAfterViewInit(): void {
     this.viewReady = true;
@@ -77,8 +79,9 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
         NoImages,
         SlashCommand,
         Placeholder.configure({
-          placeholder:
-            'Ex: time joga muito rush B no pistol, mas quase sempre com pouco cross-fire de A. Rifler 2 costuma isolar cedo demais no retake... Digite "/" para inserir um bloco.',
+          placeholder: this.translation.t(
+            'Ex: time joga muito rush B no pistol, mas quase sempre com pouco cross-fire de A. Rifler 2 costuma isolar cedo demais no retake... Digite "/" para inserir um bloco.'
+          ),
         }),
         Markdown.configure({ html: false, transformPastedText: true }),
       ],
@@ -142,12 +145,13 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.historyError = '';
     try {
       const entries = await this.electron.api.slots.listNotebookHistory(this.slotId);
+      const locale = this.translation.lang() === 'en' ? 'en-US' : 'pt-BR';
       this.historyEntries = entries.map((e) => ({
         timestamp: e.timestamp,
-        label: new Date(e.timestamp).toLocaleString('pt-BR'),
+        label: new Date(e.timestamp).toLocaleString(locale),
       }));
     } catch (err) {
-      this.historyError = (err as Error).message ?? 'Falha ao carregar histórico do notebook.';
+      this.historyError = (err as Error).message ?? this.translation.t('Falha ao carregar histórico do notebook.');
     } finally {
       this.historyLoading = false;
     }
@@ -156,7 +160,9 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
   async restoreHistory(timestamp: string) {
     if (!this.editor) return;
     const ok = confirm(
-      'Restaurar essa versão substitui o conteúdo atual do notebook (a versão atual também vira um checkpoint no histórico). Continuar?'
+      this.translation.t(
+        'Restaurar essa versão substitui o conteúdo atual do notebook (a versão atual também vira um checkpoint no histórico). Continuar?'
+      )
     );
     if (!ok) return;
     try {
@@ -166,7 +172,7 @@ export class NotebookComponent implements AfterViewInit, OnChanges, OnDestroy {
       this.historyOpen = false;
       this.contentSaved.emit(restored.content);
     } catch (err) {
-      this.historyError = (err as Error).message ?? 'Falha ao restaurar versão.';
+      this.historyError = (err as Error).message ?? this.translation.t('Falha ao restaurar versão.');
     }
   }
 

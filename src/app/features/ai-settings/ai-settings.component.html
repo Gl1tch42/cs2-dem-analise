@@ -1,20 +1,19 @@
 <div class="crypto-banner">
   <span class="crypto-icon" aria-hidden="true">🔒</span>
   <div class="crypto-text">
-    <strong>Criptografia Local:</strong>
-    Suas chaves de API ficam guardadas apenas na sua máquina — nunca saem dela, exceto na
-    chamada direta ao provedor escolhido.
+    <strong>{{ 'Criptografia Local:' | translate }}</strong>
+    {{ 'Suas chaves de API ficam guardadas apenas na sua máquina — nunca saem dela, exceto na chamada direta ao provedor escolhido.' | translate }}
   </div>
   <span
     class="crypto-info"
-    title="Nenhuma chave passa por servidores da CS Demo Analyst. Tudo acontece localmente."
+    [title]="'Nenhuma chave passa por servidores da CS Demo Analyst. Tudo acontece localmente.' | translate"
     aria-hidden="true"
     >ⓘ</span
   >
 </div>
 
-<h1 class="page-title">Configurações de IA</h1>
-<p class="text-muted mb-4">Escolha o provedor padrão que vai gerar as análises das suas demos.</p>
+<h1 class="page-title">{{ 'Configurações de IA' | translate }}</h1>
+<p class="text-muted mb-4">{{ 'Escolha o provedor padrão que vai gerar as análises das suas demos.' | translate }}</p>
 
 <ng-container *ngIf="!loading && settings">
   <div class="provider-grid">
@@ -30,7 +29,7 @@
           class="provider-select"
           [class.is-active]="isDefault(provider.id)"
           [attr.aria-pressed]="isDefault(provider.id)"
-          title="Usar como provedor padrão"
+          [title]="'Usar como provedor padrão' | translate"
           (click)="setDefault(provider.id)"
         >
           <span class="provider-icon">{{ iconFor(provider.id) }}</span>
@@ -38,7 +37,7 @@
 
         <div class="provider-title">
           <strong>{{ provider.label }}</strong>
-          <span class="provider-sub" *ngIf="isDefault(provider.id)">provedor padrão</span>
+          <span class="provider-sub" *ngIf="isDefault(provider.id)">{{ 'provedor padrão' | translate }}</span>
         </div>
 
         <span
@@ -50,14 +49,12 @@
       </div>
 
       <p class="provider-desc" *ngIf="provider.id === 'mock'">
-        Não chama nenhuma API — devolve exatamente o prompt que seria enviado a um provedor
-        real, pra você conferir se os dados da demo estão bem formatados antes de gastar
-        crédito de verdade.
+        {{ 'Não chama nenhuma API — devolve exatamente o prompt que seria enviado a um provedor real, pra você conferir se os dados da demo estão bem formatados antes de gastar crédito de verdade.' | translate }}
       </p>
 
       <ng-container *ngIf="provider.id !== 'mock'">
         <div class="field-row" *ngIf="provider.id !== 'custom'">
-          <label class="field-label">Modelo</label>
+          <label class="field-label">{{ 'Modelo' | translate }}</label>
           <input
             class="field-input"
             [ngModel]="provider.model"
@@ -66,7 +63,7 @@
         </div>
 
         <div class="field-row" *ngIf="provider.id === 'custom'">
-          <label class="field-label">Endpoint</label>
+          <label class="field-label">{{ 'Endpoint' | translate }}</label>
           <input
             class="field-input"
             placeholder="https://sua-api.com/v1/analyze"
@@ -76,7 +73,7 @@
         </div>
 
         <div class="field-row" *ngIf="provider.id === 'custom'">
-          <label class="field-label">Modelo</label>
+          <label class="field-label">{{ 'Modelo' | translate }}</label>
           <input
             class="field-input"
             [ngModel]="provider.model"
@@ -88,7 +85,7 @@
           <input
             class="field-input"
             type="password"
-            placeholder="Colar API key"
+            [placeholder]="'Colar API key' | translate"
             [(ngModel)]="keyDrafts[provider.id]"
           />
           <button
@@ -97,13 +94,13 @@
             [class.is-loading]="savingKeyFor === provider.id"
             (click)="saveKey(provider.id)"
           >
-            Salvar chave
+            {{ 'Salvar chave' | translate }}
           </button>
           <button
             type="button"
             class="btn-icon-danger"
             *ngIf="provider.hasKey"
-            title="Remover chave"
+            [title]="'Remover chave' | translate"
             (click)="clearKey(provider.id)"
           >
             🗑

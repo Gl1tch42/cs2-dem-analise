@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { ElectronService } from '../../core/services/electron.service';
 import { MapStat, SlotMeta, MAX_OPPONENT_SLOTS } from '../../core/models/slot.model';
+import { TranslationService, AppLang } from '../../core/services/translation.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 const COLLAPSED_STORAGE_KEY = 'sidebar-collapsed';
 const TEAMS_EXPANDED_KEY = 'sidebar-teams-expanded';
@@ -30,7 +32,7 @@ interface MapEntry extends MapStat {
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive],
+  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive, TranslatePipe],
   templateUrl: './sidebar.component.html',
   styleUrl: './sidebar.component.scss',
 })
@@ -51,7 +53,18 @@ export class SidebarComponent implements OnInit {
   newTeamName = '';
   creatingTeamError = '';
 
-  constructor(private electron: ElectronService) {}
+  constructor(private electron: ElectronService, public translation: TranslationService) {}
+
+  setLang(lang: AppLang) {
+    this.translation.setLang(lang);
+  }
+
+  get createTeamTitle(): string {
+    if (this.availableSlotCount === 0) {
+      return `${this.translation.t('Limite de')} ${this.maxOpponentSlots} ${this.translation.t('times atingido')}`;
+    }
+    return this.translation.t('Criar novo time');
+  }
 
   async ngOnInit() {
     this.collapsed = localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true';
@@ -134,13 +147,13 @@ export class SidebarComponent implements OnInit {
   async confirmCreateTeam() {
     const name = this.newTeamName.trim();
     if (!name) {
-      this.creatingTeamError = 'Digite um nome para o time.';
+      this.creatingTeamError = this.translation.t('Digite um nome para o time.');
       return;
     }
     const slots = await this.electron.api.slots.list();
     const nextSlot = slots.find((s) => s.kind === 'opponent' && this.isUnusedSlot(s));
     if (!nextSlot) {
-      this.creatingTeamError = `Limite de ${this.maxOpponentSlots} times atingido.`;
+      this.creatingTeamError = `${this.translation.t('Limite de')} ${this.maxOpponentSlots} ${this.translation.t('times atingido.')}`;
       return;
     }
     await this.electron.api.slots.rename(nextSlot.id, name);

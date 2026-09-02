@@ -251,7 +251,13 @@ def build_grenade_flight_paths(grenades_df) -> dict:
         if x is None or y is None or str(x) == "nan" or str(y) == "nan":
             continue
         try:
-            key = (int(float(thrower)), category)
+            # NÃO usar int(float(thrower)): SteamID64 (~7.6e16) excede 2^53, o maior
+            # inteiro que um float64 representa exatamente — o roundtrip por float
+            # corrompe o id (ex.: 76561198009653545 vira 76561198009653552), fazendo a
+            # chave nunca bater com o steamid usado no resto do código (que não passa
+            # por float). Resultado prático: quase nenhum voo de granada real (com
+            # quique) era encontrado, e o desenho caía sempre na aproximação em linha reta.
+            key = (int(thrower), category)
         except (ValueError, TypeError):
             continue
         raw_points.setdefault(key, []).append((int(row.tick), float(x), float(y)))
@@ -276,9 +282,18 @@ def build_grenade_flight_paths(grenades_df) -> dict:
     return paths
 
 def find_grenade_path(grenade_paths: dict, thrower_id, category: str, detonate_tick: int, freeze_tick: int):
-    """Acha o voo (com o quique real, se houve) cujo fim bate com o tick de
-    detonação/ignição desse evento específico, e converte pra segundos
-    relativos ao freeze do round."""
+    """Acha o voo (com o quique real, se houve) cujo tick mais próximo bate com
+    o tick de detonação/ignição desse evento específico, e converte pra
+    segundos relativos ao freeze do round.
+
+    Casa pelo ponto do voo mais próximo de `detonate_tick` — NÃO pelo último
+    ponto do voo. HE/smoke/decoy continuam aparecendo em parse_grenades() por
+    vários segundos depois de pousar (prop de granada ainda "vivo" na engine),
+    então o fim bruto do voo fica bem depois da detonação real; flashbang e
+    molotov não têm essa cauda (o entity some no próprio impacto), por isso só
+    apareciam quando o casamento usava o último ponto. Corta o voo devolvido
+    nesse ponto casado, senão a trajetória desenhada incluiria a granada
+    "parada" no chão depois de já ter detonado."""
     if not grenade_paths or thrower_id is None or category is None:
         return None
     flights = grenade_paths.get((thrower_id, category))
@@ -286,16 +301,19 @@ def find_grenade_path(grenade_paths: dict, thrower_id, category: str, detonate_t
         return None
     best = None
     best_diff = None
+    best_idx = None
     for flight in flights:
-        diff = abs(flight[-1][0] - detonate_tick)
+        idx = min(range(len(flight)), key=lambda i: abs(flight[i][0] - detonate_tick))
+        diff = abs(flight[idx][0] - detonate_tick)
         if best_diff is None or diff < best_diff:
             best_diff = diff
             best = flight
+            best_idx = idx
     if best is None or best_diff > GRENADE_PATH_MATCH_TOLERANCE_TICKS:
         return None
     return [
         {"x": round(x, 1), "y": round(y, 1), "t": round((tick - freeze_tick) / TICK_RATE, 1)}
-        for tick, x, y in best
+        for tick, x, y in best[: best_idx + 1]
     ]
 
 def pair_grenade_lifespan(

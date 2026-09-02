@@ -311,6 +311,36 @@
   }
 }
 
+.lang-switch {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.lang-btn {
+  flex: 1;
+  background: #1b2027;
+  border: 1px solid var(--panel-border);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 3px;
+  padding: 0.3rem 0;
+  cursor: pointer;
+
+  &:hover {
+    color: #f2f4f6;
+    border-color: var(--own-color);
+  }
+
+  &.is-active {
+    background: #232a33;
+    color: #f2f4f6;
+    border-color: var(--own-color);
+  }
+}
+
 .sidebar-footer {
   border-top: 1px solid var(--panel-border);
   padding-top: 0.75rem;

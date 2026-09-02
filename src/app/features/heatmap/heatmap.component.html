@@ -1,44 +1,43 @@
 <div class="heatmap">
   <ng-container *ngIf="demos.length === 0">
-    <p class="text-muted">Importe pelo menos uma demo pra ver o mapa de calor.</p>
+    <p class="text-muted">{{ 'Importe pelo menos uma demo pra ver o mapa de calor.' | translate }}</p>
   </ng-container>
 
   <ng-container *ngIf="demos.length > 0 && !hasRoster">
     <p class="text-muted">
-      Marque o time deste slot em pelo menos uma demo (aba <strong>Demos</strong>) para gerar o mapa de calor por
-      jogador.
+      {{ 'Marque o time deste slot em pelo menos uma demo (aba' | translate }} <strong>Demos</strong>{{ ') para gerar o mapa de calor por jogador.' | translate }}
     </p>
   </ng-container>
 
   <ng-container *ngIf="demos.length > 0 && hasRoster">
     <div class="heatmap-toolbar">
       <label class="select-label">
-        Jogador:
+        {{ 'Jogador:' | translate }}
         <select class="input is-small" [(ngModel)]="selectedSteamId" (ngModelChange)="onPlayerChange()">
           <option *ngFor="let p of players" [value]="p.steamId">{{ p.name }}</option>
         </select>
       </label>
 
       <label class="select-label">
-        Mapa:
+        {{ 'Mapa:' | translate }}
         <select class="input is-small" [(ngModel)]="selectedMap" (ngModelChange)="onMapChange()">
           <option *ngFor="let m of maps" [value]="m">{{ m }}</option>
         </select>
       </label>
     </div>
 
-    <p class="text-muted" *ngIf="loading">Carregando posições…</p>
+    <p class="text-muted" *ngIf="loading">{{ 'Carregando posições…' | translate }}</p>
     <p class="help is-danger" *ngIf="loadError">{{ loadError }}</p>
 
     <div class="heatmap-grid">
       <div class="heatmap-panel">
-        <h4 class="heatmap-panel-title">Geral</h4>
+        <h4 class="heatmap-panel-title">{{ 'Geral' | translate }}</h4>
         <div class="heatmap-canvas-wrap panel-block-data">
           <canvas #canvasAll width="480" height="480"></canvas>
-          <p class="text-muted no-data" *ngIf="!loading && allSampleCount === 0">Sem dados neste mapa.</p>
+          <p class="text-muted no-data" *ngIf="!loading && allSampleCount === 0">{{ 'Sem dados neste mapa.' | translate }}</p>
         </div>
         <p class="text-muted heatmap-summary" *ngIf="!loading && allSampleCount > 0">
-          {{ allSampleCount }} amostra(s) · {{ allRoundCount }} round(s)
+          {{ allSampleCount }} {{ 'amostra(s)' | translate }} · {{ allRoundCount }} {{ 'round(s)' | translate }}
         </p>
       </div>
 
@@ -46,10 +45,10 @@
         <h4 class="heatmap-panel-title"><span class="dot dot-ct"></span> CT</h4>
         <div class="heatmap-canvas-wrap panel-block-data">
           <canvas #canvasCt width="480" height="480"></canvas>
-          <p class="text-muted no-data" *ngIf="!loading && ctSampleCount === 0">Sem dados no lado CT.</p>
+          <p class="text-muted no-data" *ngIf="!loading && ctSampleCount === 0">{{ 'Sem dados no lado CT.' | translate }}</p>
         </div>
         <p class="text-muted heatmap-summary" *ngIf="!loading && ctSampleCount > 0">
-          {{ ctSampleCount }} amostra(s) · {{ ctRoundCount }} round(s)
+          {{ ctSampleCount }} {{ 'amostra(s)' | translate }} · {{ ctRoundCount }} {{ 'round(s)' | translate }}
         </p>
       </div>
 
@@ -57,10 +56,10 @@
         <h4 class="heatmap-panel-title"><span class="dot dot-t"></span> TR</h4>
         <div class="heatmap-canvas-wrap panel-block-data">
           <canvas #canvasT width="480" height="480"></canvas>
-          <p class="text-muted no-data" *ngIf="!loading && tSampleCount === 0">Sem dados no lado TR.</p>
+          <p class="text-muted no-data" *ngIf="!loading && tSampleCount === 0">{{ 'Sem dados no lado TR.' | translate }}</p>
         </div>
         <p class="text-muted heatmap-summary" *ngIf="!loading && tSampleCount > 0">
-          {{ tSampleCount }} amostra(s) · {{ tRoundCount }} round(s)
+          {{ tSampleCount }} {{ 'amostra(s)' | translate }} · {{ tRoundCount }} {{ 'round(s)' | translate }}
         </p>
       </div>
     </div>

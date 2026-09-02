@@ -241,6 +241,20 @@ export interface PlayerPositioningStats {
   avgNearestTeammateDist: number | null;
 }
 
+export interface PlayerImpactStats {
+  kills: number;
+  deaths: number;
+  assists: number;
+  adr: number;
+  kpr: number;
+  clutchesWon: number;
+  clutchesLost: number;
+  clutchWinPct: number;
+  roundsOpened: number;
+  roundsOpenedWon: number;
+  sacrificeOpenPct: number;
+}
+
 export interface PlayerAggregate {
   steamId: string;
   name: string;
@@ -333,10 +347,12 @@ export interface PlayerScoreHistoryEntry {
   aimScore: number;
   utilityScore: number;
   positioningScore: number;
+  impactScore: number;
   overallScore: number;
   aim: PlayerAimStats;
   utility: PlayerUtilityStats;
   positioning: PlayerPositioningStats;
+  impact: PlayerImpactStats;
 }
 
 export interface PlayerScoreAggregate {
@@ -346,10 +362,12 @@ export interface PlayerScoreAggregate {
   avgAimScore: number;
   avgUtilityScore: number;
   avgPositioningScore: number;
+  avgImpactScore: number;
   avgOverallScore: number;
   aim: PlayerAimStats;
   utility: PlayerUtilityStats;
   positioning: PlayerPositioningStats;
+  impact: PlayerImpactStats;
   history: PlayerScoreHistoryEntry[];
 }
 

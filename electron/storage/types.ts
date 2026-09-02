@@ -227,6 +227,25 @@ export interface PlayerPositioningStats {
   avgNearestTeammateDist: number | null;
 }
 
+// "Rating"/impacto real em vencer rounds: kills/ADR (produção crua, sem
+// filtro de qualidade de tiro — isso já é papel da nota de Mira), clutches
+// e o sacrifício de abrir round (morrer primeiro no round mas o time vencer
+// mesmo assim — sinal de que a morte comprou informação/espaço útil, distinto
+// de "ganhar o duelo de abertura", que já é coberto em PlayerPositioningStats).
+export interface PlayerImpactStats {
+  kills: number;
+  deaths: number;
+  assists: number;
+  adr: number;
+  kpr: number;
+  clutchesWon: number;
+  clutchesLost: number;
+  clutchWinPct: number;
+  roundsOpened: number;
+  roundsOpenedWon: number;
+  sacrificeOpenPct: number;
+}
+
 export interface PlayerAggregate {
   steamId: string;
   name: string;
@@ -254,10 +273,12 @@ export interface PlayerScoreHistoryEntry {
   aimScore: number;
   utilityScore: number;
   positioningScore: number;
+  impactScore: number;
   overallScore: number;
   aim: PlayerAimStats;
   utility: PlayerUtilityStats;
   positioning: PlayerPositioningStats;
+  impact: PlayerImpactStats;
 }
 
 export interface PlayerScoreAggregate {
@@ -267,10 +288,12 @@ export interface PlayerScoreAggregate {
   avgAimScore: number;
   avgUtilityScore: number;
   avgPositioningScore: number;
+  avgImpactScore: number;
   avgOverallScore: number;
   aim: PlayerAimStats;
   utility: PlayerUtilityStats;
   positioning: PlayerPositioningStats;
+  impact: PlayerImpactStats;
   history: PlayerScoreHistoryEntry[];
 }
 

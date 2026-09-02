@@ -1,14 +1,14 @@
 <div class="consolidated-score">
   <div class="consolidated-score-header">
-    <p class="text-muted">{{ players.length }} jogador(es) com nota calculada.</p>
+    <p class="text-muted">{{ players.length }} {{ 'jogador(es) com nota calculada.' | translate }}</p>
     <button class="button is-small" (click)="exportCsv()" [disabled]="players.length === 0">
-      Exportar CSV
+      {{ 'Exportar CSV' | translate }}
     </button>
   </div>
 
   <p class="text-muted" *ngIf="players.length === 0">
-    Nenhum jogador com nota calculada ainda. Marque o time do slot em pelo menos uma demo (aba
-    <strong>Demos</strong>) e importe demos suficientes pra gerar dados de mira/utility.
+    {{ 'Nenhum jogador com nota calculada ainda. Marque o time do slot em pelo menos uma demo (aba' | translate }}
+    <strong>Demos</strong>{{ ') e importe demos suficientes pra gerar dados de mira/utility.' | translate }}
   </p>
 
   <div class="score-player-card" *ngFor="let p of players">
@@ -21,22 +21,22 @@
             <span class="tag is-link is-rounded" [title]="sel.demoLabel">{{ truncateLabel(sel.demoLabel) }}</span>
             <span class="tag is-dark is-rounded" *ngIf="sel.map">{{ sel.map }}</span>
             <button class="button is-small back-btn" (click)="selectDemo(p.steamId, sel.demoId)">
-              ← Ver consolidado
+              {{ '← Ver consolidado' | translate }}
             </button>
           </div>
         </div>
         <div class="hero-metric" [ngClass]="scoreClass(sel.overallScore)">
-          <span class="hero-metric-label">Nota da demo</span>
+          <span class="hero-metric-label">{{ 'Nota da demo' | translate }}</span>
           <span class="hero-metric-value">{{ sel.overallScore }}</span>
         </div>
       </ng-container>
       <ng-template #aggregateHero>
         <div class="player-hero-identity">
           <h3 class="title is-4 has-text-white">{{ p.name }}</h3>
-          <span class="tag is-dark is-rounded">{{ p.demosCount }} demo(s)</span>
+          <span class="tag is-dark is-rounded">{{ p.demosCount }} {{ 'demo(s)' | translate }}</span>
         </div>
         <div class="hero-metric" [ngClass]="scoreClass(p.avgOverallScore)">
-          <span class="hero-metric-label">Nota Geral</span>
+          <span class="hero-metric-label">{{ 'Nota Geral' | translate }}</span>
           <span class="hero-metric-value">{{ p.avgOverallScore }}</span>
         </div>
       </ng-template>
@@ -46,7 +46,7 @@
     <div class="sub-scores">
       <div class="sub-score-box">
         <div class="sub-score-top">
-          <span class="sub-score-label">Mira</span>
+          <span class="sub-score-label">{{ 'Mira' | translate }}</span>
           <span class="sub-score-value" [ngClass]="scoreTextClass(displayAimScore(p))">{{ displayAimScore(p) }}</span>
         </div>
         <progress class="progress is-small" [ngClass]="scoreClass(displayAimScore(p))" [value]="displayAimScore(p)" max="100"></progress>
@@ -60,19 +60,26 @@
       </div>
       <div class="sub-score-box">
         <div class="sub-score-top">
-          <span class="sub-score-label">Posicionamento</span>
+          <span class="sub-score-label">{{ 'Posicionamento' | translate }}</span>
           <span class="sub-score-value" [ngClass]="scoreTextClass(displayPositioningScore(p))">{{ displayPositioningScore(p) }}</span>
         </div>
         <progress class="progress is-small" [ngClass]="scoreClass(displayPositioningScore(p))" [value]="displayPositioningScore(p)" max="100"></progress>
       </div>
+      <div class="sub-score-box">
+        <div class="sub-score-top">
+          <span class="sub-score-label">{{ 'Rating' | translate }}</span>
+          <span class="sub-score-value" [ngClass]="scoreTextClass(displayImpactScore(p))">{{ displayImpactScore(p) }}</span>
+        </div>
+        <progress class="progress is-small" [ngClass]="scoreClass(displayImpactScore(p))" [value]="displayImpactScore(p)" max="100"></progress>
+      </div>
     </div>
 
     <!-- Matriz de mira -->
-    <p class="stat-subtitle">Mira</p>
+    <p class="stat-subtitle">{{ 'Mira' | translate }}</p>
     <div class="columns is-multiline kpi-grid">
       <div class="column is-2-desktop is-3-tablet is-4-mobile" *ngFor="let m of aimKpis">
         <div class="kpi-card">
-          <p class="kpi-label">{{ m.label }}</p>
+          <p class="kpi-label">{{ m.label | translate }}</p>
           <p class="kpi-value" [ngClass]="metricClass(aimValue(p, m.key), m.key)">
             {{ formatMetric(aimValue(p, m.key), m.unit) }}
           </p>
@@ -85,7 +92,7 @@
     <div class="columns is-multiline kpi-grid kpi-grid-impact">
       <div class="column is-3-desktop is-4-tablet is-6-mobile" *ngFor="let m of utilityImpact">
         <div class="kpi-card">
-          <p class="kpi-label">{{ m.label }}</p>
+          <p class="kpi-label">{{ m.label | translate }}</p>
           <p class="kpi-value" [ngClass]="metricClass(utilityValue(p, m.key), m.key)">
             {{ formatMetric(utilityValue(p, m.key), m.unit) }}
           </p>
@@ -94,17 +101,17 @@
     </div>
     <div class="utility-counts">
       <div class="utility-count-pill" *ngFor="let m of utilityCounts">
-        <span class="pill-label">{{ m.label }}</span>
+        <span class="pill-label">{{ m.label | translate }}</span>
         <span class="pill-value">{{ utilityValue(p, m.key) }}</span>
       </div>
     </div>
 
     <!-- Posicionamento -->
-    <p class="stat-subtitle">Posicionamento</p>
+    <p class="stat-subtitle">{{ 'Posicionamento' | translate }}</p>
     <div class="columns is-multiline kpi-grid kpi-grid-impact">
       <div class="column is-3-desktop is-4-tablet is-6-mobile" *ngFor="let m of positioningKpis">
         <div class="kpi-card">
-          <p class="kpi-label">{{ m.label }}</p>
+          <p class="kpi-label">{{ m.label | translate }}</p>
           <p class="kpi-value" [ngClass]="metricClass(positioningValue(p, m.key), m.key)">
             {{ formatMetric(positioningValue(p, m.key), m.unit) }}
           </p>
@@ -113,21 +120,41 @@
     </div>
     <div class="utility-counts">
       <div class="utility-count-pill" *ngFor="let m of positioningCounts">
-        <span class="pill-label">{{ m.label }}</span>
+        <span class="pill-label">{{ m.label | translate }}</span>
         <span class="pill-value">{{ positioningValue(p, m.key) }}</span>
       </div>
     </div>
 
+    <!-- Rating / Impacto: produção crua (kills/ADR/KPR) + valor real de vencer o
+         round (clutch, sacrifício de abrir o round mesmo morrendo primeiro) -->
+    <p class="stat-subtitle">{{ 'Rating' | translate }}</p>
+    <div class="columns is-multiline kpi-grid kpi-grid-impact">
+      <div class="column is-3-desktop is-4-tablet is-6-mobile" *ngFor="let m of impactKpis">
+        <div class="kpi-card">
+          <p class="kpi-label">{{ m.label | translate }}</p>
+          <p class="kpi-value" [ngClass]="metricClass(impactValue(p, m.key), m.key)">
+            {{ formatMetric(impactValue(p, m.key), m.unit) }}
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="utility-counts">
+      <div class="utility-count-pill" *ngFor="let m of impactCounts">
+        <span class="pill-label">{{ m.label | translate }}</span>
+        <span class="pill-value">{{ impactValue(p, m.key) }}</span>
+      </div>
+    </div>
+
     <!-- Histórico de demos -->
-    <p class="stat-subtitle">Histórico ({{ p.history.length }} demo(s)) — clique numa demo pra ver os números isolados dela</p>
+    <p class="stat-subtitle">{{ 'Histórico (' | translate }}{{ p.history.length }} {{ 'demo(s)' | translate }}{{ ') — clique numa demo pra ver os números isolados dela' | translate }}</p>
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable mini-table">
         <thead>
           <tr>
             <th>Demo</th>
-            <th>Mapa</th>
-            <th>Adicionada em</th>
-            <th>Nota</th>
+            <th>{{ 'Mapa' | translate }}</th>
+            <th>{{ 'Adicionada em' | translate }}</th>
+            <th>{{ 'Nota' | translate }}</th>
           </tr>
         </thead>
         <tbody>

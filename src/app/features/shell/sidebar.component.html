@@ -13,14 +13,14 @@
         type="button"
         class="collapse-toggle"
         (click)="toggleCollapsed()"
-        [title]="collapsed ? 'Fixar barra lateral' : 'Recolher barra lateral'"
+        [title]="(collapsed ? 'Fixar barra lateral' : 'Recolher barra lateral') | translate"
       >
         {{ collapsed ? '»' : '«' }}
       </button>
     </div>
 
     <div class="sidebar-scroll">
-      <p class="menu-label">Time</p>
+      <p class="menu-label">{{ 'Time' | translate }}</p>
       <ul class="menu-list" *ngIf="ownSlot">
         <li>
           <a [routerLink]="['/slot', ownSlot.id]" routerLinkActive="is-active">
@@ -40,7 +40,7 @@
             <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-          <span class="section-title">Times</span>
+          <span class="section-title">{{ 'Times' | translate }}</span>
           <span class="tag is-rounded section-count">{{ usedOpponentSlots.length }}/{{ maxOpponentSlots }}</span>
         </button>
 
@@ -50,24 +50,24 @@
             class="create-team-btn"
             (click)="openCreateTeam()"
             [disabled]="availableSlotCount === 0"
-            [title]="availableSlotCount === 0 ? 'Limite de ' + maxOpponentSlots + ' times atingido' : 'Criar novo time'"
+            [title]="createTeamTitle"
           >
-            + Criar Time
+            {{ '+ Criar Time' | translate }}
           </button>
 
           <div class="create-team-form" *ngIf="creatingTeam">
             <input
               type="text"
               class="input is-small"
-              placeholder="Nome do time"
+              [placeholder]="'Nome do time' | translate"
               [(ngModel)]="newTeamName"
               (keyup.enter)="confirmCreateTeam()"
               (keyup.escape)="cancelCreateTeam()"
               autofocus
             />
             <div class="create-team-actions">
-              <button type="button" class="button is-small is-primary" (click)="confirmCreateTeam()">Criar</button>
-              <button type="button" class="button is-small" (click)="cancelCreateTeam()">Cancelar</button>
+              <button type="button" class="button is-small is-primary" (click)="confirmCreateTeam()">{{ 'Criar' | translate }}</button>
+              <button type="button" class="button is-small" (click)="cancelCreateTeam()">{{ 'Cancelar' | translate }}</button>
             </div>
             <p class="create-team-error" *ngIf="creatingTeamError">{{ creatingTeamError }}</p>
           </div>
@@ -81,7 +81,7 @@
               </a>
             </li>
             <li class="empty-hint" *ngIf="usedOpponentSlots.length === 0 && !creatingTeam">
-              Nenhum time criado ainda.
+              {{ 'Nenhum time criado ainda.' | translate }}
             </li>
           </ul>
         </div>
@@ -94,7 +94,7 @@
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
           </svg>
-          <span class="section-title">Mapas</span>
+          <span class="section-title">{{ 'Mapas' | translate }}</span>
           <span class="tag is-rounded section-count">{{ mapEntries.length }}</span>
         </button>
 
@@ -106,20 +106,38 @@
                 <span class="tag is-rounded demo-count">{{ entry.demoCount }}</span>
               </div>
               <div class="map-record" *ngIf="entry.wins + entry.losses > 0">
-                <span class="map-record-wl">{{ entry.wins }}V - {{ entry.losses }}D</span>
+                <span class="map-record-wl">{{ entry.wins }}{{ 'V' | translate }} - {{ entry.losses }}{{ 'D' | translate }}</span>
                 <span class="map-record-pct">{{ winRatePct(entry) }}%</span>
               </div>
-              <p class="map-description">{{ entry.description }}</p>
+              <p class="map-description">{{ entry.description | translate }}</p>
             </li>
-            <li class="empty-hint" *ngIf="mapEntries.length === 0">Nenhuma demo importada ainda.</li>
+            <li class="empty-hint" *ngIf="mapEntries.length === 0">{{ 'Nenhuma demo importada ainda.' | translate }}</li>
           </ul>
         </div>
       </div>
     </div>
 
     <div class="sidebar-footer">
+      <div class="lang-switch">
+        <button
+          type="button"
+          class="lang-btn"
+          [class.is-active]="translation.lang() === 'pt'"
+          (click)="setLang('pt')"
+        >
+          PT
+        </button>
+        <button
+          type="button"
+          class="lang-btn"
+          [class.is-active]="translation.lang() === 'en'"
+          (click)="setLang('en')"
+        >
+          EN
+        </button>
+      </div>
       <a routerLink="/config-ia" routerLinkActive="is-active" class="config-link">
-        <span class="icon">⚙</span> Configurações de IA
+        <span class="icon">⚙</span> {{ 'Configurações de IA' | translate }}
       </a>
     </div>
   </div>

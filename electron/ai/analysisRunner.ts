@@ -148,6 +148,31 @@ function positioningTable(players: PlayerScoreAggregate[], focusIds?: Set<string
   ].join('\n');
 }
 
+// Rating/Impacto: produção crua (kills/ADR/KPR), clutch e o sacrifício de
+// abertura (morrer primeiro no round mas o time vencer mesmo assim — sinal de
+// que a morte comprou informação/espaço útil). Distinto de "Posicionamento",
+// que cobre quem GANHA o duelo de abertura/trade.
+function impactTable(players: PlayerScoreAggregate[], focusIds?: Set<string>): string {
+  if (players.length === 0) {
+    return '(sem dados de rating/impacto ainda — precisa de pelo menos 1 demo com o time do slot marcado)';
+  }
+  const rows = players.map((p) => {
+    const isFocus = focusIds && focusIds.has(p.steamId);
+    const name = isFocus ? `**${p.name} 🎯**` : p.name;
+    const i = p.impact;
+    return (
+      `| ${name} | ${p.avgImpactScore} | ${i.kills} | ${i.deaths} | ${i.assists} | ${i.kpr} | ${i.adr} | ` +
+      `${i.clutchesWon}/${i.clutchesLost} (${i.clutchWinPct}%) | ${i.roundsOpenedWon}/${i.roundsOpened} (${i.sacrificeOpenPct}%) |`
+    );
+  });
+  return [
+    '| Jogador | Nota Rating | Kills | Deaths | Assists | KPR | ADR | Clutches (V/D, win%) | ' +
+      'Sacrifício de abertura (round vencido / vezes que abriu, %) |',
+    '|---|---|---|---|---|---|---|---|---|',
+    ...rows,
+  ].join('\n');
+}
+
 // Tendência por demo, em ordem cronológica — compacto (uma linha por jogador)
 // pra não estourar o prompt mesmo com muitas demos no slot; dá pro modelo
 // enxergar "melhorou/piorou ao longo do tempo" sem precisar de uma tabela
@@ -491,6 +516,10 @@ export async function runSlotAnalysis(
       ? ['(🎯 = jogador em foco — priorize a leitura de mira/utility dele(s))']
       : []),
     aimTable(playerScores, focusIds),
+    '',
+    `### Rating/Impacto consolidado do ${featuredLabel} — produção crua (kills/ADR/KPR) e o valor de vencer o round, ` +
+      `incluindo o sacrifício de morrer primeiro no round e o time mesmo assim vencer (informação/espaço que valeu a pena)`,
+    impactTable(playerScores, focusIds),
     '',
     `### Utility (granadas) consolidada do ${featuredLabel} — "Flashbang Efficiency" só conta cegueira >=1.5s em inimigo; ` +
       `dano de HE/Molotov já desconta overkill; "$ não usado" é dinheiro perdido morrendo com granada comprada e não jogada`,

@@ -1,4 +1,4 @@
-<p class="stat-subtitle">Por tipo de compra</p>
+<p class="stat-subtitle">{{ 'Por tipo de compra' | translate }}</p>
 <table class="table is-narrow is-fullwidth is-hoverable mini-table">
   <tbody>
     <tr *ngFor="let e of entries(team.tendencyByBuyType)">
@@ -13,7 +13,7 @@
   </tbody>
 </table>
 
-<p class="stat-subtitle">Jogadas mais recorrentes</p>
+<p class="stat-subtitle">{{ 'Jogadas mais recorrentes' | translate }}</p>
 <table class="table is-narrow is-fullwidth is-hoverable mini-table">
   <tbody>
     <tr *ngFor="let p of team.topRecurringPatterns">
@@ -28,10 +28,10 @@
   </tbody>
 </table>
 
-<p class="stat-subtitle">Jogadores</p>
+<p class="stat-subtitle">{{ 'Jogadores' | translate }}</p>
 <table class="table is-narrow is-fullwidth is-hoverable mini-table">
   <thead>
-    <tr><th>Jogador</th><th>ADR</th><th>Entry%</th><th>Clutch%</th></tr>
+    <tr><th>{{ 'Jogador' | translate }}</th><th>ADR</th><th>Entry%</th><th>Clutch%</th></tr>
   </thead>
   <tbody>
     <tr *ngFor="let pl of team.playerMovementProfile">

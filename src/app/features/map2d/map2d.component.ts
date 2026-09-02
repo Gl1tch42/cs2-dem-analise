@@ -2,9 +2,11 @@ import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Outpu
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElectronService } from '../../core/services/electron.service';
-import { DemoRecord, DemoSummary, GrenadePathPoint, KeyPosition, RoundBlind, RoundDeath, RoundSummary } from '../../core/models/slot.model';
+import { DemoRecord, DemoSummary, GrenadePathPoint, KeyPosition, RoundBlind, RoundDeath, RoundLoadout, RoundSummary } from '../../core/models/slot.model';
 import { RADAR_CALIBRATION, RADAR_REFERENCE_SIZE, RadarCalibration } from './radar-calibration';
 import { NotebookComponent } from '../notebook/notebook.component';
+import { TranslationService } from '../../core/services/translation.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 interface PlayerFrame {
   name: string;
@@ -84,7 +86,7 @@ function blendColorWithHealth(hexColor: string, health: number | undefined): str
 @Component({
   selector: 'app-map2d',
   standalone: true,
-  imports: [CommonModule, FormsModule, NotebookComponent],
+  imports: [CommonModule, FormsModule, NotebookComponent, TranslatePipe],
   templateUrl: './map2d.component.html',
   styleUrl: './map2d.component.scss',
 })
@@ -127,7 +129,11 @@ export class Map2dComponent implements OnChanges, OnDestroy {
   private radarImageEl?: HTMLImageElement;
   private useRealRadar = false;
 
-  constructor(private electron: ElectronService) {}
+  constructor(private electron: ElectronService, private translation: TranslationService) {}
+
+  private t(key: string): string {
+    return this.translation.t(key);
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['demos'] && this.demos.length > 0) {
@@ -172,7 +178,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
       this.setupRound();
       await this.loadRadarImage(this.summary.map);
     } catch (err) {
-      this.loadError = (err as Error).message ?? 'Falha ao carregar dados da demo.';
+      this.loadError = (err as Error).message ?? this.t('Falha ao carregar dados da demo.');
     } finally {
       this.loading = false;
     }
@@ -215,7 +221,7 @@ export class Map2dComponent implements OnChanges, OnDestroy {
         return;
       }
       const img = await this.loadImage(dataUrl);
-      if (!img) throw new Error('Falha ao carregar imagem do radar.');
+      if (!img) throw new Error(this.t('Falha ao carregar imagem do radar.'));
       this.radarImageEl = img;
       this.useRealRadar = true;
       this.radarStatus = 'loaded';
@@ -231,19 +237,19 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     try {
       const res = await this.electron.api.assets.extractRadars();
       if (!res.cs2Found) {
-        this.extractError = 'Instalação do CS2 não encontrada na Steam local.';
+        this.extractError = this.t('Instalação do CS2 não encontrada na Steam local.');
         this.radarStatus = 'missing';
       } else if (res.error) {
         this.extractError = res.error;
         this.radarStatus = 'missing';
       } else if (res.extractedMaps.length === 0) {
-        this.extractError = 'Nenhum radar foi extraído (verifique se o CS2 está atualizado).';
+        this.extractError = this.t('Nenhum radar foi extraído (verifique se o CS2 está atualizado).');
         this.radarStatus = 'missing';
       } else if (this.summary) {
         await this.loadRadarImage(this.summary.map);
       }
     } catch (err) {
-      this.extractError = (err as Error).message ?? 'Falha ao extrair radares.';
+      this.extractError = (err as Error).message ?? this.t('Falha ao extrair radares.');
       this.radarStatus = 'missing';
     }
   }
@@ -375,6 +381,32 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     return (this.currentRound?.loadout ?? []).filter((l) => l.side === side);
   }
 
+  armorTitle(l: RoundLoadout): string {
+    if (!l.armor) return this.t('sem colete');
+    return `${l.armor} ${this.t('de colete')}${l.hasHelmet ? ' + ' + this.t('capacete') : ''}`;
+  }
+
+  deathTitle(playerName: string): string {
+    const death = this.liveDeath(playerName);
+    return death?.by ? `${this.t('morto por')} ${death.by}` : '';
+  }
+
+  get playPauseLabel(): string {
+    return this.t(this.playing ? '❚❚ pausar' : '▶ tocar');
+  }
+
+  get bombHudLabel(): string {
+    const state = this.bombState;
+    if (state === 'idle') return this.t('C4 não plantada');
+    if (state === 'planted') return `${this.t('C4 plantada')} · ${this.bombCountdownLabel}`;
+    if (state === 'defused') return this.t('C4 defusada');
+    return this.t('C4 explodiu');
+  }
+
+  roundSegmentTitle(r: RoundSummary): string {
+    return `Round ${r.roundNumber} · ${r.winner === 'ct' ? this.t('CT venceu') : this.t('TR venceu')}`;
+  }
+
   deathOf(playerName: string): RoundDeath | undefined {
     return this.currentRound?.deaths?.find((d) => d.player === playerName);
   }
@@ -418,29 +450,29 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     if (death) {
       const weapon = this.formatWeapon(death.weapon);
       const detail = death.by
-        ? `morto por ${death.by} (${weapon}${death.headshot ? ', HS' : ''})`
-        : `morto (${weapon})`;
+        ? `${this.t('morto por')} ${death.by} (${weapon}${death.headshot ? ', HS' : ''})`
+        : `${this.t('morto')} (${weapon})`;
       events.push({ type: 'death', t: death.t, detail });
     }
     for (const k of round.deaths ?? []) {
       if (k.by !== player) continue;
       const weapon = this.formatWeapon(k.weapon);
-      events.push({ type: 'kill', t: k.t, detail: `matou ${k.player} (${weapon}${k.headshot ? ', HS' : ''})` });
+      events.push({ type: 'kill', t: k.t, detail: `${this.t('matou')} ${k.player} (${weapon}${k.headshot ? ', HS' : ''})` });
     }
     for (const f of round.flashes ?? []) {
-      if (f.player === player) events.push({ type: 'flash', t: f.t, detail: 'jogou flash' });
+      if (f.player === player) events.push({ type: 'flash', t: f.t, detail: this.t('jogou flash') });
     }
     for (const s of round.smokes ?? []) {
-      if (s.player === player) events.push({ type: 'smoke', t: s.startT, detail: 'jogou fumaça' });
+      if (s.player === player) events.push({ type: 'smoke', t: s.startT, detail: this.t('jogou fumaça') });
     }
     for (const fi of round.fires ?? []) {
-      if (fi.player === player) events.push({ type: 'fire', t: fi.startT, detail: 'jogou molotov' });
+      if (fi.player === player) events.push({ type: 'fire', t: fi.startT, detail: this.t('jogou molotov') });
     }
     for (const dc of round.decoys ?? []) {
-      if (dc.player === player) events.push({ type: 'decoy', t: dc.startT, detail: 'jogou decoy' });
+      if (dc.player === player) events.push({ type: 'decoy', t: dc.startT, detail: this.t('jogou decoy') });
     }
     for (const h of round.he ?? []) {
-      if (h.player === player) events.push({ type: 'he', t: h.t, detail: 'jogou HE' });
+      if (h.player === player) events.push({ type: 'he', t: h.t, detail: this.t('jogou HE') });
     }
 
     return events.sort((a, b) => a.t - b.t);

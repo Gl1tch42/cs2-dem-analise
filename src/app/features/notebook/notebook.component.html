@@ -1,15 +1,15 @@
 <div class="notebook">
   <div class="notebook-toolbar">
     <span class="text-muted" style="font-size:0.75rem">
-      Anotações Táticas (Markdown) &middot; Utilize "/" para estruturar suas observações.
+      {{ 'Anotações Táticas (Markdown) · Utilize "/" para estruturar suas observações.' | translate }}
     </span>
     <div class="notebook-history">
-      <button type="button" class="button is-small is-ghost" (click)="toggleHistory()">Histórico</button>
+      <button type="button" class="button is-small is-ghost" (click)="toggleHistory()">{{ 'Histórico' | translate }}</button>
       <div class="slash-menu notebook-history-panel" *ngIf="historyOpen">
-        <p class="slash-menu-empty" *ngIf="historyLoading">Carregando…</p>
+        <p class="slash-menu-empty" *ngIf="historyLoading">{{ 'Carregando…' | translate }}</p>
         <p class="slash-menu-empty" *ngIf="historyError">{{ historyError }}</p>
         <p class="slash-menu-empty" *ngIf="!historyLoading && !historyError && historyEntries.length === 0">
-          Sem versões anteriores salvas ainda (checkpoints são criados automaticamente a cada poucos minutos de edição).
+          {{ 'Sem versões anteriores salvas ainda (checkpoints são criados automaticamente a cada poucos minutos de edição).' | translate }}
         </p>
         <button
           type="button"
@@ -19,7 +19,7 @@
         >
           <span class="slash-menu-text">
             <span class="slash-menu-title">{{ entry.label }}</span>
-            <span class="slash-menu-subtitle">Clique para restaurar</span>
+            <span class="slash-menu-subtitle">{{ 'Clique para restaurar' | translate }}</span>
           </span>
         </button>
       </div>
@@ -29,8 +29,8 @@
     <div class="notebook-editor" #editorHost></div>
     <span class="save-indicator" [class.is-saving]="status === 'saving'" [class.is-visible]="status !== 'idle'">
       <ng-container [ngSwitch]="status">
-        <span *ngSwitchCase="'saving'">Salvando…</span>
-        <span *ngSwitchCase="'saved'">Salvo</span>
+        <span *ngSwitchCase="'saving'">{{ 'Salvando…' | translate }}</span>
+        <span *ngSwitchCase="'saved'">{{ 'Salvo' | translate }}</span>
       </ng-container>
     </span>
   </div>

@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElectronService } from '../../core/services/electron.service';
 import { AiSettings, AiProviderId } from '../../core/models/slot.model';
+import { TranslationService } from '../../core/services/translation.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 const PROVIDER_ICONS: Record<AiProviderId, string> = {
   anthropic: '✳',
@@ -14,7 +16,7 @@ const PROVIDER_ICONS: Record<AiProviderId, string> = {
 @Component({
   selector: 'app-ai-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslatePipe],
   templateUrl: './ai-settings.component.html',
   styleUrl: './ai-settings.component.scss',
 })
@@ -24,7 +26,7 @@ export class AiSettingsComponent implements OnInit {
   keyDrafts: Record<string, string> = {};
   savingKeyFor: string | null = null;
 
-  constructor(private electron: ElectronService) {}
+  constructor(private electron: ElectronService, private translation: TranslationService) {}
 
   async ngOnInit() {
     await this.reload();
@@ -70,7 +72,7 @@ export class AiSettingsComponent implements OnInit {
   }
 
   tagLabel(providerId: AiProviderId, hasKey: boolean): string {
-    if (providerId === 'mock') return 'sempre disponível';
-    return hasKey ? 'chave salva' : 'sem chave';
+    if (providerId === 'mock') return this.translation.t('sempre disponível');
+    return this.translation.t(hasKey ? 'chave salva' : 'sem chave');
   }
 }

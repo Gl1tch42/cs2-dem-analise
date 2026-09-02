@@ -1,5 +1,5 @@
 <ng-container *ngIf="loading">
-  <p class="text-muted">Carregando slot…</p>
+  <p class="text-muted">{{ 'Carregando slot…' | translate }}</p>
 </ng-container>
 
 <ng-container *ngIf="!loading && slot">
@@ -14,37 +14,36 @@
         (keyup.enter)="confirmRename()"
         (blur)="confirmRename()"
       />
-      <button class="button is-small is-ghost" (click)="startRename()" *ngIf="!editingName">renomear</button>
+      <button class="button is-small is-ghost" (click)="startRename()" *ngIf="!editingName">{{ 'renomear' | translate }}</button>
     </div>
     <p class="text-muted slot-subtitle">
-      {{ slot.demos.length }} demo(s) salva(s) · limite 100 por slot
+      {{ slot.demos.length }} {{ 'demo(s) salva(s) · limite 100 por slot' | translate }}
     </p>
   </header>
 
   <div class="tabs">
     <ul>
-      <li [class.is-active]="activeTab === 'overview'"><a (click)="setTab('overview')">Visão Geral</a></li>
-      <li [class.is-active]="activeTab === 'map'"><a (click)="setTab('map')">Mapa 2D</a></li>
-      <li [class.is-active]="activeTab === 'heatmap'"><a (click)="setTab('heatmap')">Mapa de Calor</a></li>
+      <li [class.is-active]="activeTab === 'overview'"><a (click)="setTab('overview')">{{ 'Visão Geral' | translate }}</a></li>
+      <li [class.is-active]="activeTab === 'map'"><a (click)="setTab('map')">{{ 'Mapa 2D' | translate }}</a></li>
+      <li [class.is-active]="activeTab === 'heatmap'"><a (click)="setTab('heatmap')">{{ 'Mapa de Calor' | translate }}</a></li>
       <li [class.is-active]="activeTab === 'demos'"><a (click)="setTab('demos')">Demos</a></li>
       <li [class.is-active]="activeTab === 'notebook'"><a (click)="setTab('notebook')">Notebook</a></li>
-      <li [class.is-active]="activeTab === 'ai'"><a (click)="setTab('ai')">Análise de IA</a></li>
-      <li [class.is-active]="activeTab === 'consolidado'"><a (click)="setTab('consolidado')">Consolidado</a></li>
+      <li [class.is-active]="activeTab === 'ai'"><a (click)="setTab('ai')">{{ 'Análise de IA' | translate }}</a></li>
+      <li [class.is-active]="activeTab === 'consolidado'"><a (click)="setTab('consolidado')">{{ 'Consolidado' | translate }}</a></li>
     </ul>
   </div>
 
   <section *ngIf="activeTab === 'overview'">
     <div class="panel-block-data p-4" *ngIf="slot.demos.length === 0">
       <p class="text-muted">
-        Nenhuma demo ainda. Vá na aba <strong>Demos</strong> e importe pelo menos uma partida
-        para começar a consolidar padrões deste time.
+        {{ 'Nenhuma demo ainda. Vá na aba' | translate }} <strong>Demos</strong> {{ 'e importe pelo menos uma partida para começar a consolidar padrões deste time.' | translate }}
       </p>
     </div>
     <ul class="overview-demo-list" *ngIf="slot.demos.length > 0">
       <li *ngFor="let demo of slot.demos; let i = index" class="panel-block-data">
         <span class="demo-number">#{{ slot.demos.length - i }}</span>
         <span class="mono demo-name">{{ demo.fileName }}</span>
-        <a class="icon-trash-btn" title="Excluir demo" (click)="removeDemo(demo.id)">
+        <a class="icon-trash-btn" [title]="'Excluir demo' | translate" (click)="removeDemo(demo.id)">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
@@ -72,13 +71,13 @@
 
   <section *ngIf="activeTab === 'demos'">
     <button class="button is-small mb-3" [class.is-loading]="importing" (click)="importDemo()">
-      + Importar demo (.dem)
+      {{ '+ Importar demo (.dem)' | translate }}
     </button>
-    <button class="button is-small mb-3" [class.is-loading]="exporting" (click)="exportSlot()" title="Gera um arquivo .csda-slot com demos + notebook desse slot pra passar pra outro analista">
-      Exportar slot
+    <button class="button is-small mb-3" [class.is-loading]="exporting" (click)="exportSlot()" [title]="'Gera um arquivo .csda-slot com demos + notebook desse slot pra passar pra outro analista' | translate">
+      {{ 'Exportar slot' | translate }}
     </button>
-    <button class="button is-small mb-3" [class.is-loading]="importingSlot" (click)="importSlot()" title="Importa demos + notebook de um arquivo .csda-slot recebido de outro analista">
-      Importar de arquivo .csda-slot
+    <button class="button is-small mb-3" [class.is-loading]="importingSlot" (click)="importSlot()" [title]="'Importa demos + notebook de um arquivo .csda-slot recebido de outro analista' | translate">
+      {{ 'Importar de arquivo .csda-slot' | translate }}
     </button>
     <p class="help is-danger" *ngIf="importError">{{ importError }}</p>
     <p class="help" *ngIf="exportMessage">{{ exportMessage }}</p>
@@ -87,11 +86,11 @@
     <table class="table is-fullwidth is-narrow demos-table" *ngIf="slot.demos.length > 0">
       <thead>
         <tr>
-          <th>Arquivo</th>
-          <th>Mapa</th>
-          <th>Placar</th>
-          <th>Adicionada em</th>
-          <th>Time do slot</th>
+          <th>{{ 'Arquivo' | translate }}</th>
+          <th>{{ 'Mapa' | translate }}</th>
+          <th>{{ 'Placar' | translate }}</th>
+          <th>{{ 'Adicionada em' | translate }}</th>
+          <th>{{ 'Time do slot' | translate }}</th>
           <th></th>
         </tr>
       </thead>
@@ -109,11 +108,11 @@
                 [class.is-warning]="!demo.myTeamSteamIds?.length"
                 (click)="toggleRoster(demo)"
               >
-                {{ demo.myTeamSteamIds?.length ? '✓ definido' : '⚠ definir time' }}
+                {{ (demo.myTeamSteamIds?.length ? '✓ definido' : '⚠ definir time') | translate }}
               </button>
             </td>
             <td>
-              <a class="icon-trash-btn" title="Excluir demo" (click)="removeDemo(demo.id)">
+              <a class="icon-trash-btn" [title]="'Excluir demo' | translate" (click)="removeDemo(demo.id)">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
@@ -127,18 +126,16 @@
           <tr *ngIf="rosterOpenFor === demo.id">
             <td colspan="6">
               <div class="roster-panel">
-                <p class="text-muted" *ngIf="rosterLoading">Carregando jogadores…</p>
+                <p class="text-muted" *ngIf="rosterLoading">{{ 'Carregando jogadores…' | translate }}</p>
                 <p class="help is-danger" *ngIf="rosterError">{{ rosterError }}</p>
                 <ng-container *ngIf="!rosterLoading && rosterSummary">
                   <p class="text-muted roster-hint">
-                    Marque os 5 jogadores que são <strong>o time deste slot</strong> nesta demo. O time troca de
-                    lado (CT/TR) no intervalo, então isso importa mais que marcar "CT" ou "TR" direto — a análise
-                    passa a considerar só as rodadas desses jogadores, em vez de misturar com o adversário.
+                    {{ 'Marque os 5 jogadores que são' | translate }} <strong>{{ 'o time deste slot' | translate }}</strong> {{ 'nesta demo. O time troca de lado (CT/TR) no intervalo, então isso importa mais que marcar "CT" ou "TR" direto — a análise passa a considerar só as rodadas desses jogadores, em vez de misturar com o adversário.' | translate }}
                   </p>
                   <div class="roster-quick-select">
-                    <span class="text-muted" style="font-size:0.75rem">Preencher automaticamente:</span>
-                    <button class="button is-small is-ghost" (click)="selectRosterSide('ct')">quem jogou mais CT</button>
-                    <button class="button is-small is-ghost" (click)="selectRosterSide('t')">quem jogou mais TR</button>
+                    <span class="text-muted" style="font-size:0.75rem">{{ 'Preencher automaticamente:' | translate }}</span>
+                    <button class="button is-small is-ghost" (click)="selectRosterSide('ct')">{{ 'quem jogou mais CT' | translate }}</button>
+                    <button class="button is-small is-ghost" (click)="selectRosterSide('t')">{{ 'quem jogou mais TR' | translate }}</button>
                   </div>
                   <div class="roster-players">
                     <label class="checkbox roster-player" *ngFor="let p of rosterSummary.playerAggregates">
@@ -148,17 +145,17 @@
                         (change)="toggleRosterPlayer(p.steamId)"
                       />
                       {{ p.name }}
-                      <span class="text-muted" style="font-size:0.75rem">({{ p.side === 'ct' ? 'CT' : 'TR' }} predominante)</span>
+                      <span class="text-muted" style="font-size:0.75rem">({{ p.side === 'ct' ? 'CT' : 'TR' }} {{ 'predominante' | translate }})</span>
                     </label>
                   </div>
                   <div class="roster-actions">
                     <span class="help is-danger" *ngIf="rosterDraft.size > 0 && rosterDraft.size !== 5">
-                      Times de CS têm 5 jogadores — você marcou {{ rosterDraft.size }}.
+                      {{ 'Times de CS têm 5 jogadores — você marcou' | translate }} {{ rosterDraft.size }}.
                     </span>
                     <button class="button is-small" [class.is-loading]="rosterSaving" (click)="saveRoster(demo)">
-                      Salvar time
+                      {{ 'Salvar time' | translate }}
                     </button>
-                    <button class="button is-small is-ghost" (click)="rosterOpenFor = null">cancelar</button>
+                    <button class="button is-small is-ghost" (click)="rosterOpenFor = null">{{ 'cancelar' | translate }}</button>
                   </div>
                 </ng-container>
               </div>
@@ -180,27 +177,25 @@
   <section *ngIf="activeTab === 'ai'" class="ai-tab">
     <div class="message is-info ai-scope-note" *ngIf="slot.demos.length > 0">
       <div class="message-body">
-        Esta análise sempre considera <strong>todas as {{ slot.demos.length }} demo(s)</strong> deste
-        slot, não só a mais recente.
+        {{ 'Esta análise sempre considera' | translate }} <strong>{{ 'todas as' | translate }} {{ slot.demos.length }} {{ 'demo(s)' | translate }}</strong> {{ 'deste slot, não só a mais recente.' | translate }}
         <ng-container *ngIf="slot.kind === 'opponent'">
-          Como este é um slot de <strong>adversário</strong>, a IA monta um relatório de
-          <strong>scouting/prep de confronto</strong>: pontos fortes a respeitar e vulnerabilidades de
-          {{ slot.name }} pra explorar no próximo jogo contra eles.
+          {{ 'Como este é um slot de' | translate }} <strong>{{ 'adversário' | translate }}</strong>, {{ 'a IA monta um relatório de' | translate }}
+          <strong>{{ 'scouting/prep de confronto' | translate }}</strong>{{ ': pontos fortes a respeitar e vulnerabilidades de' | translate }}
+          {{ slot.name }} {{ 'pra explorar no próximo jogo contra eles.' | translate }}
         </ng-container>
         <ng-container *ngIf="slot.kind === 'own'">
-          Como este é o slot do <strong>seu time</strong>, a IA monta um relatório de
-          <strong>desenvolvimento</strong>: o que está funcionando, o que não está e um plano de treino
-          pra melhorar.
+          {{ 'Como este é o slot do' | translate }} <strong>{{ 'seu time' | translate }}</strong>, {{ 'a IA monta um relatório de' | translate }}
+          <strong>{{ 'desenvolvimento' | translate }}</strong>{{ ': o que está funcionando, o que não está e um plano de treino pra melhorar.' | translate }}
         </ng-container>
       </div>
     </div>
 
     <div class="box focus-panel" *ngIf="slot.demos.length > 0">
-      <p class="label focus-hint">Foco da análise</p>
+      <p class="label focus-hint">{{ 'Foco da análise' | translate }}</p>
       <div class="field is-grouped focus-mode-select">
         <label class="radio">
           <input type="radio" name="focusMode" [checked]="focusMode === 'team'" (change)="setFocusMode('team')" />
-          {{ slot.kind === 'opponent' ? 'Time-alvo inteiro' : 'Time inteiro' }}
+          {{ (slot.kind === 'opponent' ? 'Time-alvo inteiro' : 'Time inteiro') | translate }}
         </label>
         <label class="radio">
           <input
@@ -209,15 +204,15 @@
             [checked]="focusMode === 'players'"
             (change)="setFocusMode('players')"
           />
-          Jogador(es) específico(s)
+          {{ 'Jogador(es) específico(s)' | translate }}
         </label>
       </div>
 
       <ng-container *ngIf="focusMode === 'players'">
-        <p class="text-muted" *ngIf="focusRosterLoading">Carregando jogadores…</p>
+        <p class="text-muted" *ngIf="focusRosterLoading">{{ 'Carregando jogadores…' | translate }}</p>
         <p class="text-muted" *ngIf="!focusRosterLoading && focusRoster.length === 0">
-          Nenhum jogador do time do slot identificado ainda — marque o time em pelo menos uma demo na
-          aba <a (click)="setTab('demos')">Demos</a>.
+          {{ 'Nenhum jogador do time do slot identificado ainda — marque o time em pelo menos uma demo na aba' | translate }}
+          <a (click)="setTab('demos')">Demos</a>.
         </p>
         <div class="focus-players" *ngIf="!focusRosterLoading && focusRoster.length > 0">
           <label
@@ -234,7 +229,7 @@
           </label>
         </div>
         <p class="help is-warning" *ngIf="focusRoster.length > 0 && focusSelected.size === 0">
-          Marque ao menos 1 jogador (dá pra marcar 2, 3, 4... quantos quiser) pra focar a análise nele(s).
+          {{ 'Marque ao menos 1 jogador (dá pra marcar 2, 3, 4... quantos quiser) pra focar a análise nele(s).' | translate }}
         </p>
       </ng-container>
     </div>
@@ -245,33 +240,30 @@
       [disabled]="slot.demos.length === 0 || (focusMode === 'players' && focusSelected.size === 0)"
       (click)="runAnalysis()"
     >
-      {{ slot.kind === 'opponent' ? 'Gerar plano de scouting' : 'Rodar análise de padrões' }}
+      {{ (slot.kind === 'opponent' ? 'Gerar plano de scouting' : 'Rodar análise de padrões') | translate }}
     </button>
     <p class="help is-danger" *ngIf="analysisError">{{ analysisError }}</p>
-    <p class="text-muted" *ngIf="slot.demos.length === 0">Importe ao menos uma demo antes de analisar.</p>
+    <p class="text-muted" *ngIf="slot.demos.length === 0">{{ 'Importe ao menos uma demo antes de analisar.' | translate }}</p>
 
     <ng-container *ngIf="analysisResult as result">
       <div class="message is-warning roster-pending-warning" *ngIf="result.stats.demosPendingRoster.length > 0">
         <div class="message-body">
-          {{ result.stats.demosPendingRoster.length }} demo(s) ficaram de fora das tendências porque o time do
-          slot ainda não foi marcado nelas: {{ result.stats.demosPendingRoster.join(', ') }}. Marque em
-          <a (click)="setTab('demos')">Demos</a> pra incluir.
+          {{ result.stats.demosPendingRoster.length }} {{ "demo(s) ficaram de fora das tendências porque o time do slot ainda não foi marcado nelas:" | translate }} {{ result.stats.demosPendingRoster.join(', ') }}{{ '. Marque em' | translate }}
+          <a (click)="setTab('demos')">Demos</a> {{ 'pra incluir.' | translate }}
         </div>
       </div>
       <div class="message is-warning roster-pending-warning" *ngIf="result.stats.demosLowCalibrationSample.length > 0">
         <div class="message-body">
-          {{ result.stats.demosLowCalibrationSample.length }} demo(s) tiveram poucos rounds pra calibrar ritmo/postura
-          com os dados da própria partida, então usaram um limiar padrão genérico: {{ result.stats.demosLowCalibrationSample.join(', ') }}.
-          Trate "ritmo" e "postura" dessas demos com mais cautela.
+          {{ result.stats.demosLowCalibrationSample.length }} {{ 'demo(s) tiveram poucos rounds pra calibrar ritmo/postura com os dados da própria partida, então usaram um limiar padrão genérico:' | translate }} {{ result.stats.demosLowCalibrationSample.join(', ') }}{{ '. Trate "ritmo" e "postura" dessas demos com mais cautela.' | translate }}
         </div>
       </div>
       <div class="columns">
         <div class="column is-7">
           <div class="card ai-output-card">
             <header class="card-header">
-              <p class="card-header-title">Leitura da IA</p>
+              <p class="card-header-title">{{ 'Leitura da IA' | translate }}</p>
               <span class="card-header-icon" *ngIf="lastFocusLabel">
-                <span class="tag is-dark">Foco: {{ lastFocusLabel }}</span>
+                <span class="tag is-dark">{{ 'Foco:' | translate }} {{ lastFocusLabel }}</span>
               </span>
             </header>
             <div class="card-content">
@@ -282,19 +274,19 @@
         <div class="column is-5">
           <div class="card">
             <header class="card-header">
-              <p class="card-header-title">Consolidado local</p>
+              <p class="card-header-title">{{ 'Consolidado local' | translate }}</p>
               <span class="card-header-icon">
-                <span class="tag is-dark">{{ result.stats.demosAnalyzed }} demos · {{ result.stats.roundsAnalyzed }} rounds</span>
+                <span class="tag is-dark">{{ result.stats.demosAnalyzed }} {{ 'demos' | translate }} · {{ result.stats.roundsAnalyzed }} {{ 'rounds' | translate }}</span>
               </span>
             </header>
             <div class="card-content">
               <div class="team-stats-block">
-                <h3 class="team-stats-heading is-mine">Seu Time</h3>
+                <h3 class="team-stats-heading is-mine">{{ 'Seu Time' | translate }}</h3>
                 <app-team-stats [team]="result.stats.myTeam"></app-team-stats>
               </div>
 
               <div class="team-stats-block">
-                <h3 class="team-stats-heading is-opponent">Adversário</h3>
+                <h3 class="team-stats-heading is-opponent">{{ 'Adversário' | translate }}</h3>
                 <app-team-stats [team]="result.stats.opponent"></app-team-stats>
               </div>
             </div>
@@ -306,10 +298,9 @@
 
   <section *ngIf="activeTab === 'consolidado'">
     <p class="text-muted" *ngIf="slot.demos.length === 0">
-      Importe ao menos uma demo e marque o time do slot (aba <a (click)="setTab('demos')">Demos</a>) pra
-      calcular as notas de mira e utility.
+      {{ 'Importe ao menos uma demo e marque o time do slot (aba' | translate }} <a (click)="setTab('demos')">Demos</a>{{ ') pra calcular as notas de mira e utility.' | translate }}
     </p>
-    <p class="text-muted" *ngIf="playerScoresLoading">Calculando notas…</p>
+    <p class="text-muted" *ngIf="playerScoresLoading">{{ 'Calculando notas…' | translate }}</p>
     <p class="help is-danger" *ngIf="playerScoresError">{{ playerScoresError }}</p>
     <app-consolidated-score
       *ngIf="!playerScoresLoading && slot.demos.length > 0"
