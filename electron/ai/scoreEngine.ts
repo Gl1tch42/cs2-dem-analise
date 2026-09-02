@@ -7,6 +7,7 @@ import {
   PlayerScoreHistoryEntry,
   PlayerAimStats,
   PlayerUtilityStats,
+  PlayerPositioningStats,
 } from '../storage/types';
 
 // Pesos e faixas-alvo da nota de mira/utility — ponto de partida razoável, não
@@ -64,26 +65,92 @@ const AIM_SUBMETRIC_WEIGHTS: AimWeights = {
   timeToKill: { weight: 0.1176, targetMin: 2000, targetMax: 600 },
 };
 
+// Pesos calibrados a partir do adendo "Leetify Utility Engine" fornecido pelo
+// usuário (escala 0-5): Flashbang Efficiency 4.5, HE Damage 4.0, Molotov
+// Damage 3.5, Smoke Impact 3.0, Utility Waste "Alto" (~4.0). Penalidades
+// (team flash "severa" ~3.5, dano em aliado, smoke desperdiçada) não vieram
+// com peso numérico explícito no adendo — atribuídos por proximidade da
+// linguagem usada. Soma 27.5, cada peso = X/27.5. Métricas "menor é melhor"
+// (penalidades) têm targetMin = pior/mais alto, targetMax = melhor/zero.
+//
+// Recalibrado (parcialmente) com uma segunda média de referência FACEIT
+// Level 10 fornecida pelo usuário: Enemies Flashed per Flashbang 0.66 (usado
+// como aproximação de effectiveFlashPct — vira 66% pra bater na escala do
+// campo, já que não veio um número específico pra "flash efetiva" vs
+// "qualquer flash"), Friends Flashed per Flashbang 0.5 (mantido como razão
+// crua, mesma escala do valor fornecido), Flashbangs Leading to Kills 9%
+// (esse sim já em %), Damage to Enemies per HE 8.52, Damage
+// to Teammates per HE 0.3 (usado como proxy do teamDamagePenalty completo,
+// que na verdade soma HE + molotov — sem dado de molotov ainda), Unused
+// Utility on Death $263. O usuário definiu que essa linha de stats deve
+// valer nota de utility (parte "quality", antes do blend com quantidade) ≈60
+// numa escala 0-100. Método: métricas "maior é melhor" usam piso em ~45% do
+// valor de referência (mesma heurística usada na mira) e teto resolvido pra
+// bater 60 no valor de referência; penalidades "menor é melhor" mantêm o
+// teto fixo em 0 (zero ocorrências = ideal) e o piso é resolvido pra bater 60
+// no valor de referência (equivale a piso = valor_referência × 2.5). Métricas
+// sem dado de referência (avgMolotovDamage, smokeWastedPenalty) mantidas nos
+// valores anteriores, não recalibradas.
 interface UtilityQualityWeights {
-  enemiesFlashedPct: SubmetricWeight;
-  avgBlindTimeSec: SubmetricWeight;
+  effectiveFlashPct: SubmetricWeight;
+  friendlyFlashPenalty: SubmetricWeight;
   avgHeDamage: SubmetricWeight;
-  flashAssistsPerRound: SubmetricWeight;
+  avgMolotovDamage: SubmetricWeight;
   teamDamagePenalty: SubmetricWeight;
+  smokeWastedPenalty: SubmetricWeight;
+  flashKillPct: SubmetricWeight;
+  unusedUtilityPenalty: SubmetricWeight;
 }
 
 const UTILITY_QUALITY_WEIGHTS: UtilityQualityWeights = {
-  enemiesFlashedPct: { weight: 0.3, targetMin: 20, targetMax: 60 },
-  avgBlindTimeSec: { weight: 0.2, targetMin: 0.5, targetMax: 3.0 },
-  avgHeDamage: { weight: 0.2, targetMin: 5, targetMax: 25 },
-  flashAssistsPerRound: { weight: 0.2, targetMin: 0, targetMax: 0.15 },
-  teamDamagePenalty: { weight: 0.1, targetMin: 5, targetMax: 0 },
+  effectiveFlashPct: { weight: 0.1636, targetMin: 29.7, targetMax: 90.2 },
+  friendlyFlashPenalty: { weight: 0.1273, targetMin: 1.25, targetMax: 0 },
+  avgHeDamage: { weight: 0.1455, targetMin: 3.8, targetMax: 11.7 },
+  avgMolotovDamage: { weight: 0.1273, targetMin: 5, targetMax: 22 },
+  teamDamagePenalty: { weight: 0.1091, targetMin: 0.75, targetMax: 0 },
+  smokeWastedPenalty: { weight: 0.1091, targetMin: 0.3, targetMax: 0 },
+  // % de flashbangs jogadas que resultaram em kill (flashAssists / flashesThrown),
+  // não mais por round — bate com a definição "Flashbangs Leading to Kills" do usuário.
+  flashKillPct: { weight: 0.0727, targetMin: 4.1, targetMax: 12.3 },
+  unusedUtilityPenalty: { weight: 0.1455, targetMin: 657.5, targetMax: 0 },
 };
 
 const UTILITY_QUANTITY_TARGET = { min: 0.3, max: 1.2 }; // granadas jogadas por round
 const UTILITY_QUALITY_SHARE = 0.7;
 const UTILITY_QUANTITY_SHARE = 0.3;
-const OVERALL_SPLIT = { aim: 0.6, utility: 0.4 };
+
+// Pesos calibrados a partir do adendo "Leetify Positioning Engine" (escala
+// 0-5): Trade Kill % & Trade Delay 5.0 (o item mais pesado de todos os três
+// adendos — dividido aqui em traded-death rate, isolamento, trade-kill rate e
+// delay, já que o adendo trata os quatro como uma coisa só), Opening Dueling
+// 4.0, Overexposure 4.0, Distance to Teammates 3.0. Soma 16.0, cada peso =
+// X/16. Sem dado de referência real — faixas são heurística a calibrar.
+interface PositioningWeights {
+  tradedDeathPct: SubmetricWeight;
+  isolatedDeathPenalty: SubmetricWeight;
+  tradeKillPct: SubmetricWeight;
+  tradeDelay: SubmetricWeight;
+  openingDuelWinPct: SubmetricWeight;
+  overexposurePenalty: SubmetricWeight;
+  nearestTeammateDist: SubmetricWeight;
+}
+
+const POSITIONING_WEIGHTS: PositioningWeights = {
+  tradedDeathPct: { weight: 0.09375, targetMin: 20, targetMax: 55 },
+  isolatedDeathPenalty: { weight: 0.09375, targetMin: 40, targetMax: 10 },
+  tradeKillPct: { weight: 0.0625, targetMin: 5, targetMax: 25 },
+  // Delay: menor é melhor (mais rápido vingando o aliado), dentro da janela de 3s.
+  tradeDelay: { weight: 0.0625, targetMin: 2500, targetMax: 1200 },
+  openingDuelWinPct: { weight: 0.25, targetMin: 35, targetMax: 65 },
+  overexposurePenalty: { weight: 0.25, targetMin: 35, targetMax: 5 },
+  // Distância: mais perto do aliado mais próximo é melhor (potencial de trade) —
+  // não modela a exceção de Lurker (sem dado de função/role disponível).
+  nearestTeammateDist: { weight: 0.1875, targetMin: 1200, targetMax: 400 },
+};
+// Com a nota de Posicionamento entrando, mira continua a maior fatia mas
+// abre espaço pra posicionamento (Trade Kill sozinho pesa 5.0/5 no adendo,
+// o item mais pesado de qualquer um dos três engines) — split ajustável.
+const OVERALL_SPLIT = { aim: 0.45, utility: 0.25, positioning: 0.3 };
 
 function normalize(value: number, targetMin: number, targetMax: number): number {
   if (targetMax === targetMin) return 50;
@@ -128,12 +195,24 @@ export function computeUtilityScore(utility: PlayerUtilityStats, roundsInDemo: n
     sum += normalize(value, cfg.targetMin, cfg.targetMax) * cfg.weight;
     totalWeight += cfg.weight;
   };
-  add(utility.enemiesFlashedPct, UTILITY_QUALITY_WEIGHTS.enemiesFlashedPct);
-  add(utility.avgBlindTimeSec, UTILITY_QUALITY_WEIGHTS.avgBlindTimeSec);
+  add(utility.effectiveFlashPct, UTILITY_QUALITY_WEIGHTS.effectiveFlashPct);
+  // Razão por flashbang jogada, não por round — bate com "Friends Flashed per
+  // Flashbang" (mantido como razão crua, não %, pra ficar na mesma escala do
+  // valor de referência 0.5 fornecido pelo usuário).
+  const friendsFlashedPerFlashbang = utility.flashesThrown ? utility.friendsFlashed / utility.flashesThrown : 0;
+  add(friendsFlashedPerFlashbang, UTILITY_QUALITY_WEIGHTS.friendlyFlashPenalty);
   add(utility.avgHeDamage, UTILITY_QUALITY_WEIGHTS.avgHeDamage);
-  const flashAssistsPerRound = roundsInDemo ? utility.flashAssists / roundsInDemo : 0;
-  add(flashAssistsPerRound, UTILITY_QUALITY_WEIGHTS.flashAssistsPerRound);
-  add(utility.avgHeTeamDamage, UTILITY_QUALITY_WEIGHTS.teamDamagePenalty);
+  add(utility.avgMolotovDamage, UTILITY_QUALITY_WEIGHTS.avgMolotovDamage);
+  const teamDamage = utility.avgHeTeamDamage + utility.avgMolotovTeamDamage;
+  add(teamDamage, UTILITY_QUALITY_WEIGHTS.teamDamagePenalty);
+  const smokesWastedPerRound = roundsInDemo ? utility.smokesWasted / roundsInDemo : 0;
+  add(smokesWastedPerRound, UTILITY_QUALITY_WEIGHTS.smokeWastedPenalty);
+  const flashKillPct = utility.flashesThrown ? (100 * utility.flashAssists) / utility.flashesThrown : 0;
+  add(flashKillPct, UTILITY_QUALITY_WEIGHTS.flashKillPct);
+  // $ de utility não usada por morte-com-utility-sobrando, não diluído por todos os
+  // rounds — bate com "Unused Utility on Death".
+  const unusedUtilityPerDeath = utility.unusedUtilityRounds ? utility.unusedUtilityValue / utility.unusedUtilityRounds : 0;
+  add(unusedUtilityPerDeath, UTILITY_QUALITY_WEIGHTS.unusedUtilityPenalty);
   const qualityScore = totalWeight ? sum / totalWeight : 0;
 
   const totalThrown = utility.flashesThrown + utility.smokesThrown + utility.molotovsThrown + utility.heThrown;
@@ -143,8 +222,31 @@ export function computeUtilityScore(utility: PlayerUtilityStats, roundsInDemo: n
   return round1(qualityScore * UTILITY_QUALITY_SHARE + quantityScore * UTILITY_QUANTITY_SHARE);
 }
 
-export function computeOverallScore(aimScore: number, utilityScore: number): number {
-  return round1(aimScore * OVERALL_SPLIT.aim + utilityScore * OVERALL_SPLIT.utility);
+export function computePositioningScore(positioning: PlayerPositioningStats): number {
+  let sum = 0;
+  let totalWeight = 0;
+  const add = (value: number, cfg: SubmetricWeight) => {
+    sum += normalize(value, cfg.targetMin, cfg.targetMax) * cfg.weight;
+    totalWeight += cfg.weight;
+  };
+  add(positioning.tradedDeathPct, POSITIONING_WEIGHTS.tradedDeathPct);
+  add(positioning.isolatedDeathPct, POSITIONING_WEIGHTS.isolatedDeathPenalty);
+  add(positioning.tradeKillPct, POSITIONING_WEIGHTS.tradeKillPct);
+  if (positioning.avgTradeDelayMs !== null) {
+    add(positioning.avgTradeDelayMs, POSITIONING_WEIGHTS.tradeDelay);
+  }
+  add(positioning.openingDuelWinPct, POSITIONING_WEIGHTS.openingDuelWinPct);
+  add(positioning.overexposedDeathPct, POSITIONING_WEIGHTS.overexposurePenalty);
+  if (positioning.avgNearestTeammateDist !== null) {
+    add(positioning.avgNearestTeammateDist, POSITIONING_WEIGHTS.nearestTeammateDist);
+  }
+  return totalWeight ? round1(sum / totalWeight) : 0;
+}
+
+export function computeOverallScore(aimScore: number, utilityScore: number, positioningScore: number): number {
+  return round1(
+    aimScore * OVERALL_SPLIT.aim + utilityScore * OVERALL_SPLIT.utility + positioningScore * OVERALL_SPLIT.positioning
+  );
 }
 
 // Acumulador guarda somas cruas (nunca médias parciais encadeadas) — as médias
@@ -188,9 +290,29 @@ interface PlayerScoreAccumulator {
   avgBlindTimeSecSum: number;
   avgHeDamageSum: number;
   avgHeTeamDamageSum: number;
+  effectiveEnemyFlashes: number;
+  avgFriendlyBlindTimeSecSum: number;
+  avgMolotovDamageSum: number;
+  avgMolotovTeamDamageSum: number;
+  smokesWasted: number;
+  unusedUtilityValue: number;
+  unusedUtilityRounds: number;
+
+  openingDuelWinPctSum: number;
+  openingDuelParticipationPctSum: number;
+  tradeKills: number;
+  tradeKillPctSum: number;
+  tradedDeathPctSum: number;
+  isolatedDeathPctSum: number;
+  tradeDelaySumMs: number;
+  tradeDelayCount: number;
+  overexposedDeathPctSum: number;
+  nearestTeammateDistSum: number;
+  nearestTeammateDistCount: number;
 
   aimScoreSum: number;
   utilityScoreSum: number;
+  positioningScoreSum: number;
   overallScoreSum: number;
   history: PlayerScoreHistoryEntry[];
 }
@@ -227,8 +349,27 @@ function newAccumulator(name: string): PlayerScoreAccumulator {
     avgBlindTimeSecSum: 0,
     avgHeDamageSum: 0,
     avgHeTeamDamageSum: 0,
+    effectiveEnemyFlashes: 0,
+    avgFriendlyBlindTimeSecSum: 0,
+    avgMolotovDamageSum: 0,
+    avgMolotovTeamDamageSum: 0,
+    smokesWasted: 0,
+    unusedUtilityValue: 0,
+    unusedUtilityRounds: 0,
+    openingDuelWinPctSum: 0,
+    openingDuelParticipationPctSum: 0,
+    tradeKills: 0,
+    tradeKillPctSum: 0,
+    tradedDeathPctSum: 0,
+    isolatedDeathPctSum: 0,
+    tradeDelaySumMs: 0,
+    tradeDelayCount: 0,
+    overexposedDeathPctSum: 0,
+    nearestTeammateDistSum: 0,
+    nearestTeammateDistCount: 0,
     aimScoreSum: 0,
     utilityScoreSum: 0,
+    positioningScoreSum: 0,
     overallScoreSum: 0,
     history: [],
   };
@@ -253,11 +394,12 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
 
     for (const player of summary.playerAggregates) {
       if (!myIdSet.has(player.steamId)) continue;
-      if (!player.aim || !player.utility) continue; // demo parseada antes desta feature
+      if (!player.aim || !player.utility || !player.positioning) continue; // demo parseada antes desta feature
 
       const aimScore = computeAimScore(player.aim);
       const utilityScore = computeUtilityScore(player.utility, roundsInDemo);
-      const overallScore = computeOverallScore(aimScore, utilityScore);
+      const positioningScore = computePositioningScore(player.positioning);
+      const overallScore = computeOverallScore(aimScore, utilityScore, positioningScore);
 
       const acc = accMap.get(player.steamId) ?? newAccumulator(player.name);
       acc.name = player.name;
@@ -298,9 +440,33 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       acc.avgBlindTimeSecSum += player.utility.avgBlindTimeSec;
       acc.avgHeDamageSum += player.utility.avgHeDamage;
       acc.avgHeTeamDamageSum += player.utility.avgHeTeamDamage;
+      acc.effectiveEnemyFlashes += player.utility.effectiveEnemyFlashes;
+      acc.avgFriendlyBlindTimeSecSum += player.utility.avgFriendlyBlindTimeSec;
+      acc.avgMolotovDamageSum += player.utility.avgMolotovDamage;
+      acc.avgMolotovTeamDamageSum += player.utility.avgMolotovTeamDamage;
+      acc.smokesWasted += player.utility.smokesWasted;
+      acc.unusedUtilityValue += player.utility.unusedUtilityValue;
+      acc.unusedUtilityRounds += player.utility.unusedUtilityRounds;
+
+      acc.openingDuelWinPctSum += player.positioning.openingDuelWinPct;
+      acc.openingDuelParticipationPctSum += player.positioning.openingDuelParticipationPct;
+      acc.tradeKills += player.positioning.tradeKills;
+      acc.tradeKillPctSum += player.positioning.tradeKillPct;
+      acc.tradedDeathPctSum += player.positioning.tradedDeathPct;
+      acc.isolatedDeathPctSum += player.positioning.isolatedDeathPct;
+      if (player.positioning.avgTradeDelayMs !== null) {
+        acc.tradeDelaySumMs += player.positioning.avgTradeDelayMs;
+        acc.tradeDelayCount++;
+      }
+      acc.overexposedDeathPctSum += player.positioning.overexposedDeathPct;
+      if (player.positioning.avgNearestTeammateDist !== null) {
+        acc.nearestTeammateDistSum += player.positioning.avgNearestTeammateDist;
+        acc.nearestTeammateDistCount++;
+      }
 
       acc.aimScoreSum += aimScore;
       acc.utilityScoreSum += utilityScore;
+      acc.positioningScoreSum += positioningScore;
       acc.overallScoreSum += overallScore;
       acc.history.push({
         demoId: demo.id,
@@ -309,9 +475,11 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         addedAt: demo.addedAt,
         aimScore,
         utilityScore,
+        positioningScore,
         overallScore,
         aim: player.aim,
         utility: player.utility,
+        positioning: player.positioning,
       });
 
       accMap.set(player.steamId, acc);
@@ -325,6 +493,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
       demosCount: acc.demosCount,
       avgAimScore: acc.demosCount ? round1(acc.aimScoreSum / acc.demosCount) : 0,
       avgUtilityScore: acc.demosCount ? round1(acc.utilityScoreSum / acc.demosCount) : 0,
+      avgPositioningScore: acc.demosCount ? round1(acc.positioningScoreSum / acc.demosCount) : 0,
       avgOverallScore: acc.demosCount ? round1(acc.overallScoreSum / acc.demosCount) : 0,
       aim: {
         shotsFired: acc.shotsFired,
@@ -356,6 +525,29 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         avgBlindTimeSec: acc.demosCount ? round1(acc.avgBlindTimeSecSum / acc.demosCount) : 0,
         avgHeDamage: acc.demosCount ? round1(acc.avgHeDamageSum / acc.demosCount) : 0,
         avgHeTeamDamage: acc.demosCount ? round1(acc.avgHeTeamDamageSum / acc.demosCount) : 0,
+        effectiveEnemyFlashes: acc.effectiveEnemyFlashes,
+        effectiveFlashPct: acc.flashesThrown ? round1((100 * acc.effectiveEnemyFlashes) / acc.flashesThrown) : 0,
+        avgFriendlyBlindTimeSec: acc.demosCount ? round1(acc.avgFriendlyBlindTimeSecSum / acc.demosCount) : 0,
+        avgMolotovDamage: acc.demosCount ? round1(acc.avgMolotovDamageSum / acc.demosCount) : 0,
+        avgMolotovTeamDamage: acc.demosCount ? round1(acc.avgMolotovTeamDamageSum / acc.demosCount) : 0,
+        smokesWasted: acc.smokesWasted,
+        unusedUtilityValue: acc.unusedUtilityValue,
+        unusedUtilityRounds: acc.unusedUtilityRounds,
+      },
+      positioning: {
+        openingDuelWinPct: acc.demosCount ? round1(acc.openingDuelWinPctSum / acc.demosCount) : 0,
+        openingDuelParticipationPct: acc.demosCount
+          ? round1(acc.openingDuelParticipationPctSum / acc.demosCount)
+          : 0,
+        tradeKills: acc.tradeKills,
+        tradeKillPct: acc.demosCount ? round1(acc.tradeKillPctSum / acc.demosCount) : 0,
+        tradedDeathPct: acc.demosCount ? round1(acc.tradedDeathPctSum / acc.demosCount) : 0,
+        isolatedDeathPct: acc.demosCount ? round1(acc.isolatedDeathPctSum / acc.demosCount) : 0,
+        avgTradeDelayMs: acc.tradeDelayCount ? round1(acc.tradeDelaySumMs / acc.tradeDelayCount) : null,
+        overexposedDeathPct: acc.demosCount ? round1(acc.overexposedDeathPctSum / acc.demosCount) : 0,
+        avgNearestTeammateDist: acc.nearestTeammateDistCount
+          ? round1(acc.nearestTeammateDistSum / acc.nearestTeammateDistCount)
+          : null,
       },
       history: acc.history.sort((a, b) => a.addedAt.localeCompare(b.addedAt)),
     }))

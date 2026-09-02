@@ -2,7 +2,7 @@ import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Outpu
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElectronService } from '../../core/services/electron.service';
-import { DemoRecord, DemoSummary, KeyPosition, RoundBlind, RoundDeath, RoundSummary } from '../../core/models/slot.model';
+import { DemoRecord, DemoSummary, GrenadePathPoint, KeyPosition, RoundBlind, RoundDeath, RoundSummary } from '../../core/models/slot.model';
 import { RADAR_CALIBRATION, RADAR_REFERENCE_SIZE, RadarCalibration } from './radar-calibration';
 import { NotebookComponent } from '../notebook/notebook.component';
 
@@ -808,11 +808,32 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     targetX: number,
     targetY: number,
     detonateT: number,
-    fuseSeconds: number
+    fuseSeconds: number,
+    path?: GrenadePathPoint[]
   ) {
-    if (!player) return;
     const t = this.currentTime;
     if (t > detonateT) return;
+
+    // Voo real (com quiques em parede) veio de parse_grenades() no backend —
+    // usa direto em vez da aproximação em linha reta.
+    if (path && path.length >= 2) {
+      if (t < path[0].t) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      path.forEach((p, i) => {
+        const { px, py } = this.toCanvasXY(p.x, p.y, width, height);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    if (!player) return;
     const origin = this.findGrenadeOrigin(round, player, detonateT, fuseSeconds);
     if (!origin || t < origin.t) return;
 
@@ -835,19 +856,19 @@ export class Map2dComponent implements OnChanges, OnDestroy {
     if (!round) return;
 
     for (const h of round.he ?? []) {
-      this.drawGrenadeTrail(ctx, width, height, round, h.player, h.x, h.y, h.t, HE_FUSE_SECONDS);
+      this.drawGrenadeTrail(ctx, width, height, round, h.player, h.x, h.y, h.t, HE_FUSE_SECONDS, h.path);
     }
     for (const f of round.flashes ?? []) {
-      this.drawGrenadeTrail(ctx, width, height, round, f.player, f.x, f.y, f.t, FLASH_FUSE_SECONDS);
+      this.drawGrenadeTrail(ctx, width, height, round, f.player, f.x, f.y, f.t, FLASH_FUSE_SECONDS, f.path);
     }
     for (const s of round.smokes ?? []) {
-      this.drawGrenadeTrail(ctx, width, height, round, s.player, s.x, s.y, s.startT, SMOKE_FUSE_SECONDS);
+      this.drawGrenadeTrail(ctx, width, height, round, s.player, s.x, s.y, s.startT, SMOKE_FUSE_SECONDS, s.path);
     }
     for (const fr of round.fires ?? []) {
-      this.drawGrenadeTrail(ctx, width, height, round, fr.player, fr.x, fr.y, fr.startT, FIRE_FUSE_SECONDS);
+      this.drawGrenadeTrail(ctx, width, height, round, fr.player, fr.x, fr.y, fr.startT, FIRE_FUSE_SECONDS, fr.path);
     }
     for (const d of round.decoys ?? []) {
-      this.drawGrenadeTrail(ctx, width, height, round, d.player, d.x, d.y, d.startT, DECOY_FUSE_SECONDS);
+      this.drawGrenadeTrail(ctx, width, height, round, d.player, d.x, d.y, d.startT, DECOY_FUSE_SECONDS, d.path);
     }
   }
 

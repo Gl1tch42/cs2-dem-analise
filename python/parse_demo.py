@@ -192,8 +192,115 @@ def event_xy(row):
         y = getattr(row, "Y", None)
     return x, y
 
+GRENADE_PATH_SEGMENT_GAP_TICKS = 16  # ~0.25s a 64 tick/s: quebra o df em voos distintos
+GRENADE_PATH_MATCH_TOLERANCE_TICKS = 64  # ~1s: janela p/ casar o fim do voo com o evento de detonação
+
+def normalize_grenade_category(raw) -> Optional[str]:
+    """demoparser2 não documenta de forma confiável o texto exato de
+    `grenade_type` (varia por versão/capitalização — ver README, item 1).
+    Casa por substring em vez de comparar contra um enum fixo."""
+    if raw is None:
+        return None
+    s = str(raw).strip().lower()
+    if not s or s == "nan":
+        return None
+    if "decoy" in s:
+        return "decoy"
+    if "flash" in s:
+        return "flashbang"
+    if "smoke" in s:
+        return "smokegrenade"
+    if "molotov" in s or "incendiary" in s or "inferno" in s:
+        return "molotov"
+    if "he" in s:
+        return "he"
+    return None
+
+def build_grenade_flight_paths(grenades_df) -> dict:
+    """`parser.parse_grenades()` traz 1 linha por TICK da posição real do
+    projétil (inclui quiques em parede — a demo não interpola em linha reta
+    do lançador até a detonação). Agrupa essas linhas em voos individuais
+    por (steamid do lançador, categoria da granada), retornando
+    {(steamid, categoria): [voo1, voo2, ...]} onde cada voo é uma lista
+    ordenada de (tick, x, y)."""
+    paths: dict = {}
+    if grenades_df is None or len(grenades_df) == 0:
+        return paths
+    cols = set(grenades_df.columns)
+    if "tick" not in cols:
+        return paths
+    # Nomes de coluna variam entre versões do demoparser2 (ver README, item 1
+    # — "thrower_steamid" nem sempre existe, o real costuma ser "steamid").
+    thrower_col = next((c for c in ("thrower_steamid", "steamid") if c in cols), None)
+    type_col = "grenade_type" if "grenade_type" in cols else None
+    x_col = next((c for c in ("X", "x") if c in cols), None)
+    y_col = next((c for c in ("Y", "y") if c in cols), None)
+    if thrower_col is None or type_col is None or x_col is None or y_col is None:
+        return paths
+
+    raw_points: dict = {}
+    for row in grenades_df.itertuples():
+        thrower = getattr(row, thrower_col, None)
+        if thrower is None or str(thrower) == "nan":
+            continue
+        category = normalize_grenade_category(getattr(row, type_col, None))
+        if category is None:
+            continue
+        x = getattr(row, x_col, None)
+        y = getattr(row, y_col, None)
+        if x is None or y is None or str(x) == "nan" or str(y) == "nan":
+            continue
+        try:
+            key = (int(float(thrower)), category)
+        except (ValueError, TypeError):
+            continue
+        raw_points.setdefault(key, []).append((int(row.tick), float(x), float(y)))
+
+    for key, points in raw_points.items():
+        points.sort(key=lambda p: p[0])
+        flights = []
+        current: list = []
+        last_tick = None
+        for tick, x, y in points:
+            if last_tick is not None and tick - last_tick > GRENADE_PATH_SEGMENT_GAP_TICKS:
+                if len(current) >= 2:
+                    flights.append(current)
+                current = []
+            if not current or tick != current[-1][0]:
+                current.append((tick, x, y))
+            last_tick = tick
+        if len(current) >= 2:
+            flights.append(current)
+        if flights:
+            paths[key] = flights
+    return paths
+
+def find_grenade_path(grenade_paths: dict, thrower_id, category: str, detonate_tick: int, freeze_tick: int):
+    """Acha o voo (com o quique real, se houve) cujo fim bate com o tick de
+    detonação/ignição desse evento específico, e converte pra segundos
+    relativos ao freeze do round."""
+    if not grenade_paths or thrower_id is None or category is None:
+        return None
+    flights = grenade_paths.get((thrower_id, category))
+    if not flights:
+        return None
+    best = None
+    best_diff = None
+    for flight in flights:
+        diff = abs(flight[-1][0] - detonate_tick)
+        if best_diff is None or diff < best_diff:
+            best_diff = diff
+            best = flight
+    if best is None or best_diff > GRENADE_PATH_MATCH_TOLERANCE_TICKS:
+        return None
+    return [
+        {"x": round(x, 1), "y": round(y, 1), "t": round((tick - freeze_tick) / TICK_RATE, 1)}
+        for tick, x, y in best
+    ]
+
 def pair_grenade_lifespan(
-    start_df, end_df, freeze_tick: int, end_tick: int, default_duration_ticks: int, player_names: dict = None
+    start_df, end_df, freeze_tick: int, end_tick: int, default_duration_ticks: int, player_names: dict = None,
+    grenade_paths: dict = None, category: str = None,
 ):
     results = []
     if start_df is None or "tick" not in start_df.columns:
@@ -226,10 +333,14 @@ def pair_grenade_lifespan(
             "startT": round((start_tick - freeze_tick) / TICK_RATE, 1),
             "endT": round((candidate_end - freeze_tick) / TICK_RATE, 1),
         }
-        if player_names is not None:
-            thrower_id = getattr(row, "user_steamid", None)
-            if thrower_id is not None and str(thrower_id) != "nan":
-                entry["player"] = player_names.get(int(thrower_id), str(int(thrower_id)))
+        thrower_id = getattr(row, "user_steamid", None)
+        has_thrower = thrower_id is not None and str(thrower_id) != "nan"
+        if player_names is not None and has_thrower:
+            entry["player"] = player_names.get(int(thrower_id), str(int(thrower_id)))
+        if grenade_paths and category and has_thrower:
+            path = find_grenade_path(grenade_paths, int(thrower_id), category, start_tick, freeze_tick)
+            if path:
+                entry["path"] = path
         results.append(entry)
     return results
 
@@ -308,10 +419,32 @@ def main():
     decoy_start_df = safe_parse_event(parser, "decoy_started")
     decoy_end_df = safe_parse_event(parser, "decoy_detonate")
 
+    grenades_df = None
+    try:
+        grenades_df = parser.parse_grenades()
+    except Exception as exc:
+        eprint(f"[parse_demo] aviso: parse_grenades falhou ({exc})")
+    grenade_paths = build_grenade_flight_paths(grenades_df)
+    # item_purchase alimenta "Utility Waste" (dinheiro morto com granada não jogada
+    # na mão) — o nome do campo do item comprado varia entre versões/wrappers do
+    # demoparser2 ("weapon" ou "item"), então tentamos os dois e usamos o que vier.
+    purchase_df = safe_parse_event(parser, "item_purchase", optional_other=["weapon", "item"])
+
     has_hitgroup = hurt_df is not None and "hitgroup" in hurt_df.columns
     has_hurt_weapon = hurt_df is not None and "weapon" in hurt_df.columns
     has_fire_weapon = fire_df is not None and "weapon" in fire_df.columns
     has_blind_attacker = blind_df is not None and "attacker_steamid" in blind_df.columns
+    has_purchase_weapon = purchase_df is not None and "weapon" in purchase_df.columns
+    has_purchase_item = purchase_df is not None and "item" in purchase_df.columns
+
+    GRENADE_PRICES = {
+        "flashbang": 200,
+        "smokegrenade": 300,
+        "hegrenade": 300,
+        "molotov": 400,
+        "incgrenade": 600,
+        "decoy": 50,
+    }
 
     NON_GUN_WEAPONS = {
         "hegrenade", "flashbang", "smokegrenade", "molotov", "incgrenade",
@@ -569,8 +702,25 @@ def main():
     player_friends_flashed: dict = {}
     player_blinds_caused: dict = {}
     player_blind_duration_sum: dict = {}
+    player_friendly_blind_duration_sum: dict = {}
+    player_effective_enemy_flashes: dict = {}
     player_he_damage_enemy: dict = {}
     player_he_damage_team: dict = {}
+    player_molotov_damage_enemy: dict = {}
+    player_molotov_damage_team: dict = {}
+    player_smokes_wasted: dict = {}
+    player_unused_utility_value: dict = {}
+    player_unused_utility_rounds: dict = {}
+
+    # --- Posicionamento ---
+    player_trade_kills: dict = {}
+    player_traded_deaths: dict = {}
+    player_isolated_deaths: dict = {}
+    player_trade_delay_sum_ms: dict = {}
+    player_trade_delay_count: dict = {}
+    player_overexposed_deaths: dict = {}
+    player_nearest_teammate_dist_sum: dict = {}
+    player_nearest_teammate_dist_count: dict = {}
 
     def bump(d: dict, key, amount=1):
         d[key] = d.get(key, 0) + amount
@@ -585,6 +735,15 @@ def main():
     EYE_HEIGHT_OFFSET = 64.0
     MIN_HP_FOR_TTK = 80.0
     SHOOTER_BLIND_THRESHOLD_SECONDS = 1.0
+    FLASH_IGNORE_DURATION_SECONDS = 1.0  # cegueira mais curta que isso é desconsiderada por completo
+    FLASH_EFFECTIVE_DURATION_SECONDS = 1.5  # cegueira em inimigo a partir daqui conta como "efetiva"
+
+    # --- Posicionamento ---
+    TRADE_WINDOW_SECONDS = 3.0
+    TRADE_DISTANCE_THRESHOLD = 1500.0  # descarta "trade" do outro lado do mapa
+    ISOLATION_DISTANCE_THRESHOLD = 1200.0  # sem aliado vivo mais perto que isso = morte isolada
+    OVEREXPOSURE_SIGHT_DISTANCE = 1600.0
+    OVEREXPOSURE_FOV_DEG = 50.0  # cone de visão do inimigo pra contar como "provável visão"
 
     def angle_to_target_deg(shooter_row, target_row) -> Optional[float]:
         if not (has_pitch and has_yaw and has_z):
@@ -1052,11 +1211,21 @@ def main():
                             player_ttk_sum_ms[attacker_id] = player_ttk_sum_ms.get(attacker_id, 0.0) + ttk_ms
                             bump(player_ttk_count, attacker_id)
 
-        # --- Utility: dano de HE separado entre inimigo/aliado ---
+        # --- Utility: dano de HE/molotov separado entre inimigo/aliado, com "overkill"
+        # descontado (dano creditado não passa da vida que a vítima tinha antes do
+        # hit — senão um golpe de misericórdia de 40 de dano numa vítima com 10 de
+        # vida infla o dano "real" retirado). Vida "antes do hit" é aproximada pelo
+        # sample de tick disponível mais próximo ANTES do tick do hurt (nem sempre
+        # é o tick imediatamente anterior, já que a amostragem de posição é esparsa
+        # fora das janelas densas de T_spot — mas é o melhor proxy sem amostrar
+        # 'health' em todo tick da partida só pra isso).
         if round_hurts is not None and has_hurt_weapon:
             for h in round_hurts.itertuples():
                 weapon = getattr(h, "weapon", None)
-                if weapon is None or str(weapon).lower() != "hegrenade":
+                weapon_low = str(weapon).lower() if weapon is not None else ""
+                is_he = weapon_low == "hegrenade"
+                is_molotov = weapon_low in ("molotov", "incgrenade")
+                if not is_he and not is_molotov:
                     continue
                 attacker_id = getattr(h, "attacker_steamid", None)
                 user_id = getattr(h, "user_steamid", None)
@@ -1065,15 +1234,27 @@ def main():
                 if user_id is None or str(user_id) == "nan":
                     continue
                 attacker_id = int(attacker_id)
+                user_id_i = int(user_id)
                 attacker_side = side_map.get(attacker_id)
-                victim_side = side_map.get(int(user_id))
+                victim_side = side_map.get(user_id_i)
                 if attacker_side is None or victim_side is None:
                     continue
-                dmg = getattr(h, "dmg_health", 0) or 0
+                dmg = float(getattr(h, "dmg_health", 0) or 0)
+
+                hurt_tick_i = int(h.tick)
+                pre_hit_rows = nearest_rows_at_or_before(hurt_tick_i - 1)
+                pre_hit_rows = pre_hit_rows[pre_hit_rows["steamid"] == user_id_i]
+                if len(pre_hit_rows) > 0:
+                    hp_before = pre_hit_rows.iloc[0].get("health")
+                    if hp_before is not None and str(hp_before) != "nan":
+                        dmg = min(dmg, max(0.0, float(hp_before)))
+
+                enemy_dict = player_he_damage_enemy if is_he else player_molotov_damage_enemy
+                team_dict = player_he_damage_team if is_he else player_molotov_damage_team
                 if victim_side == attacker_side:
-                    bump(player_he_damage_team, attacker_id, float(dmg))
+                    bump(team_dict, attacker_id, dmg)
                 else:
-                    bump(player_he_damage_enemy, attacker_id, float(dmg))
+                    bump(enemy_dict, attacker_id, dmg)
 
         if round_deaths is not None and len(round_deaths) > 0:
             alive = {"ct": set(), "t": set()}
@@ -1163,9 +1344,107 @@ def main():
         for thrower_id, n in count_utility_by_player(he_df).items():
             bump(player_he_thrown, thrower_id, n)
 
+        # Smoke "no próprio pé" — landing muito perto de onde o jogador estava na
+        # detonação. Não avalia se a smoke cobriu um ângulo estratégico relevante
+        # (isso precisaria de uma base de lineups por mapa que não temos) — só
+        # descarta o caso mais óbvio de desperdício.
+        SMOKE_OWN_FEET_RADIUS = 150.0
+        if smoke_start_df is not None and "tick" in smoke_start_df.columns:
+            round_smokes = smoke_start_df[(smoke_start_df["tick"] > freeze_tick) & (smoke_start_df["tick"] <= end_tick)]
+            for sm in round_smokes.itertuples():
+                thrower_id = getattr(sm, "user_steamid", None)
+                if thrower_id is None or str(thrower_id) == "nan":
+                    continue
+                thrower_id = int(thrower_id)
+                if thrower_id not in side_map:
+                    continue
+                sx, sy = event_xy(sm)
+                if sx is None or str(sx) == "nan":
+                    continue
+                trow = rows_at(int(sm.tick))
+                trow = trow[trow["steamid"] == thrower_id]
+                if len(trow) == 0:
+                    continue
+                px, py = trow.iloc[0].get("X"), trow.iloc[0].get("Y")
+                if px is None or str(px) == "nan":
+                    continue
+                dist = ((float(sx) - float(px)) ** 2 + (float(sy) - float(py)) ** 2) ** 0.5
+                if dist <= SMOKE_OWN_FEET_RADIUS:
+                    bump(player_smokes_wasted, thrower_id)
+
+        # Utility Waste: granada comprada e não jogada quando o jogador morre na
+        # rodada. Usa item_purchase (preço real de cada item) contra o que foi de
+        # fato jogado (já contado acima) — molotov/incendiária compartilham a
+        # mesma contagem "jogada" (inferno_startburn não diferencia o lado que
+        # iniciou o fogo), então usa o preço médio do que foi comprado daquele
+        # grupo na rodada como aproximação.
+        TYPE_MERGE = {
+            "flashbang": "flashbang", "smokegrenade": "smokegrenade", "hegrenade": "hegrenade",
+            "molotov": "fire", "incgrenade": "fire", "decoy": "decoy",
+        }
+        purchase_count_by_player_type: dict = {}
+        purchase_value_by_player_type: dict = {}
+        if purchase_df is not None and "tick" in purchase_df.columns:
+            round_purchases = purchase_df[(purchase_df["tick"] > freeze_tick) & (purchase_df["tick"] <= end_tick)]
+            item_col = "weapon" if has_purchase_weapon else ("item" if has_purchase_item else None)
+            if item_col is not None:
+                for row in round_purchases.itertuples():
+                    buyer_id = getattr(row, "user_steamid", None)
+                    item_name = getattr(row, item_col, None)
+                    if buyer_id is None or str(buyer_id) == "nan" or item_name is None or str(item_name) == "nan":
+                        continue
+                    item_low = str(item_name).lower()
+                    merged = TYPE_MERGE.get(item_low)
+                    if merged is None:
+                        continue
+                    buyer_id = int(buyer_id)
+                    if buyer_id not in side_map:
+                        continue
+                    cper = purchase_count_by_player_type.setdefault(buyer_id, {})
+                    vper = purchase_value_by_player_type.setdefault(buyer_id, {})
+                    cper[merged] = cper.get(merged, 0) + 1
+                    vper[merged] = vper.get(merged, 0.0) + GRENADE_PRICES[item_low]
+
+        if purchase_count_by_player_type:
+            thrown_by_player_type: dict = {}
+            for type_name, df in (
+                ("flashbang", flash_df),
+                ("smokegrenade", smoke_start_df),
+                ("hegrenade", he_df),
+                ("fire", fire_start_df),
+                ("decoy", decoy_start_df),
+            ):
+                for thrower_id, n in count_utility_by_player(df).items():
+                    per_type = thrown_by_player_type.setdefault(thrower_id, {})
+                    per_type[type_name] = per_type.get(type_name, 0) + n
+
+            died_this_round = set()
+            if round_deaths is not None:
+                for d in round_deaths.itertuples():
+                    uid = getattr(d, "user_steamid", None)
+                    if uid is not None and str(uid) != "nan":
+                        died_this_round.add(int(uid))
+
+            for buyer_id, purchased in purchase_count_by_player_type.items():
+                if buyer_id not in died_this_round:
+                    continue
+                thrown = thrown_by_player_type.get(buyer_id, {})
+                values = purchase_value_by_player_type.get(buyer_id, {})
+                round_wasted = 0.0
+                for gtype, bought_n in purchased.items():
+                    leftover = bought_n - thrown.get(gtype, 0)
+                    if leftover > 0 and bought_n > 0:
+                        avg_price = values.get(gtype, 0.0) / bought_n
+                        round_wasted += leftover * avg_price
+                if round_wasted > 0:
+                    bump(player_unused_utility_value, buyer_id, round_wasted)
+                    bump(player_unused_utility_rounds, buyer_id)
+
         # Flash assists / cegadas em aliado vs inimigo — só dá pra calcular se o
         # evento player_blind desta demo expôs quem jogou a flash (attacker_steamid);
         # quando não expõe, essas métricas ficam zeradas (ver has_blind_attacker).
+        # Cegueira <1s (tipicamente virada de rosto rápida) é ignorada por completo;
+        # >=1.5s em inimigo conta como "efetiva" (Flashbang Efficiency).
         if blind_df is not None and has_blind_attacker and "tick" in blind_df.columns:
             round_blinds_all = blind_df[(blind_df["tick"] > freeze_tick) & (blind_df["tick"] <= end_tick)]
             for b in round_blinds_all.itertuples():
@@ -1181,9 +1460,9 @@ def main():
                 if thrower_id not in side_map:
                     continue
                 has_duration = duration is not None and str(duration) != "nan"
-                if has_duration:
-                    bump(player_blind_duration_sum, thrower_id, float(duration))
-                    bump(player_blinds_caused, thrower_id)
+                duration_val = float(duration) if has_duration else None
+                if has_duration and duration_val < FLASH_IGNORE_DURATION_SECONDS:
+                    continue
                 if victim_id == thrower_id:
                     continue
                 victim_side = side_map.get(victim_id)
@@ -1192,8 +1471,13 @@ def main():
                     continue
                 if victim_side != thrower_side:
                     bump(player_enemies_flashed, thrower_id)
+                    if has_duration:
+                        bump(player_blind_duration_sum, thrower_id, duration_val)
+                        bump(player_blinds_caused, thrower_id)
+                        if duration_val >= FLASH_EFFECTIVE_DURATION_SECONDS:
+                            bump(player_effective_enemy_flashes, thrower_id)
                     blind_tick = int(b.tick)
-                    window_seconds = min(float(duration), FLASH_ASSIST_WINDOW_SECONDS) if has_duration else FLASH_ASSIST_WINDOW_SECONDS
+                    window_seconds = min(duration_val, FLASH_ASSIST_WINDOW_SECONDS) if has_duration else FLASH_ASSIST_WINDOW_SECONDS
                     window_ticks = int(window_seconds * TICK_RATE)
                     if round_deaths is not None and "user_steamid" in round_deaths.columns:
                         death_match = round_deaths[
@@ -1207,7 +1491,10 @@ def main():
                                 if side_map.get(int(killer_id)) == thrower_side:
                                     bump(player_flash_assists, thrower_id)
                 else:
+                    # Team flash — penalizado com peso severo na nota (ver scoreEngine).
                     bump(player_friends_flashed, thrower_id)
+                    if has_duration:
+                        bump(player_friendly_blind_duration_sum, thrower_id, duration_val)
 
         site_hit = "unknown"
         bomb_plant_out = None
@@ -1262,6 +1549,146 @@ def main():
                 explode_tick = int(round_explodes.iloc[0]["tick"])
                 bomb_explode_out = {"t": round((explode_tick - freeze_tick) / TICK_RATE, 1)}
 
+        # --- Posicionamento: Trade Kill / Isolamento / Overexposure ---
+        # Reusa round_deaths (já ordenado por tick): pra cada morte, procura uma
+        # morte de vingança do time da vítima contra o atacante dela dentro da
+        # janela/raio de trade, checa se havia aliado vivo por perto (senão a
+        # morte era "não-tradeável" independente de velocidade do time), e conta
+        # quantos inimigos tinham chance geométrica de ver a vítima ao mesmo
+        # tempo — sem raycasting real (não há geometria do mapa disponível), é
+        # aproximação por distância + cone de visão do inimigo.
+        def pos_xyz_at(steamid: int, tick: int):
+            rows = rows_at(tick)
+            rows = rows[rows["steamid"] == steamid]
+            if len(rows) == 0:
+                rows = nearest_rows_at_or_before(tick)
+                rows = rows[rows["steamid"] == steamid]
+            if len(rows) == 0:
+                return None
+            row = rows.iloc[0]
+            x, y = row.get("X"), row.get("Y")
+            if x is None or str(x) == "nan":
+                return None
+            return float(x), float(y)
+
+        if round_deaths is not None and len(round_deaths) > 0:
+            deaths_list = list(round_deaths.itertuples())
+            for i, d in enumerate(deaths_list):
+                victim_id = getattr(d, "user_steamid", None)
+                attacker_id = getattr(d, "attacker_steamid", None)
+                if victim_id is None or str(victim_id) == "nan":
+                    continue
+                victim_id = int(victim_id)
+                victim_side = side_map.get(victim_id)
+                if victim_side is None:
+                    continue
+                death_tick = int(d.tick)
+                victim_pos = pos_xyz_at(victim_id, death_tick)
+                if victim_pos is None:
+                    continue
+
+                death_rows = rows_at(death_tick)
+                if len(death_rows) == 0:
+                    death_rows = nearest_rows_at_or_before(death_tick)
+
+                # Isolamento: nenhum aliado vivo por perto no momento da morte.
+                nearest_ally_dist = None
+                for r in death_rows.itertuples():
+                    ally_id = int(r.steamid)
+                    if ally_id == victim_id or side_map.get(ally_id) != victim_side:
+                        continue
+                    hp = getattr(r, "health", None)
+                    if hp is None or str(hp) == "nan" or float(hp) <= 0:
+                        continue
+                    ax, ay = getattr(r, "X", None), getattr(r, "Y", None)
+                    if ax is None or str(ax) == "nan":
+                        continue
+                    dist = ((float(ax) - victim_pos[0]) ** 2 + (float(ay) - victim_pos[1]) ** 2) ** 0.5
+                    if nearest_ally_dist is None or dist < nearest_ally_dist:
+                        nearest_ally_dist = dist
+                if nearest_ally_dist is None or nearest_ally_dist > ISOLATION_DISTANCE_THRESHOLD:
+                    bump(player_isolated_deaths, victim_id)
+
+                # Trade: aliado da vítima mata o atacante dentro da janela/raio.
+                if attacker_id is not None and str(attacker_id) != "nan":
+                    attacker_id_i = int(attacker_id)
+                    window_end = death_tick + int(TRADE_WINDOW_SECONDS * TICK_RATE)
+                    for d2 in deaths_list[i + 1 :]:
+                        d2_tick = int(d2.tick)
+                        if d2_tick > window_end:
+                            break
+                        d2_victim = getattr(d2, "user_steamid", None)
+                        d2_attacker = getattr(d2, "attacker_steamid", None)
+                        if d2_victim is None or str(d2_victim) == "nan" or int(d2_victim) != attacker_id_i:
+                            continue
+                        if d2_attacker is None or str(d2_attacker) == "nan":
+                            continue
+                        d2_attacker_i = int(d2_attacker)
+                        if side_map.get(d2_attacker_i) != victim_side:
+                            continue
+                        avenger_pos = pos_xyz_at(d2_attacker_i, d2_tick)
+                        if avenger_pos is None:
+                            continue
+                        dist = ((avenger_pos[0] - victim_pos[0]) ** 2 + (avenger_pos[1] - victim_pos[1]) ** 2) ** 0.5
+                        if dist > TRADE_DISTANCE_THRESHOLD:
+                            continue
+                        bump(player_trade_kills, d2_attacker_i)
+                        bump(player_traded_deaths, victim_id)
+                        delay_ms = (d2_tick - death_tick) / TICK_RATE * 1000.0
+                        player_trade_delay_sum_ms[d2_attacker_i] = (
+                            player_trade_delay_sum_ms.get(d2_attacker_i, 0.0) + delay_ms
+                        )
+                        bump(player_trade_delay_count, d2_attacker_i)
+                        break
+
+                # Overexposure: >=2 inimigos com distância+ângulo plausíveis de ver a
+                # vítima ao mesmo tempo. Mitigado por retake com bomba plantada, a
+                # vítima estar cega, ou smoke ativa perto dela.
+                if has_pitch and has_yaw and has_z:
+                    victim_rows = death_rows[death_rows["steamid"] == victim_id]
+                    if len(victim_rows) > 0:
+                        victim_row = next(victim_rows.itertuples())
+                        enemy_side = "t" if victim_side == "ct" else "ct"
+                        watchers = 0
+                        for r in death_rows.itertuples():
+                            enemy_id = int(r.steamid)
+                            if side_map.get(enemy_id) != enemy_side:
+                                continue
+                            hp = getattr(r, "health", None)
+                            if hp is None or str(hp) == "nan" or float(hp) <= 0:
+                                continue
+                            ex, ey = getattr(r, "X", None), getattr(r, "Y", None)
+                            if ex is None or str(ex) == "nan":
+                                continue
+                            dist = ((float(ex) - victim_pos[0]) ** 2 + (float(ey) - victim_pos[1]) ** 2) ** 0.5
+                            if dist > OVEREXPOSURE_SIGHT_DISTANCE:
+                                continue
+                            deg = angle_to_target_deg(r, victim_row)
+                            if deg is not None and deg <= OVEREXPOSURE_FOV_DEG:
+                                watchers += 1
+                        if watchers >= 2:
+                            mitigated = plant_tick is not None and death_tick > plant_tick
+                            if not mitigated:
+                                mitigated = is_blinded_at(victim_id, death_tick, 0.5)
+                            if not mitigated and smoke_start_df is not None and "tick" in smoke_start_df.columns:
+                                round_smokes_all = smoke_start_df[
+                                    (smoke_start_df["tick"] > freeze_tick) & (smoke_start_df["tick"] <= end_tick)
+                                ]
+                                smoke_window_ticks = int(SMOKE_DEFAULT_DURATION_SECONDS * TICK_RATE)
+                                for sm in round_smokes_all.itertuples():
+                                    sm_tick = int(sm.tick)
+                                    if sm_tick > death_tick or death_tick > sm_tick + smoke_window_ticks:
+                                        continue
+                                    sx, sy = event_xy(sm)
+                                    if sx is None or str(sx) == "nan":
+                                        continue
+                                    sdist = ((float(sx) - victim_pos[0]) ** 2 + (float(sy) - victim_pos[1]) ** 2) ** 0.5
+                                    if sdist <= 500.0:
+                                        mitigated = True
+                                        break
+                            if not mitigated:
+                                bump(player_overexposed_deaths, victim_id)
+
         key_positions = []
         t = freeze_tick
         sample_ticks_local = set()
@@ -1303,6 +1730,37 @@ def main():
                     if place:
                         counts = player_area_counts.setdefault(steamid, {})
                         counts[str(place)] = counts.get(str(place), 0) + 1
+
+            # Distância ao aliado vivo mais próximo — reaproveita os mesmos ticks
+            # amostrados acima (não abre uma amostragem nova só pra isso).
+            for r in rows.itertuples():
+                steamid = int(r.steamid)
+                side = side_map.get(steamid)
+                x = getattr(r, "X", None)
+                if side is None or x is None or str(x) == "nan":
+                    continue
+                hp = getattr(r, "health", None)
+                if hp is None or str(hp) == "nan" or float(hp) <= 0:
+                    continue
+                nearest = None
+                for r2 in rows.itertuples():
+                    mate_id = int(r2.steamid)
+                    if mate_id == steamid or side_map.get(mate_id) != side:
+                        continue
+                    hp2 = getattr(r2, "health", None)
+                    if hp2 is None or str(hp2) == "nan" or float(hp2) <= 0:
+                        continue
+                    mx, my = getattr(r2, "X", None), getattr(r2, "Y", None)
+                    if mx is None or str(mx) == "nan":
+                        continue
+                    d = ((float(mx) - float(x)) ** 2 + (float(my) - float(getattr(r, "Y"))) ** 2) ** 0.5
+                    if nearest is None or d < nearest:
+                        nearest = d
+                if nearest is not None:
+                    player_nearest_teammate_dist_sum[steamid] = (
+                        player_nearest_teammate_dist_sum.get(steamid, 0.0) + nearest
+                    )
+                    bump(player_nearest_teammate_dist_count, steamid)
 
         deaths_out = []
         if round_deaths is not None:
@@ -1407,6 +1865,8 @@ def main():
             end_tick,
             int(SMOKE_DEFAULT_DURATION_SECONDS * TICK_RATE),
             player_names,
+            grenade_paths,
+            "smokegrenade",
         )
         fires_out = pair_grenade_lifespan(
             fire_start_df,
@@ -1415,6 +1875,8 @@ def main():
             end_tick,
             int(FIRE_DEFAULT_DURATION_SECONDS * TICK_RATE),
             player_names,
+            grenade_paths,
+            "molotov",
         )
         decoys_out = pair_grenade_lifespan(
             decoy_start_df,
@@ -1423,9 +1885,11 @@ def main():
             end_tick,
             int(DECOY_DEFAULT_DURATION_SECONDS * TICK_RATE),
             player_names,
+            grenade_paths,
+            "decoy",
         )
 
-        def build_point_events(df):
+        def build_point_events(df, category=None):
             out = []
             if df is not None and "tick" in df.columns:
                 round_rows = df[(df["tick"] > freeze_tick) & (df["tick"] <= end_tick)]
@@ -1433,19 +1897,25 @@ def main():
                     x, y = event_xy(row)
                     if x is None or str(x) == "nan":
                         continue
+                    tick = int(row.tick)
                     entry = {
                         "x": round(float(x), 1),
                         "y": round(float(y), 1),
-                        "t": round((int(row.tick) - freeze_tick) / TICK_RATE, 1),
+                        "t": round((tick - freeze_tick) / TICK_RATE, 1),
                     }
                     thrower_id = getattr(row, "user_steamid", None)
-                    if thrower_id is not None and str(thrower_id) != "nan":
+                    has_thrower = thrower_id is not None and str(thrower_id) != "nan"
+                    if has_thrower:
                         entry["player"] = player_names.get(int(thrower_id), str(int(thrower_id)))
+                    if grenade_paths and category and has_thrower:
+                        path = find_grenade_path(grenade_paths, int(thrower_id), category, tick, freeze_tick)
+                        if path:
+                            entry["path"] = path
                     out.append(entry)
             return out
 
-        flashes_out = build_point_events(flash_df)
-        he_out = build_point_events(he_df)
+        flashes_out = build_point_events(flash_df, "flashbang")
+        he_out = build_point_events(he_df, "he")
 
         blinds_out = []
         if blind_df is not None and "tick" in blind_df.columns:
@@ -1565,21 +2035,64 @@ def main():
 
         flashes_thrown = player_flashes_thrown.get(steamid, 0)
         he_thrown = player_he_thrown.get(steamid, 0)
+        molotovs_thrown = player_molotovs_thrown.get(steamid, 0)
         blinds_caused = player_blinds_caused.get(steamid, 0)
+        friendly_blinds = player_friends_flashed.get(steamid, 0)
         utility = {
             "flashesThrown": flashes_thrown,
             "smokesThrown": player_smokes_thrown.get(steamid, 0),
-            "molotovsThrown": player_molotovs_thrown.get(steamid, 0),
+            "molotovsThrown": molotovs_thrown,
             "heThrown": he_thrown,
             "flashAssists": player_flash_assists.get(steamid, 0),
             "enemiesFlashed": player_enemies_flashed.get(steamid, 0),
             "enemiesFlashedPct": pct(player_enemies_flashed.get(steamid, 0), flashes_thrown),
-            "friendsFlashed": player_friends_flashed.get(steamid, 0),
+            "friendsFlashed": friendly_blinds,
             "avgBlindTimeSec": (
                 round(player_blind_duration_sum.get(steamid, 0.0) / blinds_caused, 1) if blinds_caused else 0.0
             ),
             "avgHeDamage": round(player_he_damage_enemy.get(steamid, 0.0) / he_thrown, 1) if he_thrown else 0.0,
             "avgHeTeamDamage": round(player_he_damage_team.get(steamid, 0.0) / he_thrown, 1) if he_thrown else 0.0,
+            # Flashbang Efficiency: só cegueiras >=1.5s em inimigo contam como "efetivas".
+            "effectiveEnemyFlashes": player_effective_enemy_flashes.get(steamid, 0),
+            "effectiveFlashPct": pct(player_effective_enemy_flashes.get(steamid, 0), flashes_thrown),
+            "avgFriendlyBlindTimeSec": (
+                round(player_friendly_blind_duration_sum.get(steamid, 0.0) / friendly_blinds, 1)
+                if friendly_blinds
+                else 0.0
+            ),
+            "avgMolotovDamage": (
+                round(player_molotov_damage_enemy.get(steamid, 0.0) / molotovs_thrown, 1) if molotovs_thrown else 0.0
+            ),
+            "avgMolotovTeamDamage": (
+                round(player_molotov_damage_team.get(steamid, 0.0) / molotovs_thrown, 1) if molotovs_thrown else 0.0
+            ),
+            "smokesWasted": player_smokes_wasted.get(steamid, 0),
+            "unusedUtilityValue": round(player_unused_utility_value.get(steamid, 0.0), 0),
+            "unusedUtilityRounds": player_unused_utility_rounds.get(steamid, 0),
+        }
+
+        entry_attempts = player_entry_attempts.get(steamid, 0)
+        entry_success = player_entry_success.get(steamid, 0)
+        trade_delay_count = player_trade_delay_count.get(steamid, 0)
+        nearest_teammate_count = player_nearest_teammate_dist_count.get(steamid, 0)
+        positioning = {
+            "openingDuelWinPct": pct(entry_success, entry_attempts),
+            "openingDuelParticipationPct": pct(entry_attempts, rounds_played),
+            "tradeKills": player_trade_kills.get(steamid, 0),
+            "tradeKillPct": pct(player_trade_kills.get(steamid, 0), kills),
+            "tradedDeathPct": pct(player_traded_deaths.get(steamid, 0), deaths),
+            "isolatedDeathPct": pct(player_isolated_deaths.get(steamid, 0), deaths),
+            "avgTradeDelayMs": (
+                round(player_trade_delay_sum_ms.get(steamid, 0.0) / trade_delay_count, 0)
+                if trade_delay_count
+                else None
+            ),
+            "overexposedDeathPct": pct(player_overexposed_deaths.get(steamid, 0), deaths),
+            "avgNearestTeammateDist": (
+                round(player_nearest_teammate_dist_sum.get(steamid, 0.0) / nearest_teammate_count, 1)
+                if nearest_teammate_count
+                else None
+            ),
         }
 
         players_out.append(
@@ -1591,13 +2104,14 @@ def main():
                 "deaths": deaths,
                 "assists": assists,
                 "adr": adr,
-                "entryAttempts": player_entry_attempts.get(steamid, 0),
-                "entrySuccess": player_entry_success.get(steamid, 0),
+                "entryAttempts": entry_attempts,
+                "entrySuccess": entry_success,
                 "clutchesWon": player_clutches_won.get(steamid, 0),
                 "clutchesLost": player_clutches_lost.get(steamid, 0),
                 "favoriteAreas": favorite_areas,
                 "aim": aim,
                 "utility": utility,
+                "positioning": positioning,
             }
         )
 

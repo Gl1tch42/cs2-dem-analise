@@ -65,12 +65,19 @@ export interface RoundLoadout {
   assists?: number;
 }
 
+export interface GrenadePathPoint {
+  x: number;
+  y: number;
+  t: number;
+}
+
 export interface RoundSmoke {
   x: number;
   y: number;
   startT: number;
   endT: number;
   player?: string;
+  path?: GrenadePathPoint[];
 }
 
 export interface RoundFire {
@@ -79,6 +86,7 @@ export interface RoundFire {
   startT: number;
   endT: number;
   player?: string;
+  path?: GrenadePathPoint[];
 }
 
 export interface RoundDecoy {
@@ -87,6 +95,7 @@ export interface RoundDecoy {
   startT: number;
   endT: number;
   player?: string;
+  path?: GrenadePathPoint[];
 }
 
 export interface RoundFlash {
@@ -94,6 +103,7 @@ export interface RoundFlash {
   y: number;
   t: number;
   player?: string;
+  path?: GrenadePathPoint[];
 }
 
 export interface RoundHe {
@@ -101,6 +111,7 @@ export interface RoundHe {
   y: number;
   t: number;
   player?: string;
+  path?: GrenadePathPoint[];
 }
 
 export interface RoundBlind {
@@ -194,6 +205,26 @@ export interface PlayerUtilityStats {
   avgBlindTimeSec: number;
   avgHeDamage: number;
   avgHeTeamDamage: number;
+  effectiveEnemyFlashes: number;
+  effectiveFlashPct: number;
+  avgFriendlyBlindTimeSec: number;
+  avgMolotovDamage: number;
+  avgMolotovTeamDamage: number;
+  smokesWasted: number;
+  unusedUtilityValue: number;
+  unusedUtilityRounds: number;
+}
+
+export interface PlayerPositioningStats {
+  openingDuelWinPct: number;
+  openingDuelParticipationPct: number;
+  tradeKills: number;
+  tradeKillPct: number;
+  tradedDeathPct: number;
+  isolatedDeathPct: number;
+  avgTradeDelayMs: number | null;
+  overexposedDeathPct: number;
+  avgNearestTeammateDist: number | null;
 }
 
 export interface PlayerAggregate {
@@ -212,6 +243,7 @@ export interface PlayerAggregate {
   favoriteAreas: { area: string; count: number }[];
   aim: PlayerAimStats;
   utility: PlayerUtilityStats;
+  positioning: PlayerPositioningStats;
 }
 
 export interface PlayerScoreHistoryEntry {
@@ -221,9 +253,11 @@ export interface PlayerScoreHistoryEntry {
   addedAt: string;
   aimScore: number;
   utilityScore: number;
+  positioningScore: number;
   overallScore: number;
   aim: PlayerAimStats;
   utility: PlayerUtilityStats;
+  positioning: PlayerPositioningStats;
 }
 
 export interface PlayerScoreAggregate {
@@ -232,9 +266,11 @@ export interface PlayerScoreAggregate {
   demosCount: number;
   avgAimScore: number;
   avgUtilityScore: number;
+  avgPositioningScore: number;
   avgOverallScore: number;
   aim: PlayerAimStats;
   utility: PlayerUtilityStats;
+  positioning: PlayerPositioningStats;
   history: PlayerScoreHistoryEntry[];
 }
 

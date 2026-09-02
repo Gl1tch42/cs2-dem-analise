@@ -58,26 +58,75 @@ function playersTable(players, focusIds) {
         ...rows,
     ].join('\n');
 }
-function aimUtilityTable(players, focusIds) {
+function aimTable(players, focusIds) {
     if (players.length === 0) {
-        return '(sem dados de mira/utility ainda — precisa de pelo menos 1 demo com o time do slot marcado)';
+        return '(sem dados de mira ainda — precisa de pelo menos 1 demo com o time do slot marcado)';
     }
     const rows = players.map((p) => {
         const isFocus = focusIds && focusIds.has(p.steamId);
         const name = isFocus ? `**${p.name} 🎯**` : p.name;
         const a = p.aim;
-        const u = p.utility;
         const cross = a.avgCrosshairPlacementDeg !== null ? `${a.avgCrosshairPlacementDeg}°` : '—';
         const ttd = a.avgTimeToDamageMs !== null ? `${a.avgTimeToDamageMs}ms` : '—';
         const ttk = a.avgTimeToKillMs !== null ? `${a.avgTimeToKillMs}ms` : '—';
-        return (`| ${name} | ${p.avgOverallScore} | ${p.avgAimScore} | ${p.avgUtilityScore} | ${a.accuracy}% | ` +
-            `${a.headAccuracy}% | ${a.hsKillPct}% | ${a.counterStrafePct}% | ${cross} | ${a.spottedAccuracy}% | ` +
-            `${ttd} | ${ttk} | ${u.flashesThrown} | ${u.enemiesFlashedPct}% | ${u.flashAssists} | ${u.avgHeDamage} | ${u.avgHeTeamDamage} |`);
+        return (`| ${name} | ${p.avgOverallScore} | ${p.avgAimScore} | ${a.accuracy}% | ${a.headAccuracy}% | ` +
+            `${a.hsKillPct}% | ${a.firstBulletAccuracy}% | ${a.sprayAccuracy}% | ${a.counterStrafePct}% | ${cross} | ` +
+            `${a.spottedAccuracy}% | ${ttd} | ${ttk} |`);
     });
     return [
-        '| Jogador | Nota Geral | Nota Mira | Nota Utility | Accuracy | Head Acc. | HS Kill% | ' +
-            'Counter-Strafe | Crosshair | Spotted Acc. | TTD | TTK | Flashes | Enemies Flashed | Flash Assists | Avg HE Dmg | Avg HE Team Dmg |',
+        '| Jogador | Nota Geral | Nota Mira | Accuracy | Head Acc. | HS Kill% | First Bullet | Spray | ' +
+            'Counter-Strafe | Crosshair | Spotted Acc. | TTD | TTK |',
+        '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+        ...rows,
+    ].join('\n');
+}
+// Tabela separada de utility (granadas) — daria uma tabela absurdamente larga
+// se juntasse tudo numa só com a de mira. "Quality" = eficácia (flash
+// efetiva, dano líquido descontado overkill, dano em aliado); "Waste" =
+// desperdício (smoke no pé, dinheiro morto com granada não jogada ao morrer).
+function utilityTable(players, focusIds) {
+    if (players.length === 0) {
+        return '(sem dados de utility ainda — precisa de pelo menos 1 demo com o time do slot marcado)';
+    }
+    const rows = players.map((p) => {
+        const isFocus = focusIds && focusIds.has(p.steamId);
+        const name = isFocus ? `**${p.name} 🎯**` : p.name;
+        const u = p.utility;
+        return (`| ${name} | ${p.avgUtilityScore} | ${u.flashesThrown} | ${u.effectiveFlashPct}% | ${u.enemiesFlashedPct}% | ` +
+            `${u.flashAssists} | ${u.friendsFlashed} | ${u.avgFriendlyBlindTimeSec}s | ${u.heThrown} | ${u.avgHeDamage} | ` +
+            `${u.avgHeTeamDamage} | ${u.molotovsThrown} | ${u.avgMolotovDamage} | ${u.avgMolotovTeamDamage} | ` +
+            `${u.smokesThrown} | ${u.smokesWasted} | ${u.unusedUtilityValue}$ (${u.unusedUtilityRounds}x) |`);
+    });
+    return [
+        '| Jogador | Nota Utility | Flashes | Flashbang Efficiency | Enemies Flashed | Flash Assists | ' +
+            'Friends Flashed | Avg Friendly Blind | HEs | Avg HE Dmg | Avg HE Team Dmg | Molotovs | Avg Molotov Dmg | ' +
+            'Avg Molotov Team Dmg | Smokes | Smokes no pé | $ não usado (rounds morrendo com granada) |',
         '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+        ...rows,
+    ].join('\n');
+}
+// Trade Kill % / Traded Death % / Isolamento / Overexposure / Opening Duel —
+// sem raycasting real (sem geometria do mapa disponível), Overexposure e
+// distância a aliado são aproximação geométrica (distância + cone de visão),
+// documentada como tal pro modelo não tratar como precisão absoluta.
+function positioningTable(players, focusIds) {
+    if (players.length === 0) {
+        return '(sem dados de posicionamento ainda — precisa de pelo menos 1 demo com o time do slot marcado)';
+    }
+    const rows = players.map((p) => {
+        const isFocus = focusIds && focusIds.has(p.steamId);
+        const name = isFocus ? `**${p.name} 🎯**` : p.name;
+        const pos = p.positioning;
+        const delay = pos.avgTradeDelayMs !== null ? `${pos.avgTradeDelayMs}ms` : '—';
+        const dist = pos.avgNearestTeammateDist !== null ? `${pos.avgNearestTeammateDist}u` : '—';
+        return (`| ${name} | ${p.avgPositioningScore} | ${pos.openingDuelWinPct}% | ${pos.openingDuelParticipationPct}% | ` +
+            `${pos.tradedDeathPct}% | ${pos.isolatedDeathPct}% | ${pos.tradeKills} | ${pos.tradeKillPct}% | ${delay} | ` +
+            `${pos.overexposedDeathPct}% | ${dist} |`);
+    });
+    return [
+        '| Jogador | Nota Posicionamento | Opening Duel Win% | Opening Duel Participation% | Traded Death% | ' +
+            'Isolated Death% | Trade Kills | Trade Kill% | Avg Trade Delay | Overexposed Death% | Avg Dist. Aliado |',
+        '|---|---|---|---|---|---|---|---|---|---|---|',
         ...rows,
     ].join('\n');
 }
@@ -169,21 +218,54 @@ Seu trabalho:
 4. Avaliar qualidades e lacunas individuais dos jogadores em foco com base nas métricas agregadas
    (ADR, entry rate, clutch rate, kills/deaths, áreas mais visitadas) — sempre ligando o número a
    uma recomendação prática, não só descrevendo o número.
-5. Usar a tabela "Mira e utility consolidados" pra avaliar mecânica individual: accuracy, head
-   accuracy, HS kill%, counter-strafing, crosshair placement (grau — menor é melhor), spotted
-   accuracy, time to damage/kill (ms — menor é melhor), e a qualidade/quantidade de utility
-   (flashes jogadas, % de inimigos cegados, flash assists, dano de HE em inimigo vs. em aliado).
-   Um valor "—" significa que não há amostra suficiente pra essa métrica nessa demo/jogador — não
-   invente uma leitura pra ela, diga que falta amostra.
-6. Usar "Evolução da nota geral por demo" pra dizer se cada jogador está melhorando, piorando ou
+5. Usar a tabela "Mira consolidada" pra avaliar mecânica individual: accuracy, head accuracy, HS
+   kill%, first bullet, spray, counter-strafing, crosshair placement (grau — menor é melhor),
+   spotted accuracy, time to damage/kill (ms — menor é melhor). Um valor "—" significa que não há
+   amostra suficiente pra essa métrica nessa demo/jogador — não invente uma leitura pra ela, diga
+   que falta amostra.
+6. Usar a tabela "Utility consolidada" pra avaliar granadas com estas leituras específicas:
+   - Flashbang Efficiency (só conta cegueira efetiva ≥1.5s em inimigo) é o número que importa mais
+     que "Enemies Flashed" bruto — um jogador pode cegar muitos inimigos por pouco tempo (flash
+     fraca) sem gerar valor real; aponte a diferença entre os dois números quando ela existir.
+   - Se "Friends Flashed"/"Avg Friendly Blind" forem altos, isso é falha grave (team flash) — trate
+     como prioridade de correção, não como detalhe.
+   - Dano de HE/Molotov já vem líquido (sem overkill nem dano em aliado contado a favor) — "Avg
+     [Arma] Team Dmg" alto é dano no próprio time e deve ser tratado como ponto negativo.
+   - "Smokes no pé" é smoke desperdiçada (caiu perto de onde o próprio jogador estava).
+   - "$ não usado (rounds morrendo com granada)" mostra quanto dinheiro do time morreu com o
+     jogador porque ele não jogou a granada que comprou — isso é economia jogada fora, não só uma
+     estatística de utility.
+   - Diga explicitamente se o jogador está acumulando "dano passivo" (joga granada mas raramente
+     gera flash efetiva, kill ou dano líquido relevante) ou jogando flashes sem apoiar a jogada do
+     time (flash jogada sem um aliado entrando logo em seguida — inferir isso da tabela de mortes/
+     entry por round quando disponível, sem inventar o que não está nos dados).
+7. Usar a tabela "Posicionamento consolidado" com estas leituras específicas:
+   - "Isolated Death%" alto é o sinal mais grave: o jogador morre sem nenhum aliado vivo por perto
+     pra vingar, ou seja, é uma morte "de graça" pro time independente de reação — trate como
+     prioridade máxima de correção de posicionamento, diferente de "Traded Death%" baixo por outro
+     motivo (time lento, não isolamento).
+   - "Overexposed Death%" alto indica o jogador expondo o corpo pra 2+ ângulos ao mesmo tempo sem
+     suporte de utilitária — cite isso como falha de entrada/rotação, não como azar.
+   - "Opening Duel Win%" abaixo da faixa saudável é duelo perdido demais; "Opening Duel
+     Participation%" muito baixo pode indicar passividade excessiva (baiting) — muito alto sem
+     Win% correspondente também é ruim (duelo forçado demais). Comente os dois números juntos, não
+     isoladamente.
+   - "Trade Kill%"/"Avg Trade Delay" mostram se o jogador captura bem as oportunidades de vingar um
+     aliado e com que velocidade (janela de 3s) — delay alto sugere estar posicionado longe demais
+     pra reagir a tempo mesmo quando o trade acontece.
+   - "Avg Dist. Aliado" é aproximação (distância euclidiana ao aliado vivo mais próximo, sem
+     considerar função de Lurker — não há dado de função de jogador disponível): trate um valor alto
+     com cautela e considere que pode ser um jogador de flanco/isca deliberado, não
+     necessariamente erro de posicionamento, principalmente se "Isolated Death%" não for alto junto.
+8. Usar "Evolução da nota geral por demo" pra dizer se cada jogador está melhorando, piorando ou
    estável ao longo das partidas — isso é tão relevante quanto o valor consolidado atual pro plano
    de treino.
-7. Quando uma jogada deu errado, não generalizar — apontar que ela falhou "porque falhou" nesse
+9. Quando uma jogada deu errado, não generalizar — apontar que ela falhou "porque falhou" nesse
    contexto específico, sem inventar causas que não estão nos dados.
-8. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
-9. Nunca inventar estatística, tendência de movimentação, mira/utility ou uso de utilitário que não
-   esteja literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não
-   dá pra afirmar isso com os dados disponíveis, em vez de supor.
+10. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
+11. Nunca inventar estatística, tendência de movimentação, mira/utility/posicionamento ou uso de
+   utilitário que não esteja literalmente nas tabelas fornecidas — se a informação não existe nos
+   dados, diga que não dá pra afirmar isso com os dados disponíveis, em vez de supor.
 
 FORMATO DE SAÍDA — escreva como um relatório pronto pra ser entregue ao time (o tipo de documento
 que viraria um PDF de scouting/report interno), em Markdown, com exatamente estas seções:
@@ -242,20 +324,44 @@ Seu trabalho:
 4. Avaliar jogadores em foco do time-alvo com base nas métricas agregadas (ADR, entry rate, clutch
    rate, kills/deaths, áreas mais visitadas) e traduzir isso em como jogar contra eles especificamente
    (ex: quem isolar 1x1, quem não deixar entrar sozinho, onde ele costuma clutchar).
-5. Usar a tabela "Mira e utility consolidados" pra identificar a mecânica de cada jogador do
-   time-alvo: accuracy, head accuracy, HS kill%, counter-strafing, crosshair placement (grau — menor
-   é melhor), spotted accuracy, time to damage/kill (ms — menor é melhor), e como ele usa utility
-   (quantidade, % de inimigos cegados, flash assists, dano de HE) — isso vira recomendação de quem
-   duelar, quem evitar de frente, e onde a utility dele costuma pegar. Um valor "—" significa amostra
-   insuficiente pra essa métrica — não invente leitura pra ela.
-6. Usar "Evolução da nota geral por demo" pra apontar se algum jogador do time-alvo está em alta ou
+5. Usar a tabela "Mira consolidada" pra identificar a mecânica de cada jogador do time-alvo:
+   accuracy, head accuracy, HS kill%, first bullet, spray, counter-strafing, crosshair placement
+   (grau — menor é melhor), spotted accuracy, time to damage/kill (ms — menor é melhor) — isso vira
+   recomendação de quem duelar e quem evitar de frente. Um valor "—" significa amostra insuficiente
+   pra essa métrica — não invente leitura pra ela.
+6. Usar a tabela "Utility consolidada" pra identificar como o time-alvo joga granada, e traduzir
+   isso em plano de jogo:
+   - Flashbang Efficiency (só cegueira efetiva ≥1.5s em inimigo) diz quem realmente flasha bem —
+     compare com "Enemies Flashed" bruto: se o bruto for bem maior que a efficiency, esse jogador
+     joga flash fraca, o que é uma janela de reação maior pro nosso time.
+   - "Friends Flashed"/"Avg Friendly Blind" altos indicam time flash frequente do time-alvo — pode
+     virar uma vulnerabilidade a explorar (ex: forçar eles a jogar flash apressada).
+   - Dano de HE/Molotov já vem líquido, sem overkill — "Avg [Arma] Team Dmg" alto do time-alvo é
+     sinal de granada mal calculada nesse time, relevante pra saber que eles tomam dano próprio.
+   - "Smokes no pé" identifica jogador que desperdiça smoke perto de si mesmo.
+   - "$ não usado (rounds morrendo com granada)" mostra qual jogador do time-alvo costuma morrer
+     segurando utility — isso é economia que eles perdem e pode ser relevante pro nosso plano de
+     eco/force-buy no round seguinte.
+7. Usar a tabela "Posicionamento consolidado" do time-alvo pra montar plano de ataque:
+   - "Isolated Death%" alto num jogador do time-alvo é quem isolar — morre sem suporte,
+     independente de quão rápido o time dele reagiria.
+   - "Overexposed Death%" alto indica jogador que costuma se expor a 2+ ângulos sem cobertura —
+     um alvo prioritário pra forçar a se expor de novo.
+   - "Opening Duel Win%"/"Participation%" baixos indicam jogador que perde duelo de abertura ou
+     evita entrar (baiting) — vira recomendação de quem entrar contra com confiança.
+   - "Trade Kill%"/"Avg Trade Delay" altos no time-alvo indicam time que vinga rápido — nesse caso
+     evitar isolar demais nosso próprio entry contra eles; se forem baixos, é uma vulnerabilidade
+     de trade a explorar entrando mais agressivo.
+   - "Avg Dist. Aliado" alto pode ser jogador de flanco/lurker do time-alvo (sem dado de função
+     disponível pra confirmar) — trate com essa ressalva antes de recomendar isolá-lo como erro.
+8. Usar "Evolução da nota geral por demo" pra apontar se algum jogador do time-alvo está em alta ou
    em baixa recentemente — isso muda a prioridade de quem explorar no próximo confronto.
-7. Quando um padrão do time-alvo falhou, não generalizar — aponte que falhou "nesse contexto
+9. Quando um padrão do time-alvo falhou, não generalizar — aponte que falhou "nesse contexto
    específico", sem inventar causa que não está nos dados.
-8. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
-9. Nunca inventar estatística, tendência de movimentação, mira/utility ou uso de utilitário que não
-   esteja literalmente nas tabelas fornecidas — se a informação não existe nos dados, diga que não dá
-   pra afirmar isso com os dados disponíveis, em vez de supor.
+10. Levar em conta as anotações do analista humano como contexto qualitativo, não como fato bruto.
+11. Nunca inventar estatística, tendência de movimentação, mira/utility/posicionamento ou uso de
+   utilitário que não esteja literalmente nas tabelas fornecidas — se a informação não existe nos
+   dados, diga que não dá pra afirmar isso com os dados disponíveis, em vez de supor.
 
 FORMATO DE SAÍDA — escreva como um relatório de scouting pronto pra ser entregue ao time antes do
 confronto (o tipo de documento que viraria um PDF de prep de jogo), em Markdown, com exatamente
@@ -343,11 +449,20 @@ async function runSlotAnalysis(slots, settingsManager, slotId, requestedProvider
         '',
         teamSection(featuredHeading, myNames, stats.myTeam, focusIds),
         '',
-        `### Mira e utility consolidados do ${featuredLabel} (todas as demos com time marcado, nota 0-100)`,
+        `### Mira consolidada do ${featuredLabel} (todas as demos com time marcado, nota 0-100)`,
         ...(focusIds && focusIds.size > 0
             ? ['(🎯 = jogador em foco — priorize a leitura de mira/utility dele(s))']
             : []),
-        aimUtilityTable(playerScores, focusIds),
+        aimTable(playerScores, focusIds),
+        '',
+        `### Utility (granadas) consolidada do ${featuredLabel} — "Flashbang Efficiency" só conta cegueira >=1.5s em inimigo; ` +
+            `dano de HE/Molotov já desconta overkill; "$ não usado" é dinheiro perdido morrendo com granada comprada e não jogada`,
+        utilityTable(playerScores, focusIds),
+        '',
+        `### Posicionamento consolidado do ${featuredLabel} — Overexposure e "Avg Dist. Aliado" são aproximação ` +
+            `geométrica (distância + ângulo, sem raycasting real); "Isolated Death%" é morte sem aliado vivo por perto ` +
+            `(intradeável mesmo que o time reagisse rápido); "Traded Death%" é morte que o time efetivamente vingou em <=3s`,
+        positioningTable(playerScores, focusIds),
         '',
         `### Evolução da nota geral por demo do ${featuredLabel} (ordem cronológica — use pra dizer se está melhorando ou piorando)`,
         aimUtilityHistoryLines(aimUtilityHistoryScope),

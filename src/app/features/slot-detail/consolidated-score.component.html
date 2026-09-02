@@ -58,6 +58,13 @@
         </div>
         <progress class="progress is-small" [ngClass]="scoreClass(displayUtilityScore(p))" [value]="displayUtilityScore(p)" max="100"></progress>
       </div>
+      <div class="sub-score-box">
+        <div class="sub-score-top">
+          <span class="sub-score-label">Posicionamento</span>
+          <span class="sub-score-value" [ngClass]="scoreTextClass(displayPositioningScore(p))">{{ displayPositioningScore(p) }}</span>
+        </div>
+        <progress class="progress is-small" [ngClass]="scoreClass(displayPositioningScore(p))" [value]="displayPositioningScore(p)" max="100"></progress>
+      </div>
     </div>
 
     <!-- Matriz de mira -->
@@ -89,6 +96,25 @@
       <div class="utility-count-pill" *ngFor="let m of utilityCounts">
         <span class="pill-label">{{ m.label }}</span>
         <span class="pill-value">{{ utilityValue(p, m.key) }}</span>
+      </div>
+    </div>
+
+    <!-- Posicionamento -->
+    <p class="stat-subtitle">Posicionamento</p>
+    <div class="columns is-multiline kpi-grid kpi-grid-impact">
+      <div class="column is-3-desktop is-4-tablet is-6-mobile" *ngFor="let m of positioningKpis">
+        <div class="kpi-card">
+          <p class="kpi-label">{{ m.label }}</p>
+          <p class="kpi-value" [ngClass]="metricClass(positioningValue(p, m.key), m.key)">
+            {{ formatMetric(positioningValue(p, m.key), m.unit) }}
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="utility-counts">
+      <div class="utility-count-pill" *ngFor="let m of positioningCounts">
+        <span class="pill-label">{{ m.label }}</span>
+        <span class="pill-value">{{ positioningValue(p, m.key) }}</span>
       </div>
     </div>
 
