@@ -401,11 +401,12 @@ export interface PlayerScoreHistoryEntry {
   impact: PlayerImpactStats;
 }
 
-// Confiança do score consolidado, baseada só no n de demos usadas pra
-// calcular a média do jogador — não é uma medida estatística real
+// Confiança do score consolidado — combina n de demos, rounds observados,
+// cobertura de submétricas e qualidade de calibração das demos usadas pra
+// calcular a média do jogador. Não é uma medida estatística real
 // (desvio-padrão, intervalo de confiança), só um sinal visual pra não
-// tratar 2 demos e 40 demos com o mesmo peso. Ver computeScoreConfidence
-// em electron/ai/scoreEngine.ts.
+// tratar dados escassos/pouco calibrados com o mesmo peso de uma amostra
+// grande e completa. Ver computeScoreConfidence em electron/ai/scoreEngine.ts.
 export type ScoreConfidence = 'low' | 'medium' | 'high';
 
 export interface PlayerScoreAggregate {
@@ -413,6 +414,10 @@ export interface PlayerScoreAggregate {
   name: string;
   demosCount: number;
   confidence: ScoreConfidence;
+  // Composto 0-1 por trás do balde low/medium/high acima — combina demosCount,
+  // rounds observados, cobertura de submétricas e qualidade de calibração. Ver
+  // computeScoreConfidence em electron/ai/scoreEngine.ts.
+  confidenceScore: number;
   // Ver SCORING_MODEL_VERSION em electron/ai/scoreEngine.ts — muda quando as
   // faixas targetMin/targetMax são recalibradas, pra UI poder sinalizar que
   // a régua mudou em vez de só mostrar um score diferente sem contexto.

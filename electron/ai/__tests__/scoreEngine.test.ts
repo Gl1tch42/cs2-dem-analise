@@ -6,6 +6,7 @@ import {
   computeImpactScore,
   computeOverallScore,
   computePlayerScores,
+  computeScoreConfidence,
 } from '../scoreEngine';
 import {
   PlayerAimStats,
@@ -311,6 +312,51 @@ describe('computeOverallScore', () => {
   });
 });
 
+// ---- computeScoreConfidence -------------------------------------------------
+
+describe('computeScoreConfidence', () => {
+  it('returns high with score 1 when all four factors are maxed', () => {
+    const result = computeScoreConfidence({ demosCount: 8, roundsSum: 190, coverageRatio: 1, calibratedRatio: 1 });
+    expect(result.level).toBe('high');
+    expect(result.score).toBe(1);
+  });
+
+  it('returns low with score 0 when all four factors are zero', () => {
+    const result = computeScoreConfidence({ demosCount: 0, roundsSum: 0, coverageRatio: 0, calibratedRatio: 0 });
+    expect(result.level).toBe('low');
+    expect(result.score).toBe(0);
+  });
+
+  it('does not reach high on demos+rounds alone, even maxed, without coverage/calibration', () => {
+    // demos(0.4) + rounds(0.3) somam 0.7 no teto -> abaixo do limiar "high"
+    // (0.75) de propósito: muitas demos com dados majoritariamente
+    // null/não-calibrados não deve virar "alta confiança" sozinho.
+    const result = computeScoreConfidence({ demosCount: 8, roundsSum: 190, coverageRatio: 0, calibratedRatio: 0 });
+    expect(result.score).toBe(0.7);
+    expect(result.level).toBe('medium');
+  });
+
+  it('reaches high once coverage/calibration push the composite past the demos+rounds ceiling', () => {
+    const result = computeScoreConfidence({ demosCount: 8, roundsSum: 190, coverageRatio: 0.5, calibratedRatio: 1 });
+    // 0.7 (demos+rounds) + 0.5*0.2 (coverage) + 1*0.1 (calibration) = 0.9
+    expect(result.score).toBe(0.9);
+    expect(result.level).toBe('high');
+  });
+
+  it('caps demos/rounds factors at 1 instead of rewarding samples beyond the target', () => {
+    const atTarget = computeScoreConfidence({ demosCount: 8, roundsSum: 190, coverageRatio: 0, calibratedRatio: 0 });
+    const wayOverTarget = computeScoreConfidence({ demosCount: 40, roundsSum: 1000, coverageRatio: 0, calibratedRatio: 0 });
+    expect(wayOverTarget.score).toBe(atTarget.score);
+  });
+
+  it('sits at medium for a middling sample', () => {
+    const result = computeScoreConfidence({ demosCount: 4, roundsSum: 95, coverageRatio: 0.5, calibratedRatio: 0.5 });
+    // demosFactor 0.5*0.4=0.2, roundsFactor 0.5*0.3=0.15, coverage 0.5*0.2=0.1, cal 0.5*0.1=0.05 -> 0.5
+    expect(result.score).toBe(0.5);
+    expect(result.level).toBe('medium');
+  });
+});
+
 // ---- computePlayerScores (integration, fs mocked) -------------------------
 
 jest.mock('fs');
@@ -430,6 +476,33 @@ describe('computePlayerScores', () => {
     // uma demo no teto (100) e outra no piso (0) do aim score -> média 50
     expect(result[0].avgAimScore).toBe(50);
     expect(result[0].history).toHaveLength(2);
+  });
+
+  it('threads calibration quality and null-submetric coverage into confidenceScore', () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    const summary = buildSummary({
+      calibration: {
+        tempoStanceSampleSize: 2,
+        tempoStanceThresholdSource: 'default', // amostra insuficiente na demo -> não conta como calibrada
+        lowDisplacementThreshold: 60,
+        highDisplacementThreshold: 130,
+      },
+      playerAggregates: [
+        buildAggregate('76500000000000001', 'Sparse', {
+          aim: { ...aimAtCeiling(), avgCrosshairPlacementDeg: null, avgTimeToDamageMs: null, avgTimeToKillMs: null },
+          positioning: { ...positioningAtCeiling(), avgTradeDelayMs: null, avgNearestTeammateDist: null },
+        }),
+      ],
+    });
+    mockedFs.readFileSync.mockReturnValue(JSON.stringify(summary));
+
+    const result = computePlayerScores(slotFolder, [buildDemoRecord('demo-1')]);
+
+    expect(result).toHaveLength(1);
+    // 1 demo / 1 round / cobertura 0 (5 submétricas null) / calibração 0 (fallback default)
+    // -> demosFactor(1/8)*0.4 + roundsFactor(1/190)*0.3 = 0.05 + 0.0016 -> arredonda pra 0.05.
+    expect(result[0].confidenceScore).toBe(0.05);
+    expect(result[0].confidence).toBe('low');
   });
 
   it('sorts the resulting roster by avgOverallScore descending', () => {

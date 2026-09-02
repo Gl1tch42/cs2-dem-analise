@@ -37,9 +37,9 @@
           <span
             class="tag is-rounded"
             [ngClass]="confidenceClass(p)"
-            [title]="'Baseado no número de demos usadas pra calcular essa média — não é uma medida estatística formal.' | translate"
+            [title]="'Baseado no número de demos, rounds observados, cobertura de métricas (crosshair, TTD/TTK, trade delay, distância do time) e qualidade da calibração dessas demos — não é uma medida estatística formal.' | translate"
           >
-            {{ confidenceLabel(p) | translate }}
+            {{ confidenceLabel(p) | translate }} ({{ p.confidenceScore * 100 | number: '1.0-0' }}%)
           </span>
           <span
             class="tag is-rounded has-text-grey-light model-version-tag"

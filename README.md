@@ -127,12 +127,18 @@ against.
 
 **Confidence badge.** Because the model isn't statistically validated, the
 consolidated view also shows a **Low/Medium/High confidence** badge next to
-each player's aggregate score, based purely on how many demos went into that
-average (`computeScoreConfidence` in `scoreEngine.ts`: <3 demos = low, 3-7 =
-medium, 8+ = high). It's not a real confidence interval — no standard
-deviation involved — just a visual cue so a 2-demo sample and a 40-demo
-sample don't read with the same weight. Same spirit as the
-`tempoStanceThresholdSource` flag below.
+each player's aggregate score, with a numeric percentage alongside it
+(`computeScoreConfidence` in `scoreEngine.ts`). It's a weighted composite of
+four independent signals — demo count, total rounds observed, feature
+coverage (how many of the nullable submetrics like crosshair placement,
+TTD/TTK, trade delay, and nearest-teammate distance actually had data
+instead of `null`), and calibration quality (fraction of demos where the
+parser had enough in-demo samples to calibrate its own thresholds instead of
+falling back to fixed defaults — see `tempoStanceThresholdSource` below) —
+so a player with lots of demos but mostly null/uncalibrated data doesn't get
+rated "high confidence" on demo count alone. It's still not a real
+confidence interval — no standard deviation involved, just a heuristic
+visual cue.
 
 **Recalibrating the ranges.** `scripts/calibrate-scores.js` computes real
 percentiles (default p15/p85) for every sub-metric from a folder of already-

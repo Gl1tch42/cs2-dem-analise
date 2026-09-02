@@ -199,16 +199,52 @@ function round1(value: number): number {
 // mudou" em vez de só mostrar um número diferente sem explicação.
 export const SCORING_MODEL_VERSION = 'v1-heuristic';
 
-// Limiares de confiança do score consolidado — puramente heurísticos (sem
-// desvio-padrão nem intervalo de confiança por trás), só pra sinalizar na UI
-// que 1-2 demos é amostra fraca e 8+ já dá pra confiar mais na média. Ajustar
-// conforme feedback real de uso.
-const SCORE_CONFIDENCE_THRESHOLDS = { medium: 3, high: 8 };
+// Confiança do score consolidado — puramente heurística (sem desvio-padrão
+// nem intervalo de confiança por trás), combinando 4 sinais independentes do
+// próprio score de habilidade: quantas demos, quantos rounds observados
+// (uma demo de 12 rounds pesa menos que uma de 30), cobertura de features
+// (quantas das submétricas com amostra mínima — crosshair/TTD/TTK/trade
+// delay/distância do time — realmente vieram preenchidas, vs null por falta
+// de eventos) e qualidade da calibração (se o parser teve amostra suficiente
+// em cada demo pra calibrar os thresholds de tempo/stance dinamicamente, ou
+// caiu no fallback fixo — ver tempoStanceThresholdSource). Um jogador com
+// muitas demos mas dados majoritariamente null/não-calibrados não deve ficar
+// "alta confiança" só pelo n de demos — por isso os 4 fatores, não só 1.
+export interface ScoreConfidenceFactors {
+  demosCount: number;
+  roundsSum: number;
+  coverageRatio: number; // 0-1: média, nas 5 submétricas nullable, de (contagem não-null / demosCount)
+  calibratedRatio: number; // 0-1: fração das demos em que o parser calibrou dinamicamente (não caiu no default)
+}
 
-export function computeScoreConfidence(demosCount: number): 'low' | 'medium' | 'high' {
-  if (demosCount >= SCORE_CONFIDENCE_THRESHOLDS.high) return 'high';
-  if (demosCount >= SCORE_CONFIDENCE_THRESHOLDS.medium) return 'medium';
-  return 'low';
+const SCORE_CONFIDENCE_WEIGHTS = { demos: 0.4, rounds: 0.3, coverage: 0.2, calibration: 0.1 };
+// Mesmo alvo do antigo limiar "high" só-por-demosCount (8); ~190 rounds ~= 8
+// demos de ~24 rounds em média.
+const SCORE_CONFIDENCE_TARGETS = { demos: 8, rounds: 190 };
+// high=0.75 (não 0.7 = demos+rounds no teto) é proposital: demos+rounds
+// sozinhos maxam em 0.4+0.3=0.7, então maximizar só esses dois fatores NUNCA
+// basta pra virar "high" — cobertura e/ou calibração precisam contribuir
+// também, senão fica em "medium". É esse o ponto central do upgrade.
+const SCORE_CONFIDENCE_LEVEL_THRESHOLDS = { medium: 0.35, high: 0.75 };
+
+export function computeScoreConfidence(
+  factors: ScoreConfidenceFactors
+): { level: 'low' | 'medium' | 'high'; score: number } {
+  const demosFactor = Math.min(1, factors.demosCount / SCORE_CONFIDENCE_TARGETS.demos);
+  const roundsFactor = Math.min(1, factors.roundsSum / SCORE_CONFIDENCE_TARGETS.rounds);
+  const composite =
+    demosFactor * SCORE_CONFIDENCE_WEIGHTS.demos +
+    roundsFactor * SCORE_CONFIDENCE_WEIGHTS.rounds +
+    factors.coverageRatio * SCORE_CONFIDENCE_WEIGHTS.coverage +
+    factors.calibratedRatio * SCORE_CONFIDENCE_WEIGHTS.calibration;
+  const score = Math.round(composite * 100) / 100;
+  const level =
+    score >= SCORE_CONFIDENCE_LEVEL_THRESHOLDS.high
+      ? 'high'
+      : score >= SCORE_CONFIDENCE_LEVEL_THRESHOLDS.medium
+        ? 'medium'
+        : 'low';
+  return { level, score };
 }
 
 // KPR fica numa escala pequena (~0.5-1.0) — 1 casa decimal (round1) esmagaria
@@ -432,6 +468,7 @@ interface PlayerScoreAccumulator {
   overexposedDeathPctSum: number;
   nearestTeammateDistSum: number;
   nearestTeammateDistCount: number;
+  calibratedDemosCount: number;
 
   // Rating/Impacto: kills/assists somados como total; adr e kpr promediados
   // (kpr sobre a soma real de rounds jogados, não a média das médias por
@@ -504,6 +541,7 @@ function newAccumulator(name: string): PlayerScoreAccumulator {
     overexposedDeathPctSum: 0,
     nearestTeammateDistSum: 0,
     nearestTeammateDistCount: 0,
+    calibratedDemosCount: 0,
     kills: 0,
     deaths: 0,
     assists: 0,
@@ -538,6 +576,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
 
     const summary: DemoSummary = JSON.parse(fs.readFileSync(summaryFile, 'utf-8'));
     const roundsInDemo = summary.rounds.length;
+    const demoCalibrated = summary.calibration?.tempoStanceThresholdSource === 'demo';
 
     for (const player of summary.playerAggregates) {
       if (!myIdSet.has(player.steamId)) continue;
@@ -612,6 +651,7 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
         acc.nearestTeammateDistSum += player.positioning.avgNearestTeammateDist;
         acc.nearestTeammateDistCount++;
       }
+      if (demoCalibrated) acc.calibratedDemosCount++;
 
       acc.kills += impact.kills;
       acc.deaths += impact.deaths;
@@ -649,86 +689,102 @@ export function computePlayerScores(slotFolder: string, demos: DemoRecord[]): Pl
   }
 
   return Array.from(accMap.entries())
-    .map(([steamId, acc]) => ({
-      steamId,
-      name: acc.name,
-      demosCount: acc.demosCount,
-      confidence: computeScoreConfidence(acc.demosCount),
-      scoringModelVersion: SCORING_MODEL_VERSION,
-      avgAimScore: acc.demosCount ? round1(acc.aimScoreSum / acc.demosCount) : 0,
-      avgUtilityScore: acc.demosCount ? round1(acc.utilityScoreSum / acc.demosCount) : 0,
-      avgPositioningScore: acc.demosCount ? round1(acc.positioningScoreSum / acc.demosCount) : 0,
-      avgImpactScore: acc.demosCount ? round1(acc.impactScoreSum / acc.demosCount) : 0,
-      avgOverallScore: acc.demosCount ? round1(acc.overallScoreSum / acc.demosCount) : 0,
-      aim: {
-        shotsFired: acc.shotsFired,
-        shotsHit: acc.shotsHit,
-        accuracy: acc.shotsFired ? round1((100 * acc.shotsHit) / acc.shotsFired) : 0,
-        headHits: acc.headHits,
-        headAccuracy: acc.demosCount ? round1(acc.headAccuracySum / acc.demosCount) : 0,
-        hsKills: acc.hsKills,
-        hsKillPct: acc.demosCount ? round1(acc.hsKillPctSum / acc.demosCount) : 0,
-        firstBulletShots: acc.firstBulletShots,
-        firstBulletAccuracy: acc.demosCount ? round1(acc.firstBulletAccuracySum / acc.demosCount) : 0,
-        sprayShots: acc.sprayShots,
-        sprayAccuracy: acc.demosCount ? round1(acc.sprayAccuracySum / acc.demosCount) : 0,
-        counterStrafePct: acc.demosCount ? round1(acc.counterStrafePctSum / acc.demosCount) : 0,
-        avgCrosshairPlacementDeg: acc.crosshairDegCount ? round1(acc.crosshairDegSum / acc.crosshairDegCount) : null,
-        spottedAccuracy: acc.demosCount ? round1(acc.spottedAccuracySum / acc.demosCount) : 0,
-        avgTimeToDamageMs: acc.ttdCount ? round1(acc.ttdSumMs / acc.ttdCount) : null,
-        avgTimeToKillMs: acc.ttkCount ? round1(acc.ttkSumMs / acc.ttkCount) : null,
-      },
-      utility: {
-        flashesThrown: acc.flashesThrown,
-        smokesThrown: acc.smokesThrown,
-        molotovsThrown: acc.molotovsThrown,
-        heThrown: acc.heThrown,
-        flashAssists: acc.flashAssists,
-        enemiesFlashed: acc.enemiesFlashed,
-        enemiesFlashedPct: acc.flashesThrown ? round1((100 * acc.enemiesFlashed) / acc.flashesThrown) : 0,
-        friendsFlashed: acc.friendsFlashed,
-        avgBlindTimeSec: acc.demosCount ? round1(acc.avgBlindTimeSecSum / acc.demosCount) : 0,
-        avgHeDamage: acc.demosCount ? round1(acc.avgHeDamageSum / acc.demosCount) : 0,
-        avgHeTeamDamage: acc.demosCount ? round1(acc.avgHeTeamDamageSum / acc.demosCount) : 0,
-        effectiveEnemyFlashes: acc.effectiveEnemyFlashes,
-        effectiveFlashPct: acc.flashesThrown ? round1((100 * acc.effectiveEnemyFlashes) / acc.flashesThrown) : 0,
-        avgFriendlyBlindTimeSec: acc.demosCount ? round1(acc.avgFriendlyBlindTimeSecSum / acc.demosCount) : 0,
-        avgMolotovDamage: acc.demosCount ? round1(acc.avgMolotovDamageSum / acc.demosCount) : 0,
-        avgMolotovTeamDamage: acc.demosCount ? round1(acc.avgMolotovTeamDamageSum / acc.demosCount) : 0,
-        smokesWasted: acc.smokesWasted,
-        unusedUtilityValue: acc.unusedUtilityValue,
-        unusedUtilityRounds: acc.unusedUtilityRounds,
-      },
-      positioning: {
-        openingDuelWinPct: acc.demosCount ? round1(acc.openingDuelWinPctSum / acc.demosCount) : 0,
-        openingDuelParticipationPct: acc.demosCount
-          ? round1(acc.openingDuelParticipationPctSum / acc.demosCount)
-          : 0,
-        tradeKills: acc.tradeKills,
-        tradeKillPct: acc.demosCount ? round1(acc.tradeKillPctSum / acc.demosCount) : 0,
-        tradedDeathPct: acc.demosCount ? round1(acc.tradedDeathPctSum / acc.demosCount) : 0,
-        isolatedDeathPct: acc.demosCount ? round1(acc.isolatedDeathPctSum / acc.demosCount) : 0,
-        avgTradeDelayMs: acc.tradeDelayCount ? round1(acc.tradeDelaySumMs / acc.tradeDelayCount) : null,
-        overexposedDeathPct: acc.demosCount ? round1(acc.overexposedDeathPctSum / acc.demosCount) : 0,
-        avgNearestTeammateDist: acc.nearestTeammateDistCount
-          ? round1(acc.nearestTeammateDistSum / acc.nearestTeammateDistCount)
-          : null,
-      },
-      impact: {
-        kills: acc.kills,
-        deaths: acc.deaths,
-        assists: acc.assists,
-        adr: acc.demosCount ? round1(acc.adrSum / acc.demosCount) : 0,
-        kpr: acc.roundsSum ? round2(acc.kills / acc.roundsSum) : 0,
-        clutchesWon: acc.clutchesWon,
-        clutchesLost: acc.clutchesLost,
-        clutchWinPct:
-          acc.clutchesWon + acc.clutchesLost ? round1((100 * acc.clutchesWon) / (acc.clutchesWon + acc.clutchesLost)) : 0,
-        roundsOpened: acc.roundsOpened,
-        roundsOpenedWon: acc.roundsOpenedWon,
-        sacrificeOpenPct: acc.roundsOpened ? round1((100 * acc.roundsOpenedWon) / acc.roundsOpened) : 0,
-      },
-      history: acc.history.sort((a, b) => a.addedAt.localeCompare(b.addedAt)),
-    }))
+    .map(([steamId, acc]) => {
+      const coverageRatio = acc.demosCount
+        ? [acc.crosshairDegCount, acc.ttdCount, acc.ttkCount, acc.tradeDelayCount, acc.nearestTeammateDistCount].reduce(
+            (sum, count) => sum + count / acc.demosCount,
+            0
+          ) / 5
+        : 0;
+      const calibratedRatio = acc.demosCount ? acc.calibratedDemosCount / acc.demosCount : 0;
+      const confidence = computeScoreConfidence({
+        demosCount: acc.demosCount,
+        roundsSum: acc.roundsSum,
+        coverageRatio,
+        calibratedRatio,
+      });
+      return {
+        steamId,
+        name: acc.name,
+        demosCount: acc.demosCount,
+        confidence: confidence.level,
+        confidenceScore: confidence.score,
+        scoringModelVersion: SCORING_MODEL_VERSION,
+        avgAimScore: acc.demosCount ? round1(acc.aimScoreSum / acc.demosCount) : 0,
+        avgUtilityScore: acc.demosCount ? round1(acc.utilityScoreSum / acc.demosCount) : 0,
+        avgPositioningScore: acc.demosCount ? round1(acc.positioningScoreSum / acc.demosCount) : 0,
+        avgImpactScore: acc.demosCount ? round1(acc.impactScoreSum / acc.demosCount) : 0,
+        avgOverallScore: acc.demosCount ? round1(acc.overallScoreSum / acc.demosCount) : 0,
+        aim: {
+          shotsFired: acc.shotsFired,
+          shotsHit: acc.shotsHit,
+          accuracy: acc.shotsFired ? round1((100 * acc.shotsHit) / acc.shotsFired) : 0,
+          headHits: acc.headHits,
+          headAccuracy: acc.demosCount ? round1(acc.headAccuracySum / acc.demosCount) : 0,
+          hsKills: acc.hsKills,
+          hsKillPct: acc.demosCount ? round1(acc.hsKillPctSum / acc.demosCount) : 0,
+          firstBulletShots: acc.firstBulletShots,
+          firstBulletAccuracy: acc.demosCount ? round1(acc.firstBulletAccuracySum / acc.demosCount) : 0,
+          sprayShots: acc.sprayShots,
+          sprayAccuracy: acc.demosCount ? round1(acc.sprayAccuracySum / acc.demosCount) : 0,
+          counterStrafePct: acc.demosCount ? round1(acc.counterStrafePctSum / acc.demosCount) : 0,
+          avgCrosshairPlacementDeg: acc.crosshairDegCount ? round1(acc.crosshairDegSum / acc.crosshairDegCount) : null,
+          spottedAccuracy: acc.demosCount ? round1(acc.spottedAccuracySum / acc.demosCount) : 0,
+          avgTimeToDamageMs: acc.ttdCount ? round1(acc.ttdSumMs / acc.ttdCount) : null,
+          avgTimeToKillMs: acc.ttkCount ? round1(acc.ttkSumMs / acc.ttkCount) : null,
+        },
+        utility: {
+          flashesThrown: acc.flashesThrown,
+          smokesThrown: acc.smokesThrown,
+          molotovsThrown: acc.molotovsThrown,
+          heThrown: acc.heThrown,
+          flashAssists: acc.flashAssists,
+          enemiesFlashed: acc.enemiesFlashed,
+          enemiesFlashedPct: acc.flashesThrown ? round1((100 * acc.enemiesFlashed) / acc.flashesThrown) : 0,
+          friendsFlashed: acc.friendsFlashed,
+          avgBlindTimeSec: acc.demosCount ? round1(acc.avgBlindTimeSecSum / acc.demosCount) : 0,
+          avgHeDamage: acc.demosCount ? round1(acc.avgHeDamageSum / acc.demosCount) : 0,
+          avgHeTeamDamage: acc.demosCount ? round1(acc.avgHeTeamDamageSum / acc.demosCount) : 0,
+          effectiveEnemyFlashes: acc.effectiveEnemyFlashes,
+          effectiveFlashPct: acc.flashesThrown ? round1((100 * acc.effectiveEnemyFlashes) / acc.flashesThrown) : 0,
+          avgFriendlyBlindTimeSec: acc.demosCount ? round1(acc.avgFriendlyBlindTimeSecSum / acc.demosCount) : 0,
+          avgMolotovDamage: acc.demosCount ? round1(acc.avgMolotovDamageSum / acc.demosCount) : 0,
+          avgMolotovTeamDamage: acc.demosCount ? round1(acc.avgMolotovTeamDamageSum / acc.demosCount) : 0,
+          smokesWasted: acc.smokesWasted,
+          unusedUtilityValue: acc.unusedUtilityValue,
+          unusedUtilityRounds: acc.unusedUtilityRounds,
+        },
+        positioning: {
+          openingDuelWinPct: acc.demosCount ? round1(acc.openingDuelWinPctSum / acc.demosCount) : 0,
+          openingDuelParticipationPct: acc.demosCount
+            ? round1(acc.openingDuelParticipationPctSum / acc.demosCount)
+            : 0,
+          tradeKills: acc.tradeKills,
+          tradeKillPct: acc.demosCount ? round1(acc.tradeKillPctSum / acc.demosCount) : 0,
+          tradedDeathPct: acc.demosCount ? round1(acc.tradedDeathPctSum / acc.demosCount) : 0,
+          isolatedDeathPct: acc.demosCount ? round1(acc.isolatedDeathPctSum / acc.demosCount) : 0,
+          avgTradeDelayMs: acc.tradeDelayCount ? round1(acc.tradeDelaySumMs / acc.tradeDelayCount) : null,
+          overexposedDeathPct: acc.demosCount ? round1(acc.overexposedDeathPctSum / acc.demosCount) : 0,
+          avgNearestTeammateDist: acc.nearestTeammateDistCount
+            ? round1(acc.nearestTeammateDistSum / acc.nearestTeammateDistCount)
+            : null,
+        },
+        impact: {
+          kills: acc.kills,
+          deaths: acc.deaths,
+          assists: acc.assists,
+          adr: acc.demosCount ? round1(acc.adrSum / acc.demosCount) : 0,
+          kpr: acc.roundsSum ? round2(acc.kills / acc.roundsSum) : 0,
+          clutchesWon: acc.clutchesWon,
+          clutchesLost: acc.clutchesLost,
+          clutchWinPct:
+            acc.clutchesWon + acc.clutchesLost ? round1((100 * acc.clutchesWon) / (acc.clutchesWon + acc.clutchesLost)) : 0,
+          roundsOpened: acc.roundsOpened,
+          roundsOpenedWon: acc.roundsOpenedWon,
+          sacrificeOpenPct: acc.roundsOpened ? round1((100 * acc.roundsOpenedWon) / acc.roundsOpened) : 0,
+        },
+        history: acc.history.sort((a, b) => a.addedAt.localeCompare(b.addedAt)),
+      };
+    })
     .sort((a, b) => b.avgOverallScore - a.avgOverallScore);
 }
