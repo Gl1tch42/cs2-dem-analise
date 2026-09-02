@@ -10,6 +10,10 @@ who track more than one opponent at a time and need scrim/scouting data to
 stay private, with AI reports running on their own API key instead of a
 SaaS subscription.
 
+> Looking for a plain-language explanation of every field and score shown
+> in the app (written for analysts, not developers, formulas as math, not
+> code)? See [docs/customer-doc.md](docs/customer-doc.md).
+
 ## Features
 
 - **Slot management** — 1 "own team" slot + 20 opponent slots, each holding
