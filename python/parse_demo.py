@@ -14,6 +14,14 @@ from demoparser2 import DemoParser
 
 TICK_RATE = 64.0
 
+# Bump whenever detection logic for any metric changes (opening duel, trade,
+# flash assist, crosshair placement, TTD/TTK, overexposure, utility
+# efficiency). Consumers (golden-demo validation, historical analyses) use
+# this to know which analytics results are comparable/reproducible.
+# Independent from electron/ai/scoreEngine.ts's SCORING_MODEL_VERSION, which
+# versions the separate 0-100 scoring layer.
+FEATURE_MODEL_VERSION = "v1-heuristic"
+
 TEAM_NUM_TO_SIDE = {2: "t", 3: "ct"}
 
 def coerce_side(value) -> Optional[str]:
@@ -2142,6 +2150,7 @@ def main():
         "rounds": rounds_out,
         "playerAggregates": players_out,
         "fileName": os.path.basename(args.input),
+        "featureModelVersion": FEATURE_MODEL_VERSION,
         "calibration": {
             "tempoStanceSampleSize": tempo_stance_sample_size,
             "tempoStanceThresholdSource": "demo" if tempo_stance_sample_size >= MIN_SAMPLES_FOR_DYNAMIC_THRESHOLDS else "default",

@@ -287,6 +287,11 @@ export interface DemoSummary {
   finalScore: { team: number; opponent: number };
   rounds: RoundSummary[];
   playerAggregates: PlayerAggregate[];
+  // Version of parse_demo.py's FEATURE_MODEL_VERSION that produced this
+  // summary. Optional because summaries persisted before this field existed
+  // won't have it. Independent from PlayerScoreAggregate.scoringModelVersion,
+  // which versions the separate 0-100 scoring layer.
+  featureModelVersion?: string;
   calibration?: DemoCalibration;
 }
 
